@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+target
+src-tauri
+package-lock.json
+*.sql
+*.md
+.claude

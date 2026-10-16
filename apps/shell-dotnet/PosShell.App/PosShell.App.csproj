@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plain WPF + WebView2, NOT MAUI: no MAUI workload, no multi-GB install, and a real self-contained single-file publish.
+      dotnet publish apps/shell-dotnet/PosShell.App -c Release -r win-x64 --self-contained `
+        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+    The React build (apps/desktop/dist) is copied next to the exe as wwwroot/ and served from https://app.pos/.
+    Needs the WebView2 Runtime on the PC (preinstalled on Windows 11; ship the Evergreen bootstrapper for Windows 10).
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PosShell.Desktop</RootNamespace>
+    <AssemblyName>PosShell</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PosShell.Core\PosShell.Core.csproj" />
+    <ProjectReference Include="..\PosShell.Infrastructure\PosShell.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- `npm run build -w @pos/desktop` first. Missing dist = the window shows a hint instead of the UI. -->
+    <Content Include="..\..\desktop\dist\**\*" Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\desktop\dist')" />
+  </ItemGroup>
+
+</Project>

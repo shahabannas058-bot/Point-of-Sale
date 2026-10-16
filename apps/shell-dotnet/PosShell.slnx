@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="PosShell.Core/PosShell.Core.csproj" />
+  <Project Path="PosShell.Core.Tests/PosShell.Core.Tests.csproj" />
+  <Project Path="PosShell.Infrastructure/PosShell.Infrastructure.csproj" />
+  <Project Path="PosShell.Infrastructure.Tests/PosShell.Infrastructure.Tests.csproj" />
+  <Project Path="PosShell.App/PosShell.App.csproj" />
+</Solution>

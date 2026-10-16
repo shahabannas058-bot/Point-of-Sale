@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Bundles the native e_sqlite3 library. "9.*" floats inside the .NET 9 line; pin the restored version afterwards. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PosShell.Core\PosShell.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The SAME .sql files the TypeScript migrator uses (single source of truth, no copy). They end up inside the dll as
+      resources named "Migrations/0001_masters.sql" etc. A new migration = a new file in packages/db/migrations.
+    -->
+    <EmbeddedResource Include="..\..\..\packages\db\migrations\*.sql" LogicalName="Migrations/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

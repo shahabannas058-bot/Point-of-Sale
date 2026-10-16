@@ -1,0 +1,99 @@
+/* Design tokens. Light is the default; dark is applied by [data-theme='dark'] or, when no explicit
+   choice is stored, by the OS preference. The two dark blocks MUST stay identical (see test/tokens.test.ts). */
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #cbd5e1;
+  --text: #0f172a; /* 17.85:1 on white (AAA) */
+  --text-muted: #475569; /* 7.58:1 on white */
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --on-primary: #ffffff; /* 6.70:1 */
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --primary-soft: #dbeafe;
+  --primary-ink: #1e40af;
+  --success-soft: #dcfce7;
+  --success-ink: #166534;
+  --warning-soft: #fef3c7;
+  --warning-ink: #92400e;
+  --danger-soft: #fee2e2;
+  --danger-ink: #991b1b;
+  --rail: #0f1b3d;
+  --rail-text: #cbd5e1;
+  --rail-active: #1d4ed8;
+  --scrim: rgb(15 23 42 / 0.55);
+  --focus: #1d4ed8;
+  --radius: 8px;
+  --dur: 160ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0b1220;
+    --surface: #111a2e;
+    --surface-2: #1a2540;
+    --border: #334155;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --primary: #60a5fa;
+    --primary-hover: #93c5fd;
+    --on-primary: #0b1220;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --primary-soft: #172554;
+    --primary-ink: #93c5fd;
+    --success-soft: #052e16;
+    --success-ink: #86efac;
+    --warning-soft: #451a03;
+    --warning-ink: #fcd34d;
+    --danger-soft: #450a0a;
+    --danger-ink: #fca5a5;
+    --rail: #080f1f;
+    --rail-text: #94a3b8;
+    --rail-active: #2563eb;
+    --scrim: rgb(2 6 23 / 0.7);
+    --focus: #60a5fa;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0b1220;
+  --surface: #111a2e;
+  --surface-2: #1a2540;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+  --on-primary: #0b1220;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --primary-soft: #172554;
+  --primary-ink: #93c5fd;
+  --success-soft: #052e16;
+  --success-ink: #86efac;
+  --warning-soft: #451a03;
+  --warning-ink: #fcd34d;
+  --danger-soft: #450a0a;
+  --danger-ink: #fca5a5;
+  --rail: #080f1f;
+  --rail-text: #94a3b8;
+  --rail-active: #2563eb;
+  --scrim: rgb(2 6 23 / 0.7);
+  --focus: #60a5fa;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
