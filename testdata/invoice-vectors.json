@@ -1,0 +1,418 @@
+{
+  "description": "Golden vectors from the TypeScript reference. C# InvoiceHasher must reproduce canonical and expected_hash exactly.",
+  "hash_domain": "pos.invoice.v1",
+  "vectors": [
+    {
+      "name": "khata-split-basic",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "unsealed_data": {
+        "id": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 1,
+        "invoiceNo": "A-000001",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": "0199c82c-c003-76c4-9f03-2d14f3ed2c2b",
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 279955,
+        "discountTotal": 0,
+        "total": 279955,
+        "note": null,
+        "createdAt": 1760000060000,
+        "hashVersion": 1,
+        "lines": [
+          {
+            "id": "0199c82c-c008-7647-a081-67a7bf22566c",
+            "saleId": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Fast Charger 25W",
+            "quantity": 2,
+            "unitPrice": 50000,
+            "costPrice": 30000,
+            "discountAmount": 0,
+            "lineTotal": 100000,
+            "createdAt": 1760000060000
+          },
+          {
+            "id": "0199c82c-c009-741f-adb1-501b37dfefe2",
+            "saleId": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
+            "lineNo": 2,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": "0199c82c-c005-74ef-987f-fed73952b6db",
+            "variantId": null,
+            "description": "Galaxy A55 8/256 \u00b7 IMEI 356938035643809",
+            "quantity": 1,
+            "unitPrice": 199950,
+            "costPrice": 149962,
+            "discountAmount": 19995,
+            "lineTotal": 179955,
+            "createdAt": 1760000060000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c00a-752b-85c9-c231f9261957",
+            "saleId": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
+            "method": "cash",
+            "amount": 179955,
+            "reference": null,
+            "createdAt": 1760000060000
+          },
+          {
+            "id": "0199c82c-c00b-7421-a114-68567d8c8dda",
+            "saleId": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
+            "method": "khata",
+            "amount": 100000,
+            "reference": null,
+            "createdAt": 1760000060000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000060000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c007-76a3-a3d0-fb1b2a2e50e7\",\"invoiceNo\":\"A-000001\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":30000,\"createdAt\":1760000060000,\"description\":\"Fast Charger 25W\",\"discountAmount\":0,\"id\":\"0199c82c-c008-7647-a081-67a7bf22566c\",\"lineNo\":1,\"lineTotal\":100000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2,\"unitPrice\":50000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"},{\"costPrice\":149962,\"createdAt\":1760000060000,\"description\":\"Galaxy A55 8/256 \u00b7 IMEI 356938035643809\",\"discountAmount\":19995,\"id\":\"0199c82c-c009-741f-adb1-501b37dfefe2\",\"lineNo\":2,\"lineTotal\":179955,\"phoneUnitId\":\"0199c82c-c005-74ef-987f-fed73952b6db\",\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":199950,\"variantId\":null}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":179955,\"createdAt\":1760000060000,\"id\":\"0199c82c-c00a-752b-85c9-c231f9261957\",\"method\":\"cash\",\"reference\":null},{\"amount\":100000,\"createdAt\":1760000060000,\"id\":\"0199c82c-c00b-7421-a114-68567d8c8dda\",\"method\":\"khata\",\"reference\":null}],\"seq\":1,\"subtotal\":279955,\"total\":279955,\"v\":1}",
+      "expected_hash": "233fe105f884dabacfed7e8defc85a6d0f667e639832109957ae4fb5200b4f9f"
+    },
+    {
+      "name": "urdu-text",
+      "previous_hash": "233fe105f884dabacfed7e8defc85a6d0f667e639832109957ae4fb5200b4f9f",
+      "unsealed_data": {
+        "id": "0199c82c-c00c-7470-a0b5-b1801ffc8182",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 2,
+        "invoiceNo": "A-000002",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": "0199c82c-c003-76c4-9f03-2d14f3ed2c2b",
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 8500000,
+        "discountTotal": 0,
+        "total": 8500000,
+        "note": "\u0646\u0642\u062f \u0627\u062f\u0627\u0626\u06cc\u06af\u06cc \u2014 \u0634\u06a9\u0631\u06cc\u06c1 \u2713",
+        "createdAt": 1760000120000,
+        "hashVersion": 1,
+        "lines": [
+          {
+            "id": "0199c82c-c00d-7596-8c2b-50ee94d5e3f2",
+            "saleId": "0199c82c-c00c-7470-a0b5-b1801ffc8182",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": "0199c82c-c005-74ef-987f-fed73952b6db",
+            "variantId": null,
+            "description": "\u0633\u06cc\u0645\u0633\u0646\u06af \u06af\u0644\u06cc\u06a9\u0633\u06cc A55 (\u0646\u06cc\u0644\u0627, 8/256GB) \u00b7 IMEI 356938035643809",
+            "quantity": 1,
+            "unitPrice": 8500000,
+            "costPrice": 6375000,
+            "discountAmount": 0,
+            "lineTotal": 8500000,
+            "createdAt": 1760000120000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c00e-7242-aeae-dcc53b840880",
+            "saleId": "0199c82c-c00c-7470-a0b5-b1801ffc8182",
+            "method": "cash",
+            "amount": 8500000,
+            "reference": null,
+            "createdAt": 1760000120000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000120000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c00c-7470-a0b5-b1801ffc8182\",\"invoiceNo\":\"A-000002\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":6375000,\"createdAt\":1760000120000,\"description\":\"\u0633\u06cc\u0645\u0633\u0646\u06af \u06af\u0644\u06cc\u06a9\u0633\u06cc A55 (\u0646\u06cc\u0644\u0627, 8/256GB) \u00b7 IMEI 356938035643809\",\"discountAmount\":0,\"id\":\"0199c82c-c00d-7596-8c2b-50ee94d5e3f2\",\"lineNo\":1,\"lineTotal\":8500000,\"phoneUnitId\":\"0199c82c-c005-74ef-987f-fed73952b6db\",\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":8500000,\"variantId\":null}],\"note\":\"\u0646\u0642\u062f \u0627\u062f\u0627\u0626\u06cc\u06af\u06cc \u2014 \u0634\u06a9\u0631\u06cc\u06c1 \u2713\",\"originalSaleId\":null,\"payments\":[{\"amount\":8500000,\"createdAt\":1760000120000,\"id\":\"0199c82c-c00e-7242-aeae-dcc53b840880\",\"method\":\"cash\",\"reference\":null}],\"seq\":2,\"subtotal\":8500000,\"total\":8500000,\"v\":1}",
+      "expected_hash": "fc41630d087347c1646cf2d4e03684a28dcf4faf15478169b1980fe8c9236ad8"
+    },
+    {
+      "name": "special-characters",
+      "previous_hash": "fc41630d087347c1646cf2d4e03684a28dcf4faf15478169b1980fe8c9236ad8",
+      "unsealed_data": {
+        "id": "0199c82c-c00f-71cf-a481-ddfaf108278f",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 3,
+        "invoiceNo": "A-000003",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": "0199c82c-c003-76c4-9f03-2d14f3ed2c2b",
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 120000,
+        "discountTotal": 100,
+        "total": 119900,
+        "note": "line1\nline2\ttab \u0001 ctrl, emoji \ud83d\ude00, DEL \u007f, LS \u2028, </script> & \"q\" \\ /",
+        "createdAt": 1760000180000,
+        "hashVersion": 1,
+        "lines": [
+          {
+            "id": "0199c82c-c010-701c-ae27-9780e3d16267",
+            "saleId": "0199c82c-c00f-71cf-a481-ddfaf108278f",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Cable \"USB-C\" \\ 1m / <fast> & 'strong'",
+            "quantity": 1,
+            "unitPrice": 120000,
+            "costPrice": 72000,
+            "discountAmount": 0,
+            "lineTotal": 120000,
+            "createdAt": 1760000180000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c011-7447-8a82-4842f5a6c70b",
+            "saleId": "0199c82c-c00f-71cf-a481-ddfaf108278f",
+            "method": "cash",
+            "amount": 119900,
+            "reference": "REF \"A\\B\"",
+            "createdAt": 1760000180000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000180000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":100,\"id\":\"0199c82c-c00f-71cf-a481-ddfaf108278f\",\"invoiceNo\":\"A-000003\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":72000,\"createdAt\":1760000180000,\"description\":\"Cable \\\"USB-C\\\" \\\\ 1m / <fast> & 'strong'\",\"discountAmount\":0,\"id\":\"0199c82c-c010-701c-ae27-9780e3d16267\",\"lineNo\":1,\"lineTotal\":120000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":120000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":\"line1\\nline2\\ttab \\u0001 ctrl, emoji \ud83d\ude00, DEL \u007f, LS \u2028, </script> & \\\"q\\\" \\\\ /\",\"originalSaleId\":null,\"payments\":[{\"amount\":119900,\"createdAt\":1760000180000,\"id\":\"0199c82c-c011-7447-8a82-4842f5a6c70b\",\"method\":\"cash\",\"reference\":\"REF \\\"A\\\\B\\\"\"}],\"seq\":3,\"subtotal\":120000,\"total\":119900,\"v\":1}",
+      "expected_hash": "e92b426ce36ccaf6e2327cd223be1adfc9fe3222d921b269de4fb40a5170f2a1"
+    },
+    {
+      "name": "null-customer-cash",
+      "previous_hash": "e92b426ce36ccaf6e2327cd223be1adfc9fe3222d921b269de4fb40a5170f2a1",
+      "unsealed_data": {
+        "id": "0199c82c-c012-77a6-bfe2-bbd6bf283439",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 4,
+        "invoiceNo": "A-000004",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": null,
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 3700,
+        "discountTotal": 0,
+        "total": 3700,
+        "note": null,
+        "createdAt": 1760000240000,
+        "hashVersion": 1,
+        "lines": [
+          {
+            "id": "0199c82c-c013-77ae-a76d-623d8a6aa327",
+            "saleId": "0199c82c-c012-77a6-bfe2-bbd6bf283439",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Screen Guard",
+            "quantity": 3,
+            "unitPrice": 1250,
+            "costPrice": 750,
+            "discountAmount": 50,
+            "lineTotal": 3700,
+            "createdAt": 1760000240000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c014-75d7-846c-b7c1ba53ff5f",
+            "saleId": "0199c82c-c012-77a6-bfe2-bbd6bf283439",
+            "method": "cash",
+            "amount": 3700,
+            "reference": null,
+            "createdAt": 1760000240000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000240000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c012-77a6-bfe2-bbd6bf283439\",\"invoiceNo\":\"A-000004\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":750,\"createdAt\":1760000240000,\"description\":\"Screen Guard\",\"discountAmount\":50,\"id\":\"0199c82c-c013-77ae-a76d-623d8a6aa327\",\"lineNo\":1,\"lineTotal\":3700,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":3,\"unitPrice\":1250,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":3700,\"createdAt\":1760000240000,\"id\":\"0199c82c-c014-75d7-846c-b7c1ba53ff5f\",\"method\":\"cash\",\"reference\":null}],\"seq\":4,\"subtotal\":3700,\"total\":3700,\"v\":1}",
+      "expected_hash": "2997bde73412fe7c770467556455f2200084f015926832531ec20e8ec1721944"
+    },
+    {
+      "name": "return-negative-discount",
+      "previous_hash": "2997bde73412fe7c770467556455f2200084f015926832531ec20e8ec1721944",
+      "unsealed_data": {
+        "id": "0199c82c-c015-7152-a66a-5384c3187e40",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 5,
+        "invoiceNo": "A-000005",
+        "kind": "return",
+        "originalSaleId": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": "0199c82c-c003-76c4-9f03-2d14f3ed2c2b",
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": -179955,
+        "discountTotal": -500,
+        "total": -179455,
+        "note": "wapsi \u2014 screen crack",
+        "createdAt": 1760000300000,
+        "hashVersion": 1,
+        "lines": [
+          {
+            "id": "0199c82c-c016-7248-b1f1-10630e2bbbb7",
+            "saleId": "0199c82c-c015-7152-a66a-5384c3187e40",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": "0199c82c-c005-74ef-987f-fed73952b6db",
+            "variantId": null,
+            "description": "Galaxy A55 8/256 \u00b7 IMEI 356938035643809",
+            "quantity": -1,
+            "unitPrice": 199950,
+            "costPrice": 149962,
+            "discountAmount": -19995,
+            "lineTotal": -179955,
+            "createdAt": 1760000300000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c017-7616-996a-c06be4936015",
+            "saleId": "0199c82c-c015-7152-a66a-5384c3187e40",
+            "method": "cash",
+            "amount": -79455,
+            "reference": null,
+            "createdAt": 1760000300000
+          },
+          {
+            "id": "0199c82c-c018-74e3-8368-02b636e2d5ed",
+            "saleId": "0199c82c-c015-7152-a66a-5384c3187e40",
+            "method": "khata",
+            "amount": -100000,
+            "reference": null,
+            "createdAt": 1760000300000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000300000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":-500,\"id\":\"0199c82c-c015-7152-a66a-5384c3187e40\",\"invoiceNo\":\"A-000005\",\"kind\":\"return\",\"lines\":[{\"costPrice\":149962,\"createdAt\":1760000300000,\"description\":\"Galaxy A55 8/256 \u00b7 IMEI 356938035643809\",\"discountAmount\":-19995,\"id\":\"0199c82c-c016-7248-b1f1-10630e2bbbb7\",\"lineNo\":1,\"lineTotal\":-179955,\"phoneUnitId\":\"0199c82c-c005-74ef-987f-fed73952b6db\",\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":-1,\"unitPrice\":199950,\"variantId\":null}],\"note\":\"wapsi \u2014 screen crack\",\"originalSaleId\":\"0199c82c-c007-76a3-a3d0-fb1b2a2e50e7\",\"payments\":[{\"amount\":-79455,\"createdAt\":1760000300000,\"id\":\"0199c82c-c017-7616-996a-c06be4936015\",\"method\":\"cash\",\"reference\":null},{\"amount\":-100000,\"createdAt\":1760000300000,\"id\":\"0199c82c-c018-74e3-8368-02b636e2d5ed\",\"method\":\"khata\",\"reference\":null}],\"seq\":5,\"subtotal\":-179955,\"total\":-179455,\"v\":1}",
+      "expected_hash": "600ad683e0b922f067f12e0c6398f4f466005f0a5ab82187947b0a8e084cb12b"
+    },
+    {
+      "name": "three-way-split-scrambled",
+      "previous_hash": "600ad683e0b922f067f12e0c6398f4f466005f0a5ab82187947b0a8e084cb12b",
+      "unsealed_data": {
+        "id": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 6,
+        "invoiceNo": "A-000006",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": "0199c82c-c003-76c4-9f03-2d14f3ed2c2b",
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 450000,
+        "discountTotal": 2500,
+        "total": 447500,
+        "note": null,
+        "createdAt": 1760000360000,
+        "hashVersion": 1,
+        "lines": [
+          {
+            "id": "0199c82c-c01b-76e4-b2e4-1d19e3bd686c",
+            "saleId": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
+            "lineNo": 2,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Earbuds",
+            "quantity": 1,
+            "unitPrice": 150000,
+            "costPrice": 90000,
+            "discountAmount": 0,
+            "lineTotal": 150000,
+            "createdAt": 1760000360000
+          },
+          {
+            "id": "0199c82c-c01a-774c-9182-675d2fa0ba97",
+            "saleId": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Back Cover",
+            "quantity": 1,
+            "unitPrice": 300000,
+            "costPrice": 180000,
+            "discountAmount": 0,
+            "lineTotal": 300000,
+            "createdAt": 1760000360000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c01e-7747-b2d5-e5f4b82bf274",
+            "saleId": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
+            "method": "khata",
+            "amount": 97500,
+            "reference": null,
+            "createdAt": 1760000360000
+          },
+          {
+            "id": "0199c82c-c01d-7103-9110-46d797b06bdb",
+            "saleId": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
+            "method": "jazzcash",
+            "amount": 150000,
+            "reference": "TXN \"9\"\\77",
+            "createdAt": 1760000360000
+          },
+          {
+            "id": "0199c82c-c01c-77a5-a366-bef3c86fbbb5",
+            "saleId": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
+            "method": "cash",
+            "amount": 200000,
+            "reference": null,
+            "createdAt": 1760000360000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000360000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":2500,\"id\":\"0199c82c-c019-734d-a24e-eaf34d4e17ef\",\"invoiceNo\":\"A-000006\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":180000,\"createdAt\":1760000360000,\"description\":\"Back Cover\",\"discountAmount\":0,\"id\":\"0199c82c-c01a-774c-9182-675d2fa0ba97\",\"lineNo\":1,\"lineTotal\":300000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":300000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"},{\"costPrice\":90000,\"createdAt\":1760000360000,\"description\":\"Earbuds\",\"discountAmount\":0,\"id\":\"0199c82c-c01b-76e4-b2e4-1d19e3bd686c\",\"lineNo\":2,\"lineTotal\":150000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":150000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":200000,\"createdAt\":1760000360000,\"id\":\"0199c82c-c01c-77a5-a366-bef3c86fbbb5\",\"method\":\"cash\",\"reference\":null},{\"amount\":150000,\"createdAt\":1760000360000,\"id\":\"0199c82c-c01d-7103-9110-46d797b06bdb\",\"method\":\"jazzcash\",\"reference\":\"TXN \\\"9\\\"\\\\77\"},{\"amount\":97500,\"createdAt\":1760000360000,\"id\":\"0199c82c-c01e-7747-b2d5-e5f4b82bf274\",\"method\":\"khata\",\"reference\":null}],\"seq\":6,\"subtotal\":450000,\"total\":447500,\"v\":1}",
+      "expected_hash": "0cc0fa90374f8017a1f13a3aa7c4e309b349a7aa50cbd31210f091641b02a359"
+    },
+    {
+      "name": "large-amounts",
+      "previous_hash": "0cc0fa90374f8017a1f13a3aa7c4e309b349a7aa50cbd31210f091641b02a359",
+      "unsealed_data": {
+        "id": "0199c82c-c01f-7436-9697-48fef423f7aa",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 7,
+        "invoiceNo": "A-000007",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": null,
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 8000000000000000,
+        "discountTotal": 0,
+        "total": 8000000000000000,
+        "note": null,
+        "createdAt": 1760000420000,
+        "hashVersion": 1,
+        "lines": [
+          {
+            "id": "0199c82c-c020-7027-b648-bf0bd8f3ac62",
+            "saleId": "0199c82c-c01f-7436-9697-48fef423f7aa",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Gold-plated charger",
+            "quantity": 2,
+            "unitPrice": 4000000000000000,
+            "costPrice": 2400000000000000,
+            "discountAmount": 0,
+            "lineTotal": 8000000000000000,
+            "createdAt": 1760000420000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c021-75c6-bd95-b94a499f13f6",
+            "saleId": "0199c82c-c01f-7436-9697-48fef423f7aa",
+            "method": "cash",
+            "amount": 8000000000000000,
+            "reference": null,
+            "createdAt": 1760000420000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000420000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c01f-7436-9697-48fef423f7aa\",\"invoiceNo\":\"A-000007\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":2400000000000000,\"createdAt\":1760000420000,\"description\":\"Gold-plated charger\",\"discountAmount\":0,\"id\":\"0199c82c-c020-7027-b648-bf0bd8f3ac62\",\"lineNo\":1,\"lineTotal\":8000000000000000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2,\"unitPrice\":4000000000000000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":8000000000000000,\"createdAt\":1760000420000,\"id\":\"0199c82c-c021-75c6-bd95-b94a499f13f6\",\"method\":\"cash\",\"reference\":null}],\"seq\":7,\"subtotal\":8000000000000000,\"total\":8000000000000000,\"v\":1}",
+      "expected_hash": "e7b6fd45d5c511c6ac72a6db6d2e1b9a515b2c0629236d28677e3e89be5873b8"
+    }
+  ]
+}

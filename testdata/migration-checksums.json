@@ -1,0 +1,25 @@
+{
+  "description": "checksum() of every file in packages/db/migrations (SHA-256 of the LF-normalised text). C# Migrator.Checksum must match.",
+  "migrations": [
+    {
+      "version": 1,
+      "name": "masters",
+      "checksum": "de374c6bb276907dff093319b2dbbf4c031ba941a19380d724f2e4895ffb38df"
+    },
+    {
+      "version": 2,
+      "name": "stock",
+      "checksum": "0c8d06d03048c3570d0a954ae22ea40185e31b7f8816bd59200f72d4356927e3"
+    },
+    {
+      "version": 3,
+      "name": "sales_ledger",
+      "checksum": "62465dbd48be7bd242c40a902e0616ba236e13b892bf3d5cb66ffd94f49878ba"
+    },
+    {
+      "version": 4,
+      "name": "outbox",
+      "checksum": "0f053d426e095df69f1d411d41ffa9ffa37e47c31d82941598d7e3ddd04e975b"
+    }
+  ]
+}

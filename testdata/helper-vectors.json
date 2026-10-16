@@ -1,0 +1,817 @@
+{
+  "description": "Recorded results of intIn/optIntIn/money/optText. A missing \"v\" means the field was undefined.",
+  "cases": [
+    {
+      "name": "intIn: in range",
+      "fn": "intIn",
+      "args": {
+        "v": 5,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": true,
+        "value": 5
+      }
+    },
+    {
+      "name": "intIn: lower bound",
+      "fn": "intIn",
+      "args": {
+        "v": 1,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": true,
+        "value": 1
+      }
+    },
+    {
+      "name": "intIn: upper bound",
+      "fn": "intIn",
+      "args": {
+        "v": 10,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": true,
+        "value": 10
+      }
+    },
+    {
+      "name": "intIn: below min",
+      "fn": "intIn",
+      "args": {
+        "v": 0,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: above max",
+      "fn": "intIn",
+      "args": {
+        "v": 11,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: fraction",
+      "fn": "intIn",
+      "args": {
+        "v": 1.5,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: numeric string",
+      "fn": "intIn",
+      "args": {
+        "v": "5",
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: null",
+      "fn": "intIn",
+      "args": {
+        "v": null,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: undefined (field missing)",
+      "fn": "intIn",
+      "args": {
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: boolean",
+      "fn": "intIn",
+      "args": {
+        "v": true,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: array",
+      "fn": "intIn",
+      "args": {
+        "v": [],
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: object",
+      "fn": "intIn",
+      "args": {
+        "v": {},
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "intIn: 1e21",
+      "fn": "intIn",
+      "args": {
+        "v": 1e21,
+        "field": "qty",
+        "min": 1,
+        "max": 1e22
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 1e+22"
+      }
+    },
+    {
+      "name": "intIn: 2^53 is not safe",
+      "fn": "intIn",
+      "args": {
+        "v": 9007199254740992,
+        "field": "qty",
+        "min": 1,
+        "max": 1.7976931348623157e308
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 1.7976931348623157e+308"
+      }
+    },
+    {
+      "name": "intIn: 2^53-1 is safe",
+      "fn": "intIn",
+      "args": {
+        "v": 9007199254740991,
+        "field": "qty",
+        "min": 1,
+        "max": 9007199254740991
+      },
+      "expect": {
+        "ok": true,
+        "value": 9007199254740991
+      }
+    },
+    {
+      "name": "intIn: negative in negative range",
+      "fn": "intIn",
+      "args": {
+        "v": -3,
+        "field": "qty",
+        "min": -5,
+        "max": 5
+      },
+      "expect": {
+        "ok": true,
+        "value": -3
+      }
+    },
+    {
+      "name": "intIn: integer-valued float 3.0",
+      "fn": "intIn",
+      "args": {
+        "v": 3,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": true,
+        "value": 3
+      }
+    },
+    {
+      "name": "intIn: tiny fraction",
+      "fn": "intIn",
+      "args": {
+        "v": 5e-324,
+        "field": "qty",
+        "min": 1,
+        "max": 10
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "qty",
+        "message": "qty must be an integer between 1 and 10"
+      }
+    },
+    {
+      "name": "optIntIn: null -> null",
+      "fn": "optIntIn",
+      "args": {
+        "v": null,
+        "field": "n",
+        "min": 1,
+        "max": 9
+      },
+      "expect": {
+        "ok": true,
+        "value": null
+      }
+    },
+    {
+      "name": "optIntIn: undefined -> null",
+      "fn": "optIntIn",
+      "args": {
+        "field": "n",
+        "min": 1,
+        "max": 9
+      },
+      "expect": {
+        "ok": true,
+        "value": null
+      }
+    },
+    {
+      "name": "optIntIn: valid",
+      "fn": "optIntIn",
+      "args": {
+        "v": 3,
+        "field": "n",
+        "min": 1,
+        "max": 9
+      },
+      "expect": {
+        "ok": true,
+        "value": 3
+      }
+    },
+    {
+      "name": "optIntIn: fraction",
+      "fn": "optIntIn",
+      "args": {
+        "v": 1.2,
+        "field": "n",
+        "min": 1,
+        "max": 9
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "n",
+        "message": "n must be an integer between 1 and 9"
+      }
+    },
+    {
+      "name": "money: zero allowed by default",
+      "fn": "money",
+      "args": {
+        "v": 0,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": true,
+        "value": 0
+      }
+    },
+    {
+      "name": "money: positive",
+      "fn": "money",
+      "args": {
+        "v": 100,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": true,
+        "value": 100
+      }
+    },
+    {
+      "name": "money: negative rejected",
+      "fn": "money",
+      "args": {
+        "v": -1,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "amount",
+        "message": "amount must not be negative"
+      }
+    },
+    {
+      "name": "money: negative allowed",
+      "fn": "money",
+      "args": {
+        "v": -1,
+        "field": "amount",
+        "allowNegative": true
+      },
+      "expect": {
+        "ok": true,
+        "value": -1
+      }
+    },
+    {
+      "name": "money: zero rejected when allowZero=false",
+      "fn": "money",
+      "args": {
+        "v": 0,
+        "field": "amount",
+        "allowZero": false
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "amount",
+        "message": "amount must be greater than zero"
+      }
+    },
+    {
+      "name": "money: fraction",
+      "fn": "money",
+      "args": {
+        "v": 1.5,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": false,
+        "code": "MONEY_INVALID",
+        "field": "amount",
+        "message": "amount must be a whole number of paisa"
+      }
+    },
+    {
+      "name": "money: numeric string",
+      "fn": "money",
+      "args": {
+        "v": "100",
+        "field": "amount"
+      },
+      "expect": {
+        "ok": false,
+        "code": "MONEY_INVALID",
+        "field": "amount",
+        "message": "amount must be a whole number of paisa"
+      }
+    },
+    {
+      "name": "money: null",
+      "fn": "money",
+      "args": {
+        "v": null,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": false,
+        "code": "MONEY_INVALID",
+        "field": "amount",
+        "message": "amount must be a whole number of paisa"
+      }
+    },
+    {
+      "name": "money: undefined",
+      "fn": "money",
+      "args": {
+        "field": "amount"
+      },
+      "expect": {
+        "ok": false,
+        "code": "MONEY_INVALID",
+        "field": "amount",
+        "message": "amount must be a whole number of paisa"
+      }
+    },
+    {
+      "name": "money: 2^53 not safe",
+      "fn": "money",
+      "args": {
+        "v": 9007199254740992,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": false,
+        "code": "MONEY_INVALID",
+        "field": "amount",
+        "message": "amount must be a whole number of paisa"
+      }
+    },
+    {
+      "name": "money: -(2^53-1) allowed with allowNegative",
+      "fn": "money",
+      "args": {
+        "v": -9007199254740991,
+        "field": "amount",
+        "allowNegative": true
+      },
+      "expect": {
+        "ok": true,
+        "value": -9007199254740991
+      }
+    },
+    {
+      "name": "money: 2^53-1",
+      "fn": "money",
+      "args": {
+        "v": 9007199254740991,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": true,
+        "value": 9007199254740991
+      }
+    },
+    {
+      "name": "money: boolean",
+      "fn": "money",
+      "args": {
+        "v": false,
+        "field": "amount"
+      },
+      "expect": {
+        "ok": false,
+        "code": "MONEY_INVALID",
+        "field": "amount",
+        "message": "amount must be a whole number of paisa"
+      }
+    },
+    {
+      "name": "optText: undefined -> null",
+      "fn": "optText",
+      "args": {
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": null
+      }
+    },
+    {
+      "name": "optText: null -> null",
+      "fn": "optText",
+      "args": {
+        "v": null,
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": null
+      }
+    },
+    {
+      "name": "optText: empty -> null",
+      "fn": "optText",
+      "args": {
+        "v": "",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": null
+      }
+    },
+    {
+      "name": "optText: spaces only -> null",
+      "fn": "optText",
+      "args": {
+        "v": "   ",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": null
+      }
+    },
+    {
+      "name": "optText: trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "  a b  ",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "a b"
+      }
+    },
+    {
+      "name": "optText: number rejected",
+      "fn": "optText",
+      "args": {
+        "v": 123,
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "note",
+        "message": "note must be text"
+      }
+    },
+    {
+      "name": "optText: boolean rejected",
+      "fn": "optText",
+      "args": {
+        "v": true,
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "note",
+        "message": "note must be text"
+      }
+    },
+    {
+      "name": "optText: too long",
+      "fn": "optText",
+      "args": {
+        "v": "abcde",
+        "field": "note",
+        "max": 4
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "note",
+        "message": "note must be at most 4 characters"
+      }
+    },
+    {
+      "name": "optText: exactly max after trim",
+      "fn": "optText",
+      "args": {
+        "v": "  abcd  ",
+        "field": "note",
+        "max": 4
+      },
+      "expect": {
+        "ok": true,
+        "value": "abcd"
+      }
+    },
+    {
+      "name": "optText: NBSP trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\u00a0x\u00a0",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "x"
+      }
+    },
+    {
+      "name": "optText: BOM (U+FEFF) trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\ufeffx\ufeff",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "x"
+      }
+    },
+    {
+      "name": "optText: NEL (U+0085) NOT trimmed in JS",
+      "fn": "optText",
+      "args": {
+        "v": "\u0085x\u0085",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "\u0085x\u0085"
+      }
+    },
+    {
+      "name": "optText: LS/PS trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\u2028x\u2029",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "x"
+      }
+    },
+    {
+      "name": "optText: ideographic space trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\u3000x\u3000",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "x"
+      }
+    },
+    {
+      "name": "optText: ogham space trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\u1680x\u1680",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "x"
+      }
+    },
+    {
+      "name": "optText: hair space trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\u200ax\u200a",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "x"
+      }
+    },
+    {
+      "name": "optText: zero-width space NOT trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\u200bx\u200b",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "\u200bx\u200b"
+      }
+    },
+    {
+      "name": "optText: mongolian vowel separator NOT trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\u180ex\u180e",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "\u180ex\u180e"
+      }
+    },
+    {
+      "name": "optText: tabs and newlines trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "\t\n x \r\n",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "x"
+      }
+    },
+    {
+      "name": "optText: urdu trimmed",
+      "fn": "optText",
+      "args": {
+        "v": "  \u0646\u0642\u062f  ",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "\u0646\u0642\u062f"
+      }
+    },
+    {
+      "name": "optText: emoji counts as 2 UTF-16 units (3 > max)",
+      "fn": "optText",
+      "args": {
+        "v": "\ud83d\ude00\ud83d\ude00",
+        "field": "note",
+        "max": 3
+      },
+      "expect": {
+        "ok": false,
+        "code": "VALIDATION",
+        "field": "note",
+        "message": "note must be at most 3 characters"
+      }
+    },
+    {
+      "name": "optText: emoji fits (4 <= max)",
+      "fn": "optText",
+      "args": {
+        "v": "\ud83d\ude00\ud83d\ude00",
+        "field": "note",
+        "max": 4
+      },
+      "expect": {
+        "ok": true,
+        "value": "\ud83d\ude00\ud83d\ude00"
+      }
+    },
+    {
+      "name": "optText: inner whitespace kept",
+      "fn": "optText",
+      "args": {
+        "v": " a\u00a0\u00a0b ",
+        "field": "note",
+        "max": 50
+      },
+      "expect": {
+        "ok": true,
+        "value": "a\u00a0\u00a0b"
+      }
+    }
+  ]
+}
