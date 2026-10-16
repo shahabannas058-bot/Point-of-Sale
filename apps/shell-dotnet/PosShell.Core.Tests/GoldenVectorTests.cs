@@ -185,8 +185,8 @@ public class HelperVectorTests
     [Fact]
     public void JsTrim_differs_from_dotnet_Trim_exactly_where_expected()
     {
-        Assert.Equal("x", Validate.JsTrim("﻿x﻿")); // JS trims BOM ...
-        Assert.Equal("﻿x﻿", "﻿x﻿".Trim()); // ... .NET does not
+        Assert.Equal("x", Validate.JsTrim("\uFEFFx\uFEFF")); // JS trims BOM ...
+        Assert.Equal("\uFEFFx\uFEFF", "\uFEFFx\uFEFF".Trim()); // ... .NET does not
         Assert.Equal("\u0085x\u0085", Validate.JsTrim("\u0085x\u0085")); // JS keeps NEL ...
         Assert.Equal("x", "\u0085x\u0085".Trim()); // ... .NET trims it
     }

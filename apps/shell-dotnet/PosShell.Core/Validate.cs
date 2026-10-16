@@ -83,8 +83,8 @@ public static class Validate
     /// JS trims U+FEFF but not U+0085 (NEL); .NET does the opposite.
     /// </summary>
     private static bool IsJsSpace(char c) =>
-        c is '\t' or '\n' or '\v' or '\f' or '\r' or ' ' or ' ' or ' '
-          or (>= ' ' and <= ' ') or ' ' or ' ' or ' ' or ' ' or '　' or '﻿';
+        c is '\t' or '\n' or '\v' or '\f' or '\r' or ' ' or '\u00A0' or '\u1680'
+          or (>= '\u2000' and <= '\u200A') or '\u2028' or '\u2029' or '\u202F' or '\u205F' or '\u3000' or '\uFEFF';
 
     public static string JsTrim(string s)
     {

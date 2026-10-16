@@ -46,7 +46,8 @@ public static class PaisaMath
     {
         var ok = gross >= 0 ? discount >= 0 && discount <= gross : discount <= 0 && discount >= gross;
         if (!ok)
-            throw new ServiceException("DISCOUNT_INVALID", $"{label} discount {discount} is outside 0..{gross}");
+            throw new ServiceException(
+                "DISCOUNT_INVALID", FormattableString.Invariant($"{label} discount {discount} is outside 0..{gross}"));
     }
 
     public static long LineTotal(PricedLine line)
@@ -85,7 +86,8 @@ public static class PaisaMath
             paid = Add(paid, p.Amount);
         }
         if (paid != total)
-            throw Mismatch($"Payments sum to {paid} paisa but total is {total} paisa (difference {total - paid})");
+            throw Mismatch(FormattableString.Invariant(
+                $"Payments sum to {paid} paisa but total is {total} paisa (difference {total - paid})"));
     }
 
     /// <summary>Exact comparison discount/gross &gt; maxBps/10000 (no floor: 1 paisa over the limit counts). Int128, like BigInt in TS.</summary>
