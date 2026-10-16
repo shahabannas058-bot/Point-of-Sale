@@ -35,3 +35,16 @@ Thumbs.db
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# .NET test output, packages and IDE state
+TestResults/
+*.trx
+*.nupkg
+*.suo
+*.rsuser
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code: personal settings stay local, shared agents stay tracked
+.claude/settings.local.json
