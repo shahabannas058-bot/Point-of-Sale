@@ -2,14 +2,15 @@
 
   <!--
     Plain WPF + WebView2, NOT MAUI: no MAUI workload, no multi-GB install, and a real self-contained single-file publish.
-      dotnet publish apps/shell-dotnet/PosShell.App -c Release -r win-x64 --self-contained `
+      dotnet publish apps/shell-dotnet/PosShell.App -c Release -r win-x64 -p:SelfContained=true
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+    (No double hyphens in this comment: XML forbids them, which is why SelfContained is spelled as a property.)
     The React build (apps/desktop/dist) is copied next to the exe as wwwroot/ and served from https://app.pos/.
     Needs the WebView2 Runtime on the PC (preinstalled on Windows 11; ship the Evergreen bootstrapper for Windows 10).
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

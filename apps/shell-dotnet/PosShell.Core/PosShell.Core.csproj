@@ -2,7 +2,7 @@
 
   <!-- Pure logic only: no MAUI, no SQLite, no Windows APIs. That is what lets xUnit run it anywhere. -->
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Warnings are not errors locally; CI runs `dotnet build -warnaserror`. -->
