@@ -275,6 +275,11 @@ export interface PurchaseResult {
   phoneUnitIds: string[];
   supplierBalance: Paisa;
 }
+export interface SupplierLedgerLine {
+  entry: LedgerEntry;
+  runningBalance: Paisa; // positive = the shop owes the supplier
+  referenceNo: string | null; // the supplier's own invoice number on the linked purchase
+}
 export interface PurchasingApi {
   listSuppliers(): Promise<PartyBalance<Supplier>[]>;
   createSupplier(i: {
@@ -289,6 +294,13 @@ export interface PurchasingApi {
     method: Exclude<PaymentMethod, 'khata'>;
     note?: string;
   }): Promise<Paisa>; // returns new balance
+  /** Newest first; running balance is cumulative per supplier. Needs receive_stock. */
+  getLedger(
+    supplierId: string,
+    o?: { limit?: number; beforeCreatedAt?: number },
+  ): Promise<{ supplier: Supplier; balance: Paisa; lines: SupplierLedgerLine[] }>;
+  /** What the shop owes in total, over suppliers with a positive balance. Needs receive_stock or view_reports. */
+  totals(): Promise<{ payable: Paisa; suppliersOwed: number }>;
 }
 
 // ---------- checkout / returns ----------

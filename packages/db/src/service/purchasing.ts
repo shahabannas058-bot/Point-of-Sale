@@ -1,15 +1,18 @@
 import {
   PaymentMethodSchema,
+  ServiceError,
+  type LedgerEntry,
   type PartyBalance,
   type Paisa,
   type Purchase,
   type PurchasingApi,
   type Supplier,
+  type SupplierLedgerLine,
 } from '@pos/shared';
 import { negPaisa, paisa } from '@pos/core';
 import { WriteBatch } from './batch';
 import { createProductResolver, normalizePhone, stagePhoneUnit } from './catalog';
-import { requirePermission, type Ctx } from './deps';
+import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optPhone, optText, reqText } from './errors';
 import { mapRow, type Raw } from './mappers';
 import { loadShop } from './meta';
@@ -225,6 +228,49 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
         await b.commit(ctx.driver);
       });
       return paisa(await supplierBalance(ctx.driver, i.supplierId));
+    },
+
+    async getLedger(supplierId, o = {}) {
+      requirePermission(ctx, 'receive_stock');
+      const supplier = await requireSupplier(ctx.driver, supplierId); // NOT_FOUND
+      const limit = o.limit === undefined ? 100 : intIn(o.limit, 'limit', 1, 1000);
+      const before = o.beforeCreatedAt ?? null;
+      const rows = await ctx.driver.query<Raw>(
+        `SELECT * FROM (
+           SELECT le.*, p.reference_no AS reference_no,
+             SUM(le.amount) OVER (ORDER BY le.created_at, le.id) AS running_balance
+           FROM ledger_entries le LEFT JOIN purchases p ON p.id = le.purchase_id
+           WHERE le.supplier_id = ?
+         ) WHERE (? IS NULL OR created_at < ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
+        [supplierId, before, before, limit],
+      );
+      const lines = rows.map((r): SupplierLedgerLine => {
+        const { running_balance: running, reference_no: referenceNo, ...entry } = r;
+        return {
+          entry: mapRow<LedgerEntry>(entry),
+          runningBalance: paisa(Number(running)),
+          referenceNo: typeof referenceNo === 'string' ? referenceNo : null,
+        };
+      });
+      return {
+        supplier: supplier as unknown as Supplier,
+        balance: paisa(await supplierBalance(ctx.driver, supplierId)),
+        lines,
+      };
+    },
+
+    async totals() {
+      requireSession(ctx);
+      if (!canDo(ctx, 'receive_stock') && !canDo(ctx, 'view_reports'))
+        throw new ServiceError('FORBIDDEN', 'Permission required: receive_stock', {
+          permission: 'receive_stock',
+        });
+      const rows = await ctx.driver.query<{ payable: number; owed: number }>(
+        `SELECT COALESCE(SUM(balance), 0) AS payable, COUNT(*) AS owed FROM (
+           SELECT supplier_id, SUM(amount) AS balance FROM ledger_entries
+           WHERE supplier_id IS NOT NULL GROUP BY supplier_id HAVING SUM(amount) > 0)`,
+      );
+      return { payable: paisa(rows[0]?.payable ?? 0), suppliersOwed: rows[0]?.owed ?? 0 };
     },
   });
 }
