@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   Smartphone,
   Sun,
+  Truck,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -35,6 +36,7 @@ const NAV: NavItem[] = [
   { to: '/inventory', key: 'nav.inventory', icon: Boxes, perm: 'view_catalog' },
   { to: '/sales', key: 'nav.sales', icon: Receipt, perm: 'sell' },
   { to: '/customers', key: 'nav.customers', icon: Users, perm: 'receive_khata' },
+  { to: '/suppliers', key: 'nav.suppliers', icon: Truck, perm: 'receive_stock' },
   { to: '/reports', key: 'nav.reports', icon: ChartColumn, perm: 'view_reports' },
   { to: '/settings', key: 'nav.settings', icon: SettingsIcon, perm: null },
 ];

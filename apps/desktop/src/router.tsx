@@ -9,6 +9,8 @@ import { ReceiptPage } from './screens/ReceiptPage';
 import { Reports } from './screens/Reports';
 import { Sales } from './screens/Sales';
 import { Settings } from './screens/Settings';
+import { SupplierDetail } from './screens/SupplierDetail';
+import { Suppliers } from './screens/Suppliers';
 
 export const router = createHashRouter([
   { path: '/login', element: <Login /> },
@@ -24,6 +26,8 @@ export const router = createHashRouter([
       { path: 'sales', element: <Sales /> },
       { path: 'customers', element: <Customers /> },
       { path: 'customers/:id', element: <CustomerDetail /> },
+      { path: 'suppliers', element: <Suppliers /> },
+      { path: 'suppliers/:id', element: <SupplierDetail /> },
       { path: 'reports', element: <Reports /> },
       { path: 'settings', element: <Settings /> },
     ],

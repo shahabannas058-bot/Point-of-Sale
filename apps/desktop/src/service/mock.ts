@@ -55,6 +55,7 @@ import {
   type ShopInfo,
   type ShopSettings,
   type Supplier,
+  type SupplierLedgerLine,
   type User,
   type VariantView,
   PAYMENT_METHODS,
@@ -99,7 +100,16 @@ function build(): { service: PosService; seed: () => Promise<void> } {
   const customers: Customer[] = [];
   const suppliers: Supplier[] = [];
   const ledger: LedgerEntry[] = [];
-  const supplierLedger: { supplierId: string; amount: number; at: number }[] = [];
+  const supplierLedger: {
+    id: string;
+    supplierId: string;
+    type: LedgerEntryType;
+    amount: number;
+    method: Exclude<PaymentMethod, 'khata'> | null;
+    note: string | null;
+    referenceNo: string | null;
+    at: number;
+  }[] = [];
   const invoices: Invoice[] = [];
   const idempotent = new Map<string, Invoice>();
   const grants = new Map<string, { expiresAt: number; username: string }>();
@@ -865,9 +875,30 @@ function build(): { service: PosService; seed: () => Promise<void> } {
             variants[idx] = { ...v, costPrice: paisa(a.unitCost), updatedAt: now() as never };
             total += a.quantity * a.unitCost;
           }
-          supplierLedger.push({ supplierId: i.supplierId, amount: total, at: now() });
+          const receivedAt = now();
+          const referenceNo = i.referenceNo ?? null;
+          if (total > 0)
+            supplierLedger.push({
+              id: newId(),
+              supplierId: i.supplierId,
+              type: 'purchase_credit',
+              amount: total,
+              method: null,
+              note: referenceNo,
+              referenceNo,
+              at: receivedAt,
+            });
           if (i.paidNow && i.paidNow.amount > 0)
-            supplierLedger.push({ supplierId: i.supplierId, amount: -i.paidNow.amount, at: now() });
+            supplierLedger.push({
+              id: newId(),
+              supplierId: i.supplierId,
+              type: 'payment_made',
+              amount: -i.paidNow.amount,
+              method: i.paidNow.method,
+              note: null,
+              referenceNo,
+              at: receivedAt,
+            });
           const r: PurchaseResult = {
             purchase: cast({
               id: newId(),
@@ -888,10 +919,62 @@ function build(): { service: PosService; seed: () => Promise<void> } {
           return Promise.reject(e instanceof Error ? e : new Error(String(e)));
         }
       },
-      paySupplier: ({ supplierId, amount }) => {
+      paySupplier: ({ supplierId, amount, method, note }) => {
         require('receive_stock');
-        supplierLedger.push({ supplierId, amount: -amount, at: now() });
+        if (!suppliers.some((s) => s.id === supplierId))
+          return Promise.reject(new ServiceError('NOT_FOUND', 'Supplier not found'));
+        if (!Number.isSafeInteger(amount) || amount <= 0)
+          return Promise.reject(new ServiceError('VALIDATION', 'amount must be greater than zero'));
+        supplierLedger.push({
+          id: newId(),
+          supplierId,
+          type: 'payment_made',
+          amount: -amount,
+          method,
+          note: note?.trim() || null,
+          referenceNo: null,
+          at: now(),
+        });
         return Promise.resolve(paisa(supplierBalance(supplierId)));
+      },
+      getLedger: (supplierId, o = {}) => {
+        require('receive_stock');
+        const supplier = suppliers.find((s) => s.id === supplierId);
+        if (!supplier) return Promise.reject(new ServiceError('NOT_FOUND', 'Supplier not found'));
+        let running = 0;
+        const all: SupplierLedgerLine[] = supplierLedger
+          .filter((e) => e.supplierId === supplierId)
+          .map((e) => {
+            running += e.amount;
+            return {
+              entry: cast<LedgerEntry>({
+                id: e.id,
+                customerId: null,
+                supplierId: e.supplierId,
+                type: e.type,
+                amount: e.amount,
+                method: e.method,
+                saleId: null,
+                purchaseId: null,
+                note: e.note,
+                createdBy: needSessionOrSystem(),
+                createdAt: e.at,
+              }),
+              runningBalance: paisa(running),
+              referenceNo: e.referenceNo,
+            };
+          });
+        const before = o.beforeCreatedAt;
+        const lines = all
+          .filter((l) => (before ? l.entry.createdAt < before : true))
+          .slice(-(o.limit ?? 100))
+          .reverse();
+        return Promise.resolve({ supplier, balance: paisa(running), lines });
+      },
+      totals: () => {
+        require('receive_stock');
+        const owed = suppliers.map((s) => supplierBalance(s.id)).filter((b) => b > 0);
+        return Promise.resolve({ payable: paisa(sum(owed)), suppliersOwed: owed.length });
       },
     },
     checkout: {
