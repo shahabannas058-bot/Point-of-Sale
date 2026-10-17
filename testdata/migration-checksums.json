@@ -19,6 +19,11 @@
       "version": 4,
       "name": "ledger_outbox",
       "checksum": "148dd31dea2c8a6c7ce9cbf0d9d482267f4b8e0037cfef1d67e28917945c332c"
+    },
+    {
+      "version": 5,
+      "name": "repairs_warranty",
+      "checksum": "bb3f91ba40cdaa513e70f23ce7c966ec483343d37305f74e0e62a58de99a87c1"
     }
   ]
 }

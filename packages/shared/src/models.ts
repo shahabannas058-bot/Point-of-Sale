@@ -311,3 +311,150 @@ export interface IntegrityChecks {
   badPhoneUnits: number;
   unsentOutbox: number;
 }
+
+// ---------------- repairs (Phase 3) ----------------
+
+export const REPAIR_STATUSES = [
+  'received',
+  'diagnosing',
+  'in_repair',
+  'ready',
+  'delivered',
+  'cancelled',
+] as const;
+export type RepairStatus = (typeof REPAIR_STATUSES)[number];
+
+export const REPAIR_PAYMENT_KINDS = ['advance', 'balance', 'refund'] as const;
+export type RepairPaymentKind = (typeof REPAIR_PAYMENT_KINDS)[number];
+
+export interface RepairTicket {
+  id: Id;
+  /** Per-shop sequence, e.g. "R-000001". */
+  ticketNo: string;
+  branchId: Id;
+  customerId: Id | null;
+  /** Snapshot at intake (registered customer or walk-in). */
+  customerName: string;
+  customerPhone: string | null;
+  deviceBrand: string;
+  deviceModel: string;
+  imei: string | null;
+  serial: string | null;
+  problem: string;
+  conditionNotes: string | null;
+  accessories: string | null;
+  estimatedCost: Paisa;
+  finalCharge: Paisa | null;
+  technicianId: Id | null;
+  promisedAt: EpochMs | null;
+  status: RepairStatus;
+  createdBy: Id;
+  createdAt: EpochMs;
+  updatedAt: EpochMs;
+  /** Set when the ticket is delivered or cancelled. */
+  closedAt: EpochMs | null;
+}
+
+/** One row of the append-only status history. */
+export interface RepairStatusChange {
+  id: Id;
+  ticketId: Id;
+  fromStatus: RepairStatus | null;
+  toStatus: RepairStatus;
+  note: string | null;
+  changedBy: Id;
+  changedByName: string;
+  changedAt: EpochMs;
+}
+
+export interface RepairPart {
+  id: Id;
+  ticketId: Id;
+  variantId: Id;
+  label: string;
+  quantity: number;
+  unitCost: Paisa;
+  unitPrice: Paisa;
+  createdBy: Id;
+  createdAt: EpochMs;
+}
+
+export interface RepairPayment {
+  id: Id;
+  ticketId: Id;
+  kind: RepairPaymentKind;
+  method: PaymentMethod;
+  /** Negative for refunds. */
+  amount: Paisa;
+  reference: string | null;
+  createdBy: Id;
+  createdAt: EpochMs;
+}
+
+export interface RepairTicketView {
+  ticket: RepairTicket;
+  technicianName: string | null;
+  /** Oldest first. */
+  history: RepairStatusChange[];
+  parts: RepairPart[];
+  payments: RepairPayment[];
+  /** Sum of all payments (advance + balance - refunds). */
+  paidTotal: Paisa;
+  /** (finalCharge ?? estimatedCost) - paidTotal; 0 once delivered or cancelled. */
+  balanceDue: Paisa;
+}
+
+// ---------------- warranty (Phase 3) ----------------
+
+export const WARRANTY_KINDS = ['shop', 'company'] as const;
+export type WarrantyKind = (typeof WARRANTY_KINDS)[number];
+
+export interface Warranty {
+  id: Id;
+  phoneUnitId: Id;
+  saleId: Id;
+  kind: WarrantyKind;
+  startsAt: EpochMs;
+  endsAt: EpochMs;
+  note: string | null;
+  createdBy: Id;
+  createdAt: EpochMs;
+}
+
+/** 'void' = the sale was returned / voided, so the warranty no longer applies. */
+export type WarrantyState = 'active' | 'expired' | 'void';
+
+export interface WarrantyStatus {
+  warranty: Warranty;
+  state: WarrantyState;
+  /** Whole days left (ceil), 0 when expired or void. */
+  daysLeft: number;
+}
+
+export interface WarrantySaleInfo {
+  saleId: Id;
+  invoiceNo: string;
+  soldAt: EpochMs;
+  customerId: Id | null;
+  customerName: string | null;
+  /** True when a return / void was made against this sale. */
+  returned: boolean;
+}
+
+export interface WarrantyLookup {
+  unit: PhoneUnitView;
+  /** The latest sale of this unit, or null if it was never sold. */
+  sale: WarrantySaleInfo | null;
+  /** Warranties registered on that sale. */
+  warranties: WarrantyStatus[];
+}
+
+export interface ExpiringWarranty {
+  status: WarrantyStatus;
+  unitLabel: string;
+  imei: string | null;
+  serial: string | null;
+  invoiceNo: string;
+  customerName: string | null;
+  customerPhone: string | null;
+}

@@ -42,12 +42,17 @@ describe('migrations', () => {
       'phone_units',
       'products',
       'purchases',
+      'repair_parts',
+      'repair_payments',
+      'repair_status_history',
+      'repair_tickets',
       'sale_lines',
       'sales',
       'schema_migrations',
       'stock_movements',
       'suppliers',
       'users',
+      'warranties',
     ]);
     const triggers = await driver.query("SELECT name FROM sqlite_master WHERE type = 'trigger'");
     expect(triggers.length).toBeGreaterThanOrEqual(10);
