@@ -19,9 +19,9 @@ Tick boxes as work completes. Architecture rules and licensing design are in `CL
 - [ ] Multiple users with roles (owner / manager / cashier); cashier cannot discount or void without PIN
 - [ ] Supplier purchases, supplier payable ledger, purchase returns
 - [ ] Expense tracking, cash-in-hand / day close
-- [ ] **Warranty tracking by IMEI** (shop vs company warranty, expiry lookup)
+- [x] **Warranty tracking by IMEI** (shop vs company warranty, expiry lookup)
 - [ ] **Trade-in / purchase of used phones** (CNIC + IMEI capture, goes back to stock)
-- [ ] **Repair job tickets** (received → in repair → ready → delivered), advance payment, spare-part stock consumption
+- [x] **Repair job tickets** (received → in repair → ready → delivered), advance payment, spare-part stock consumption
 - [ ] Easyload / recharge / scratch-card register and commission
 - [ ] JazzCash / Easypaisa agent transaction register
 - [ ] WhatsApp invoice / reminder sending
@@ -66,9 +66,9 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 - [x] Billing screen, payments (cash / khata / split), hash-chained immutable invoices
 - [x] Returns / voids as entries
 - [ ] Thermal receipt printing (ESC/POS), Urdu text rendering check — _browser `window.print()` receipt exists; ESC/POS encoder pending_
-- [ ] Customer + supplier khata — _customer khata done; supplier payment/ledger screen pending_
+- [x] Customer + supplier khata — _customer khata and supplier ledger/payment screens done_
 - [x] Daily report, user login with roles
-- [x] Tests for money math, stock ledger, invoice hash chain (493 tests, `npm run check` green)
+- [x] Tests for money math, stock ledger, invoice hash chain (536 tests, `npm run check` green)
 
 ### Phase 2 — Cloud, sync and licensing
 - [ ] NestJS + PostgreSQL (RLS multi-tenant), auth
@@ -79,7 +79,7 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 - [ ] Trial flow for new shops
 
 ### Phase 3 — Mobile-shop depth
-- [ ] Warranty, trade-in, repair tickets, easyload/agent registers
+- [ ] Warranty, trade-in, repair tickets, easyload/agent registers — _warranty + repair tickets done (migration 0005, service, screens); trade-in and easyload/agent registers pending_
 - [ ] Installment (qist) system with reminders
 - [ ] WhatsApp integration, owner PWA, cloud backup
 

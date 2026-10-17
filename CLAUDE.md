@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Subscription-based **POS for mobile shops** (phones + accessories + repair) targeting the Pakistani local market. Sold per month to shopkeepers; the app must stop accepting sales when a subscription lapses. The owner (user) communicates in Roman Urdu — reply in Roman Urdu, keep code, identifiers and docs in English.
 
-**Status (2026-10-11): Phase 1 mostly built.** `packages/shared`, `packages/core`, `packages/db` (SQLite schema + `PosService`) and `apps/desktop` (React UI, runs in the browser on sql.js) exist and pass `npm run check`. Not built yet: Tauri/Rust shell, ESC/POS printing, supplier ledger screen, and everything in Phases 2–4 (server, sync, licensing). See `PLAN.md` for exact ticks. The working copy is `C:\dev\point-of-sale`; the OneDrive copy is stale, and neither has any commits yet.
+**Status (2026-10-11): Phase 1 mostly built.** `packages/shared`, `packages/core`, `packages/db` (SQLite schema + `PosService`) and `apps/desktop` (React UI, runs in the browser on sql.js) exist and pass `npm run check`. Also built: supplier khata screens, repair job tickets and IMEI warranty (migration 0005, `repairs`/`warranty` APIs, screens), a liquid-glass UI, and the app's `ur` language is **Roman Urdu** (Latin letters, LTR; the id stays `ur`). Not built yet: Tauri/Rust shell, ESC/POS printing, trade-in, easyload/agent registers, and everything in Phases 2–4 (server, sync, licensing). See `PLAN.md` for exact ticks. The working copy is `C:\dev\point-of-sale`; the OneDrive copy is stale, and neither has any commits yet.
 
 The full service catalogue (what we sell, per plan tier) and the phased roadmap live in `PLAN.md`:
 
