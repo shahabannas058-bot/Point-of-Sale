@@ -79,7 +79,7 @@ export async function seedDemoData({ driver }: { driver: SqlDriver }): Promise<v
     address: 'Shop 12, Hall Road, Lahore',
     phone: '0300-1234567',
     receiptFooter: 'No warranty without this receipt.',
-    receiptFooterUr: 'رسید کے بغیر وارنٹی نہیں ہوگی۔',
+    receiptFooterUr: 'Raseed ke baghair warranty nahi hogi.',
   });
   await s.auth.createUser({
     username: 'manager',

@@ -6,11 +6,14 @@ import { Customers } from './screens/Customers';
 import { Inventory } from './screens/Inventory';
 import { Login } from './screens/Login';
 import { ReceiptPage } from './screens/ReceiptPage';
+import { RepairDetail } from './screens/RepairDetail';
+import { Repairs } from './screens/Repairs';
 import { Reports } from './screens/Reports';
 import { Sales } from './screens/Sales';
 import { Settings } from './screens/Settings';
 import { SupplierDetail } from './screens/SupplierDetail';
 import { Suppliers } from './screens/Suppliers';
+import { Warranty } from './screens/Warranty';
 
 export const router = createHashRouter([
   { path: '/login', element: <Login /> },
@@ -28,6 +31,9 @@ export const router = createHashRouter([
       { path: 'customers/:id', element: <CustomerDetail /> },
       { path: 'suppliers', element: <Suppliers /> },
       { path: 'suppliers/:id', element: <SupplierDetail /> },
+      { path: 'repairs', element: <Repairs /> },
+      { path: 'repairs/:id', element: <RepairDetail /> },
+      { path: 'warranty', element: <Warranty /> },
       { path: 'reports', element: <Reports /> },
       { path: 'settings', element: <Settings /> },
     ],

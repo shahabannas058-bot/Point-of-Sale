@@ -9,8 +9,6 @@ export type TFn = (key: TKey, params?: Params) => string;
 
 export const dictionaries: Record<Lang, Record<TKey, string>> = { en, ur };
 
-export const dirOf = (lang: Lang): 'ltr' | 'rtl' => (lang === 'ur' ? 'rtl' : 'ltr');
-
 /** Looks up `key` in `lang`, falling back to English, then to the key itself. `{name}` placeholders are interpolated. */
 export function translate(lang: Lang, key: TKey, params?: Params): string {
   const raw = dictionaries[lang][key] ?? en[key] ?? key;

@@ -5,6 +5,7 @@ import { assertPaymentsMatchTotal, paisa } from '@pos/core';
 import {
   PAYMENT_METHODS,
   REPAIR_STATUSES,
+  REPAIR_TRANSITIONS,
   ServiceError,
   WARRANTY_KINDS,
   type AccessoryVariant,
@@ -36,14 +37,6 @@ type CashMethod = Exclude<PaymentMethod, 'khata'>;
 
 const DAY_MS = 86_400_000;
 
-const TRANSITIONS: Readonly<Record<RepairStatus, readonly RepairStatus[]>> = {
-  received: ['diagnosing', 'in_repair', 'ready'],
-  diagnosing: ['in_repair', 'ready'],
-  in_repair: ['diagnosing', 'ready'],
-  ready: ['in_repair'],
-  delivered: [],
-  cancelled: [],
-};
 const CLOSED: readonly RepairStatus[] = ['delivered', 'cancelled'];
 
 const fail = (
@@ -334,7 +327,7 @@ export function createMockRepairs(d: MockDeps): PosRepairsApi {
       run(() => {
         d.require('sell');
         const t = find(i.ticketId);
-        if (!TRANSITIONS[t.status].includes(i.status))
+        if (!REPAIR_TRANSITIONS[t.status].includes(i.status))
           invalid('status', `Cannot move a ticket from ${t.status} to ${String(i.status)}`);
         replace({ ...t, status: i.status, updatedAt: d.now() });
         log(t.id, t.status, i.status, optional(i.note));

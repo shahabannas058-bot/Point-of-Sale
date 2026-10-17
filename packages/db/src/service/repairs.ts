@@ -2,6 +2,7 @@ import { assertPaymentsMatchTotal, exceedsDiscountLimit, paisa } from '@pos/core
 import {
   PAYMENT_METHODS,
   REPAIR_STATUSES,
+  REPAIR_TRANSITIONS,
   hasPermission,
   isServiceError,
   type Id,
@@ -42,16 +43,6 @@ type CashMethod = Exclude<PaymentMethod, 'khata'>;
 const TICKET_PREFIX = 'R';
 const LIST_LIMIT = 200;
 const MAX_PART_QTY = 1_000;
-
-/** Moves allowed through setStatus. Delivery and cancellation have their own methods (they move money). */
-const TRANSITIONS: Readonly<Record<RepairStatus, readonly RepairStatus[]>> = {
-  received: ['diagnosing', 'in_repair', 'ready'],
-  diagnosing: ['in_repair', 'ready'],
-  in_repair: ['diagnosing', 'ready'],
-  ready: ['in_repair'],
-  delivered: [],
-  cancelled: [],
-};
 
 const CLOSED: readonly RepairStatus[] = ['delivered', 'cancelled'];
 
@@ -431,7 +422,7 @@ export function repairsApi(ctx: Ctx): PosRepairsApi {
       ctx.lock(async () => {
         const s = requirePerm(ctx, 'sell');
         const ticket = await loadTicket(ctx, i.ticketId);
-        if (!TRANSITIONS[ticket.status].includes(i.status))
+        if (!REPAIR_TRANSITIONS[ticket.status].includes(i.status))
           invalid('status', `Cannot move a ticket from ${ticket.status} to ${String(i.status)}`);
         const t = ctx.now();
         await write(ctx, [

@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Download, KeyRound, RotateCcw, ShieldCheck, UserPlus } from 'lucide-react';
 import { ROLES, type ChainReport, type Role, type ShopSettings } from '@pos/shared';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { Field, Input, Select } from '../components/ui/Field';
+import { MorphPill } from '../components/ui/MorphPill';
 import { ErrorBox, PageHeader } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
@@ -46,8 +47,10 @@ function Segmented<T extends string>({
   items: { value: T; label: string }[];
   label: string;
 }): ReactNode {
+  const ref = useRef<HTMLDivElement>(null);
   return (
-    <div className="seg" role="group" aria-label={label}>
+    <div ref={ref} className="seg" role="group" aria-label={label}>
+      <MorphPill containerRef={ref} selector="[aria-pressed='true']" watch={value} />
       {items.map((i) => (
         <button
           key={i.value}
@@ -128,7 +131,7 @@ function ShopForm({ initial }: { initial: ShopSettings }): ReactNode {
         <Input value={f.footer} onChange={set('footer')} />
       </Field>
       <Field label={t('settings.footerUr')}>
-        <Input value={f.footerUr} onChange={set('footerUr')} dir="rtl" lang="ur" />
+        <Input value={f.footerUr} onChange={set('footerUr')} />
       </Field>
       <Field label={t('settings.maxDiscount')} hint={t('settings.maxDiscountHint')}>
         <Input value={f.maxDisc} onChange={set('maxDisc')} inputMode="decimal" className="ltr" />
@@ -506,7 +509,7 @@ export function Settings(): ReactNode {
               onChange={prefs.setLang}
               items={[
                 { value: 'en', label: 'English' },
-                { value: 'ur', label: 'اردو' },
+                { value: 'ur', label: 'Roman Urdu' },
               ]}
             />
           </Field>
@@ -519,6 +522,17 @@ export function Settings(): ReactNode {
                 { value: 'light', label: t('settings.themeLight') },
                 { value: 'dark', label: t('settings.themeDark') },
                 { value: 'system', label: t('settings.themeSystem') },
+              ]}
+            />
+          </Field>
+          <Field label={t('settings.glass')} hint={t('settings.glassHint')}>
+            <Segmented<'on' | 'off'>
+              label={t('settings.glass')}
+              value={prefs.glass ? 'on' : 'off'}
+              onChange={(v) => prefs.setGlass(v === 'on')}
+              items={[
+                { value: 'on', label: t('settings.glassOn') },
+                { value: 'off', label: t('settings.glassOff') },
               ]}
             />
           </Field>
@@ -540,8 +554,8 @@ export function Settings(): ReactNode {
               onChange={prefs.setReceiptLang}
               items={[
                 { value: 'en', label: 'English' },
-                { value: 'ur', label: 'اردو' },
-                { value: 'both', label: 'EN + اردو' },
+                { value: 'ur', label: 'Roman Urdu' },
+                { value: 'both', label: 'EN + Roman Urdu' },
               ]}
             />
           </Field>

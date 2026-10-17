@@ -336,6 +336,16 @@ export const REPAIR_STATUSES = [
 ] as const;
 export type RepairStatus = (typeof REPAIR_STATUSES)[number];
 
+/** Moves allowed through repairs.setStatus. Delivery (from 'ready') and cancellation have their own methods. */
+export const REPAIR_TRANSITIONS: Readonly<Record<RepairStatus, readonly RepairStatus[]>> = {
+  received: ['diagnosing', 'in_repair', 'ready'],
+  diagnosing: ['in_repair', 'ready'],
+  in_repair: ['diagnosing', 'ready'],
+  ready: ['in_repair'],
+  delivered: [],
+  cancelled: [],
+};
+
 export const REPAIR_PAYMENT_KINDS = ['advance', 'balance', 'refund'] as const;
 export type RepairPaymentKind = (typeof REPAIR_PAYMENT_KINDS)[number];
 

@@ -84,7 +84,7 @@ export function ReceiptDialog({
         <div className="seg" role="group" aria-label={t('settings.receiptLang')}>
           {(['en', 'ur', 'both'] as ReceiptLang[]).map((l) => (
             <button key={l} type="button" aria-pressed={lang === l} onClick={() => setLang(l)}>
-              {l === 'en' ? 'English' : l === 'ur' ? 'اردو' : 'EN + اردو'}
+              {l === 'en' ? 'English' : l === 'ur' ? 'Roman Urdu' : 'EN + Roman Urdu'}
             </button>
           ))}
         </div>
