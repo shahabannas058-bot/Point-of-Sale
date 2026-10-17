@@ -99,7 +99,7 @@ function build(): { service: PosService; seed: () => Promise<void> } {
   const customers: Customer[] = [];
   const suppliers: Supplier[] = [];
   const ledger: LedgerEntry[] = [];
-  const supplierLedger: { supplierId: string; amount: number; at: number }[] = [];
+  const supplierLedger: { entry: LedgerEntry; referenceNo: string | null }[] = [];
   const invoices: Invoice[] = [];
   const idempotent = new Map<string, Invoice>();
   const grants = new Map<string, { expiresAt: number; username: string }>();
@@ -160,7 +160,7 @@ function build(): { service: PosService; seed: () => Promise<void> } {
   const customerBalance = (id: string): number =>
     sum(ledger.filter((e) => e.customerId === id).map((e) => e.amount));
   const supplierBalance = (id: string): number =>
-    sum(supplierLedger.filter((e) => e.supplierId === id).map((e) => e.amount));
+    sum(supplierLedger.filter((l) => l.entry.supplierId === id).map((l) => l.entry.amount));
 
   const findOrCreateProduct = (ref: ProductRef, kind: 'phone' | 'accessory'): Product => {
     if ('productId' in ref) return productOf(ref.productId);
@@ -288,6 +288,32 @@ function build(): { service: PosService; seed: () => Promise<void> } {
         createdAt: e.at ?? now(),
       }),
     );
+  };
+  const addSupplierLedger = (e: {
+    supplierId: string;
+    type: LedgerEntryType;
+    amount: number;
+    method?: Exclude<PaymentMethod, 'khata'> | null;
+    purchaseId?: string | null;
+    referenceNo?: string | null;
+    note?: string | null;
+  }): void => {
+    supplierLedger.push({
+      entry: cast<LedgerEntry>({
+        id: newId(),
+        customerId: null,
+        supplierId: e.supplierId,
+        type: e.type,
+        amount: e.amount,
+        method: e.method ?? null,
+        saleId: null,
+        purchaseId: e.purchaseId ?? null,
+        note: e.note ?? null,
+        createdBy: needSessionOrSystem(),
+        createdAt: now(),
+      }),
+      referenceNo: e.referenceNo ?? null,
+    });
   };
   const needSessionOrSystem = (): string => session?.user.id ?? users[0]?.id ?? newId();
 
@@ -823,7 +849,9 @@ function build(): { service: PosService; seed: () => Promise<void> } {
           suppliers.map((s): PartyBalance<Supplier> => ({
             party: s,
             balance: paisa(supplierBalance(s.id)),
-            lastActivityAt: supplierLedger.filter((e) => e.supplierId === s.id).at(-1)?.at ?? null,
+            lastActivityAt:
+              supplierLedger.filter((l) => l.entry.supplierId === s.id).at(-1)?.entry.createdAt ??
+              null,
           })),
         );
       },
@@ -841,6 +869,12 @@ function build(): { service: PosService; seed: () => Promise<void> } {
           updatedAt: t,
         });
         suppliers.push(s);
+        if (i.openingBalance && i.openingBalance > 0)
+          addSupplierLedger({
+            supplierId: s.id,
+            type: 'opening_balance',
+            amount: i.openingBalance,
+          });
         return Promise.resolve(s);
       },
       receive: (i: ReceivePurchaseInput) => {
@@ -865,12 +899,26 @@ function build(): { service: PosService; seed: () => Promise<void> } {
             variants[idx] = { ...v, costPrice: paisa(a.unitCost), updatedAt: now() };
             total += a.quantity * a.unitCost;
           }
-          supplierLedger.push({ supplierId: i.supplierId, amount: total, at: now() });
+          const purchaseId = newId();
+          const ref = { purchaseId, referenceNo: i.referenceNo ?? null };
+          if (total > 0)
+            addSupplierLedger({
+              supplierId: i.supplierId,
+              type: 'purchase_credit',
+              amount: total,
+              ...ref,
+            });
           if (i.paidNow && i.paidNow.amount > 0)
-            supplierLedger.push({ supplierId: i.supplierId, amount: -i.paidNow.amount, at: now() });
+            addSupplierLedger({
+              supplierId: i.supplierId,
+              type: 'payment_made',
+              amount: -i.paidNow.amount,
+              method: i.paidNow.method,
+              ...ref,
+            });
           const r: PurchaseResult = {
             purchase: cast({
-              id: newId(),
+              id: purchaseId,
               supplierId: i.supplierId,
               branchId: shop?.branchId,
               kind: 'purchase',
@@ -888,10 +936,39 @@ function build(): { service: PosService; seed: () => Promise<void> } {
           return Promise.reject(e instanceof Error ? e : new Error(String(e)));
         }
       },
-      paySupplier: ({ supplierId, amount }) => {
+      paySupplier: ({ supplierId, amount, method, note }) => {
         require('receive_stock');
-        supplierLedger.push({ supplierId, amount: -amount, at: now() });
+        if (!suppliers.some((s) => s.id === supplierId))
+          return Promise.reject(new ServiceError('NOT_FOUND', 'Supplier not found'));
+        if (!Number.isInteger(amount) || amount <= 0)
+          return Promise.reject(new ServiceError('VALIDATION', 'Amount must be more than zero'));
+        addSupplierLedger({
+          supplierId,
+          type: 'payment_made',
+          amount: -amount,
+          method: method ?? 'cash',
+          note: note ?? null,
+        });
         return Promise.resolve(paisa(supplierBalance(supplierId)));
+      },
+      // ---- supplier ledger ----
+      getSupplierLedger: (supplierId, o = {}) => {
+        require('receive_stock');
+        const supplier = suppliers.find((s) => s.id === supplierId);
+        if (!supplier) return Promise.reject(new ServiceError('NOT_FOUND', 'Supplier not found'));
+        let running = 0;
+        const all: LedgerLine[] = supplierLedger
+          .filter((l) => l.entry.supplierId === supplierId)
+          .map(({ entry, referenceNo }) => {
+            running += entry.amount;
+            return { entry, runningBalance: paisa(running), invoiceNo: null, referenceNo };
+          });
+        const before = o.beforeCreatedAt;
+        const lines = all
+          .filter((l) => (before ? l.entry.createdAt < before : true))
+          .slice(-(o.limit ?? 500))
+          .reverse();
+        return Promise.resolve({ supplier, balance: paisa(running), lines });
       },
     },
     checkout: {
@@ -1360,6 +1437,7 @@ async function seedMock(
   const sup = await s.purchasing.createSupplier({
     name: 'Hafeez Centre Traders',
     phone: '03211234567',
+    openingBalance: rs(185000),
   });
   await s.purchasing.createSupplier({ name: 'Karachi Accessories House', address: 'Saddar' });
   let n = 100;

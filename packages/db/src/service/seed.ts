@@ -97,6 +97,7 @@ export async function seedDemoData({ driver }: { driver: SqlDriver }): Promise<v
   const sup = await s.purchasing.createSupplier({
     name: 'Hafeez Centre Traders',
     phone: '03211234567',
+    openingBalance: rs(185000),
   });
   await s.purchasing.createSupplier({ name: 'Karachi Accessories House', address: 'Saddar' });
 

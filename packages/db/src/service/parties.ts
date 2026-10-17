@@ -10,6 +10,7 @@ import {
   type PaymentMethod,
   type PosService,
   type Supplier,
+  type SupplierLedger,
 } from '@pos/shared';
 import type { SqlValue, Statement } from '../driver';
 import {
@@ -278,7 +279,8 @@ export function purchasingApi(ctx: Ctx): PosService['purchasing'] {
 
     createSupplier: (i) =>
       ctx.lock(async () => {
-        requirePerm(ctx, 'receive_stock');
+        const s = requirePerm(ctx, 'receive_stock');
+        const opening = optMoney(i.openingBalance, 'openingBalance') ?? 0;
         const t = ctx.now();
         const id = ctx.newId();
         const row = {
@@ -291,7 +293,18 @@ export function purchasingApi(ctx: Ctx): PosService['purchasing'] {
           created_at: t,
           updated_at: t,
         };
-        await write(ctx, [insert('suppliers', row), emit(ctx, 'supplier', id, row, t)]);
+        const stmts = [insert('suppliers', row), emit(ctx, 'supplier', id, row, t)];
+        if (opening > 0)
+          stmts.push(
+            ...ledgerStatement(ctx, {
+              supplierId: id,
+              type: 'opening_balance',
+              amount: opening,
+              userId: s.user.id,
+              t,
+            }),
+          );
+        await write(ctx, stmts);
         return toSupplier(row);
       }),
 
@@ -439,5 +452,35 @@ export function purchasingApi(ctx: Ctx): PosService['purchasing'] {
         );
         return paisa(await supplierBalance(ctx, supplierId));
       }),
+
+    // ---- supplier ledger ----
+    async getSupplierLedger(supplierId, o = {}): Promise<SupplierLedger> {
+      requirePerm(ctx, 'receive_stock');
+      const row = await one(ctx, 'SELECT * FROM suppliers WHERE id = ?', [supplierId]);
+      if (!row) return fail('NOT_FOUND', 'Supplier not found');
+      const rows = await q(
+        ctx,
+        `SELECT le.*, p.reference_no FROM ledger_entries le LEFT JOIN purchases p ON p.id = le.purchase_id
+         WHERE le.supplier_id = ? ORDER BY le.created_at, le.id`,
+        [supplierId],
+      );
+      let running = 0;
+      const all: LedgerLine[] = rows.map((r) => {
+        running += Number(r.amount);
+        return {
+          entry: toEntry(r),
+          runningBalance: paisa(running),
+          invoiceNo: null,
+          referenceNo:
+            r.reference_no === null || r.reference_no === undefined ? null : String(r.reference_no),
+        };
+      });
+      const before = o.beforeCreatedAt;
+      const lines = all
+        .filter((l) => (before ? l.entry.createdAt < before : true))
+        .slice(-(o.limit ?? 500))
+        .reverse();
+      return { supplier: toSupplier(row), balance: paisa(running), lines };
+    },
   };
 }
