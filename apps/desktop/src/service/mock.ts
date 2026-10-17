@@ -862,7 +862,7 @@ function build(): { service: PosService; seed: () => Promise<void> } {
             const v = variants[idx];
             if (!v) throw new ServiceError('NOT_FOUND', 'Accessory not found');
             variantQty.set(v.id, (variantQty.get(v.id) ?? 0) + a.quantity);
-            variants[idx] = { ...v, costPrice: paisa(a.unitCost), updatedAt: now() as never };
+            variants[idx] = { ...v, costPrice: paisa(a.unitCost), updatedAt: now() };
             total += a.quantity * a.unitCost;
           }
           supplierLedger.push({ supplierId: i.supplierId, amount: total, at: now() });

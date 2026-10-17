@@ -1,0 +1,19 @@
+{
+  "name": "@pos/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./service": "./src/service/index.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "@pos/core": "*",
+    "@pos/shared": "*"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.2.0"
+  }
+}

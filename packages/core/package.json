@@ -1,0 +1,13 @@
+{
+  "name": "@pos/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "@pos/shared": "*"
+  }
+}

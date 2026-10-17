@@ -14,6 +14,10 @@ Tick boxes as work completes. Architecture rules and licensing design are in `CL
 - [ ] Returns / exchange / void (as new entries, never edits)
 - [ ] Offline operation (full functionality without internet)
 - [ ] Local backup + restore, Excel import of existing stock
+- [ ] Full keyboard billing (F-key / Ctrl shortcuts for save, print, delete row, customer, ledger, item history)
+- [ ] Info at the till: item stock, last purchase price, customer balance, last rate sold to this customer
+- [ ] Item history / stock register (every in/out movement per item)
+- [ ] Reorder level per item with low-stock list and purchase suggestion
 
 ### Standard
 - [ ] Multiple users with roles (owner / manager / cashier); cashier cannot discount or void without PIN
@@ -26,6 +30,13 @@ Tick boxes as work completes. Architecture rules and licensing design are in `CL
 - [ ] JazzCash / Easypaisa agent transaction register
 - [ ] WhatsApp invoice / reminder sending
 - [ ] Audit log (who changed/deleted what)
+- [ ] Purchase orders to suppliers; supplier rate comparison at purchase entry
+- [ ] Quotations / sales orders (convert to invoice)
+- [ ] Stock taking: physical count vs system stock, variance report, posted as adjustment movements
+- [ ] Customer credit limit (warn/block on khata sale over limit)
+- [ ] Rack / shelf location per item
+- [ ] Fast-moving, slow-moving and dead-stock reports
+- [ ] Multi-PC LAN mode (2–3 counters in one shop sharing one database)
 
 ### Pro
 - [ ] **Installment (qist) system**: advance, monthly plan, guarantor, due-date WhatsApp reminders, overdue report
@@ -34,6 +45,9 @@ Tick boxes as work completes. Architecture rules and licensing design are in `CL
 - [ ] Cloud backup (automatic, encrypted)
 - [ ] Price/cost history and dollar-rate based repricing
 - [ ] Staff commission / attendance
+- [ ] Multiple godowns (warehouses) with stock transfer between them
+- [ ] Reorder forecast from past sales (daily average × lead time)
+- [ ] General ledger: chart of accounts, journal / payment / receipt vouchers, P&L and balance sheet
 - [ ] FBR POS integration (Tier-1 retailers) — later
 - [ ] Payment QR (JazzCash / Easypaisa) — later
 
@@ -82,6 +96,20 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 - [ ] Warranty, trade-in, repair tickets, easyload/agent registers
 - [ ] Installment (qist) system with reminders
 - [ ] WhatsApp integration, owner PWA, cloud backup
+
+### Phase 3b — Competitor parity (gaps vs Abuzar / WASILA, researched 2026-10-17)
+- [ ] Keyboard shortcut map + till info panel (stock, last cost, customer balance, last rate)
+- [ ] Item history / stock register, reorder levels + purchase suggestion
+- [ ] Purchase orders, quotations / sales orders, supplier rate comparison
+- [ ] Stock taking with variance report, rack locations, customer credit limit
+- [ ] Fast / slow / dead-stock reports
+- [ ] Multi-PC LAN mode, multiple godowns, general ledger + vouchers
+
+### Phase 3c — Multi-niche (one product, many shop types)
+- [ ] Refactor into core + niche modules; "business type" chosen at shop setup turns modules on/off
+- [ ] Move mobile-only features (IMEI, PTA, repair, qist, warranty) into a `mobile` module
+- [ ] `pharmacy` module: batch + expiry, pack / strip / tablet units, manufacturer, near-expiry report
+- [ ] `grocery` module: sale by weight (kg / g), loose items, barcode-scale labels
 
 ### Phase 4 — Growth
 - [ ] Payment gateway automation, multi-branch ,FBR, installer + auto-update, code signing
