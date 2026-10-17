@@ -1,6 +1,4 @@
 import '@fontsource-variable/inter/wght.css';
-import '@fontsource-variable/noto-naskh-arabic/wght.css';
-import '@fontsource-variable/noto-nastaliq-urdu/wght.css';
 import './styles/index.css';
 
 import { StrictMode, useEffect, useState, type ReactNode } from 'react';
@@ -9,9 +7,11 @@ import { Loader } from './components/Loader';
 import { App } from './App';
 import { bootstrap, type BootResult } from './bootstrap';
 import { translate } from './i18n';
+import { installGlassShine } from './lib/glass';
 import { applyPrefsToDocument, usePrefs } from './store/prefs';
 
 applyPrefsToDocument();
+installGlassShine();
 
 function Boot(): ReactNode {
   const [state, setState] = useState<BootResult | null>(null);

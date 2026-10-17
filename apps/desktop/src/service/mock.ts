@@ -60,6 +60,7 @@ import {
   type VariantView,
   PAYMENT_METHODS,
 } from '@pos/shared';
+import { createMockRepairs, createMockWarranty, type MockDeps } from './mock-repairs';
 
 const cast = <T>(v: unknown): T => v as T;
 const fail = (
@@ -582,6 +583,28 @@ function build(): { service: PosService; seed: () => Promise<void> } {
     require('sell');
     if (!can('return_void')) consumeApproval(token, reason);
   };
+
+  // ---------------- Phase 3 deps ----------------
+  const phase3Deps = (): MockDeps => ({
+    now,
+    newId,
+    session: () => session,
+    require,
+    can,
+    takeApproval: consumeApproval,
+    maxDiscountBps: () => settings.cashierMaxDiscountBps,
+    allowNegativeStock: () => settings.allowNegativeStock,
+    branchId: () => shop?.branchId ?? fail('NOT_SETUP', 'Not set up'),
+    customers,
+    users,
+    variants,
+    variantQty,
+    variantLabel: (v) => variantView(v).label,
+    units,
+    unitView,
+    invoices,
+    addLedger,
+  });
 
   // ---------------- API ----------------
   const service: PosService = {
@@ -1331,6 +1354,9 @@ function build(): { service: PosService; seed: () => Promise<void> } {
           unsentOutbox: 0,
         }),
     },
+    // Phase 3: repair tickets + IMEI warranty (see mock-repairs.ts)
+    repairs: createMockRepairs(phase3Deps()),
+    warranty: createMockWarranty(phase3Deps()),
   };
 
   const seed = (): Promise<void> =>

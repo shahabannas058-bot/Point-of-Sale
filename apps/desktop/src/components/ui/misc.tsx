@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { CircleAlert, Inbox, RefreshCw } from 'lucide-react';
 import { useT } from '../../i18n';
 import { errorMessage } from '../../i18n/errors';
 import { formatRs, type FormatRsOptions } from '../../lib/money';
 import { Button } from './Button';
+import { MorphPill } from './MorphPill';
 
 export function Money({
   value,
@@ -100,8 +101,10 @@ export function Tabs<T extends string>({
   items: { value: T; label: ReactNode }[];
   label: string;
 }): ReactNode {
+  const ref = useRef<HTMLDivElement>(null);
   return (
-    <div className="seg" role="tablist" aria-label={label}>
+    <div ref={ref} className="seg" role="tablist" aria-label={label}>
+      <MorphPill containerRef={ref} selector="[aria-selected='true']" watch={value} />
       {items.map((it) => (
         <button
           key={it.value}

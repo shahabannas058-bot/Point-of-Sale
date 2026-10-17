@@ -25,7 +25,7 @@ public static class ErrorMap
             return new("UNIT_NOT_IN_STOCK", "This phone is not in stock", null, inner);
         if (Has(msg, "seq must be previous seq + 1") || Has(msg, "prev_hash must equal"))
             return new("CHAIN_CONFLICT", "The invoice chain moved; please retry", null, inner);
-        if (Has(msg, "khata requires a sale with a customer"))
+        if (Has(msg, "khata requires a sale with a customer") || Has(msg, "khata requires a ticket with a customer"))
             return new("KHATA_NEEDS_CUSTOMER", "Khata needs a customer", null, inner);
         if (Has(msg, "original_sale_id must reference"))
             return new("RETURN_NOT_ALLOWED", "Only a sale invoice can be returned", null, inner);

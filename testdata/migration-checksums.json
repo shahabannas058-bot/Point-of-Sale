@@ -20,6 +20,11 @@
       "version": 4,
       "name": "outbox",
       "checksum": "0f053d426e095df69f1d411d41ffa9ffa37e47c31d82941598d7e3ddd04e975b"
+    },
+    {
+      "version": 5,
+      "name": "repairs_warranty",
+      "checksum": "e46a6a4775a72a82b082668286ab1af16350affe472bee60639d124e77e271c8"
     }
   ]
 }

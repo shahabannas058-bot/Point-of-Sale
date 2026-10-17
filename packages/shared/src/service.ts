@@ -3,6 +3,15 @@ import type { PaymentMethod, PhoneCondition, PtaStatus, Role, SaleKind } from '.
 import type { LedgerEntry } from './ledger';
 import type { Customer, Supplier, User } from './people';
 import type { Paisa } from './primitives';
+import type {
+  RepairStatus,
+  RepairTicket,
+  RepairTicketView,
+  Warranty,
+  WarrantyKind,
+  WarrantySaleInfo,
+  WarrantyStatus,
+} from './repairs';
 import type { Invoice } from './sales';
 import type { Purchase } from './stock';
 
@@ -95,7 +104,9 @@ export type GuardAction =
   | 'stock_entry'
   | 'report'
   | 'ledger_entry'
-  | 'catalog_edit';
+  | 'catalog_edit'
+  | 'repair'
+  | 'warranty';
 export interface SellGuardContext {
   action: GuardAction;
   branchId: string;
@@ -480,6 +491,123 @@ export interface IntegrityApi {
   }>; // v_sale_* views, units outside 0..1
 }
 
+// ---------- repair job tickets ----------
+export interface NewRepairTicketInput {
+  /** An existing customer, OR a walk-in name (+ phone). */
+  customerId?: string | null;
+  walkIn?: { name: string; phone?: string | null } | null;
+  deviceBrand: string;
+  deviceModel: string;
+  /** Luhn-checked when given. */
+  imei?: string | null;
+  serial?: string | null;
+  problem: string;
+  conditionNotes?: string | null;
+  accessories?: string | null;
+  estimatedCost: number;
+  advance?: {
+    amount: number;
+    method: Exclude<PaymentMethod, 'khata'>;
+    reference?: string | null;
+  } | null;
+  technicianId?: string | null;
+  promisedAt?: number | null;
+}
+export interface RepairTicketPatch {
+  problem?: string;
+  conditionNotes?: string | null;
+  accessories?: string | null;
+  estimatedCost?: number;
+  finalCharge?: number | null;
+  technicianId?: string | null;
+  promisedAt?: number | null;
+}
+export interface RepairStatusInput {
+  ticketId: string;
+  /** Delivery and cancellation have their own methods (they move money). */
+  status: Exclude<RepairStatus, 'delivered' | 'cancelled'>;
+  note?: string | null;
+}
+export interface AddRepairPartInput {
+  ticketId: string;
+  variantId: string;
+  quantity: number;
+}
+export interface DeliverRepairInput {
+  ticketId: string;
+  /** Defaults to the ticket's finalCharge, else its estimate. */
+  finalCharge?: number;
+  /**
+   * Positive amounts that add up to |finalCharge - paid so far|: collected when positive, refunded when the
+   * advance was larger (refunds cannot be khata). Empty when nothing is due.
+   */
+  payments: PaymentInput[];
+  note?: string | null;
+  /** Needed when finalCharge is below the estimate by more than cashierMaxDiscountBps (no discount_unlimited). */
+  approvalToken?: string;
+}
+export interface CancelRepairInput {
+  ticketId: string;
+  reason: string;
+  /** How the advance is given back (default cash). */
+  refundMethod?: Exclude<PaymentMethod, 'khata'>;
+  /** Needed when money is refunded and the user lacks return_void. */
+  approvalToken?: string;
+}
+export interface RepairFilter {
+  q?: string;
+  status?: RepairStatus;
+  customerId?: string;
+  /** Only tickets that are not delivered / cancelled. */
+  openOnly?: boolean;
+  limit?: number;
+}
+/** Spare parts are consumed from accessory stock as 'adjustment' movements (see migration 0005). */
+export interface RepairsApi {
+  create(input: NewRepairTicketInput): Promise<RepairTicketView>;
+  get(idOrNo: string): Promise<RepairTicketView>;
+  list(filter?: RepairFilter): Promise<RepairTicket[]>;
+  update(id: string, patch: RepairTicketPatch): Promise<RepairTicketView>;
+  setStatus(input: RepairStatusInput): Promise<RepairTicketView>;
+  addPart(input: AddRepairPartInput): Promise<RepairTicketView>;
+  deliver(input: DeliverRepairInput): Promise<RepairTicketView>;
+  cancel(input: CancelRepairInput): Promise<RepairTicketView>;
+}
+
+// ---------- warranty by IMEI ----------
+export interface RegisterWarrantyInput {
+  saleId: string;
+  phoneUnitId: string;
+  kind: WarrantyKind;
+  /** Exactly one of `days` (from the sale date) or `endsAt`. */
+  days?: number;
+  endsAt?: number;
+  note?: string | null;
+}
+export interface WarrantyLookup {
+  unit: PhoneUnitView;
+  /** The latest sale of this unit, or null if it was never sold. */
+  sale: WarrantySaleInfo | null;
+  /** Warranties registered on that sale. */
+  warranties: WarrantyStatus[];
+}
+export interface ExpiringWarranty {
+  status: WarrantyStatus;
+  unitLabel: string;
+  imei: string | null;
+  serial: string | null;
+  invoiceNo: string;
+  customerName: string | null;
+  customerPhone: string | null;
+}
+export interface WarrantyApi {
+  register(input: RegisterWarrantyInput): Promise<Warranty>;
+  /** NOT_FOUND when no phone unit has this IMEI / serial. */
+  lookup(imeiOrSerial: string): Promise<WarrantyLookup>;
+  /** Active warranties ending within the next `days` days, soonest first. */
+  listExpiring(days: number): Promise<ExpiringWarranty[]>;
+}
+
 export interface PosService {
   readonly setup: SetupApi;
   readonly settings: SettingsApi;
@@ -490,4 +618,6 @@ export interface PosService {
   readonly khata: KhataApi;
   readonly reports: ReportsApi;
   readonly integrity: IntegrityApi;
+  readonly repairs: RepairsApi;
+  readonly warranty: WarrantyApi;
 }

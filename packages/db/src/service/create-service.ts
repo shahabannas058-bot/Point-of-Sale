@@ -7,11 +7,13 @@ import { createIntegrityApi } from './integrity';
 import { createKhataApi } from './khata';
 import { createPurchasingApi } from './purchasing';
 import { createReportsApi } from './reports';
+import { createRepairsApi } from './repairs';
 import { createReturnsPart } from './returns';
 import { createSettingsApi } from './settings';
 import { createSetupApi } from './setup';
+import { createWarrantyApi } from './warranty';
 
-/** Composes the nine APIs of the contract over one driver. Each service instance has its own session/lock. */
+/** Composes the eleven APIs of the contract over one driver. Each service instance has its own session/lock. */
 export function createPosService(deps: ServiceDeps): PosService {
   const ctx = createCtx(deps);
   return {
@@ -24,5 +26,7 @@ export function createPosService(deps: ServiceDeps): PosService {
     khata: createKhataApi(ctx),
     reports: createReportsApi(ctx),
     integrity: createIntegrityApi(ctx),
+    repairs: createRepairsApi(ctx),
+    warranty: createWarrantyApi(ctx),
   };
 }

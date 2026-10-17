@@ -223,7 +223,7 @@ export function withApprovalNote(note: string | null, approvedBy: string | null)
 }
 
 /** Exact comparison: discount/gross > maxBps/10000 (no floor, so 1 paisa over the limit counts). */
-const exceedsDiscountLimit = (discount: number, gross: number, maxBps: number): boolean =>
+export const exceedsDiscountLimit = (discount: number, gross: number, maxBps: number): boolean =>
   BigInt(discount) * 10_000n > BigInt(maxBps) * BigInt(gross);
 
 const discountMoney = (v: unknown, field: string): Paisa => {
