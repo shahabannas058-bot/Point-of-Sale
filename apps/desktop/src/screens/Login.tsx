@@ -27,7 +27,6 @@ function readLastUser(): string | null {
 
 function BrandPanel({ shopName }: { shopName: string }): ReactNode {
   const t = useT();
-  const lang = usePrefs((s) => s.lang);
   const points: { icon: typeof WifiOff; key: TKey }[] = [
     { icon: WifiOff, key: 'login.pointOffline' },
     { icon: ShieldCheck, key: 'login.pointImmutable' },
@@ -45,11 +44,7 @@ function BrandPanel({ shopName }: { shopName: string }): ReactNode {
         <span className="text-sm font-semibold text-slate-300">{t('app.name')}</span>
       </div>
       <div>
-        <h1
-          className={`display text-4xl font-bold leading-tight ${lang === 'ur' ? '' : 'tracking-tight'}`}
-        >
-          {shopName}
-        </h1>
+        <h1 className="display text-4xl font-bold leading-tight tracking-tight">{shopName}</h1>
         <p className="mt-3 max-w-sm text-slate-300">{t('login.tagline')}</p>
         <ul className="mt-8 flex flex-col gap-3">
           {points.map((p) => (
@@ -386,7 +381,7 @@ export function Login(): ReactNode {
             aria-label={t('shell.toggleLang')}
           >
             <Languages size={18} aria-hidden="true" />
-            {lang === 'en' ? 'اردو' : 'English'}
+            {lang === 'en' ? 'Roman Urdu' : 'English'}
           </Button>
         </div>
         {setupQ.loading && setupQ.data === undefined ? (

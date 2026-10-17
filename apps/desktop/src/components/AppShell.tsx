@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink, Navigate, Outlet, useNavigate } from 'react-router';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   Boxes,
   ChartColumn,
@@ -8,10 +8,13 @@ import {
   Moon,
   Receipt,
   Settings as SettingsIcon,
+  ShieldCheck,
   ShoppingCart,
   Smartphone,
   Sun,
+  Truck,
   Users,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import type { Permission } from '@pos/shared';
@@ -22,6 +25,7 @@ import { usePrefs } from '../store/prefs';
 import { useSession, useCan } from '../store/session';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
+import { MorphPill } from './ui/MorphPill';
 
 interface NavItem {
   to: string;
@@ -34,7 +38,10 @@ const NAV: NavItem[] = [
   { to: '/', key: 'nav.billing', icon: ShoppingCart, perm: 'sell' },
   { to: '/inventory', key: 'nav.inventory', icon: Boxes, perm: 'view_catalog' },
   { to: '/sales', key: 'nav.sales', icon: Receipt, perm: 'sell' },
+  { to: '/repairs', key: 'nav.repairs', icon: Wrench, perm: 'sell' },
+  { to: '/warranty', key: 'nav.warranty', icon: ShieldCheck, perm: 'sell' },
   { to: '/customers', key: 'nav.customers', icon: Users, perm: 'receive_khata' },
+  { to: '/suppliers', key: 'nav.suppliers', icon: Truck, perm: 'receive_stock' },
   { to: '/reports', key: 'nav.reports', icon: ChartColumn, perm: 'view_reports' },
   { to: '/settings', key: 'nav.settings', icon: SettingsIcon, perm: null },
 ];
@@ -72,6 +79,8 @@ export function AppShell(): ReactNode {
   const dark = useEffectiveDark();
   const shopQ = useServiceQuery((s) => s.setup.getShop(), []);
   const settingsQ = useServiceQuery((s) => s.settings.get(), []);
+  const { pathname } = useLocation();
+  const railRef = useRef<HTMLDivElement>(null);
 
   const logout = (): void => {
     service.auth.logout();
@@ -84,7 +93,7 @@ export function AppShell(): ReactNode {
       <nav className="rail no-print" aria-label={t('nav.main')}>
         <div className="mb-4 flex items-center gap-3 px-1.5 pt-1">
           <div
-            className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-on-primary"
+            className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-on-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_8px_20px_-8px_var(--primary)]"
             aria-hidden="true"
           >
             <Smartphone size={22} />
@@ -98,12 +107,15 @@ export function AppShell(): ReactNode {
             </div>
           </div>
         </div>
-        {NAV.filter((n) => n.perm === null || can(n.perm)).map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/'} className="rail-link" title={t(n.key)}>
-            <n.icon size={20} aria-hidden="true" className="shrink-0" />
-            <span className="rail-label">{t(n.key)}</span>
-          </NavLink>
-        ))}
+        <div ref={railRef} className="rail-nav">
+          <MorphPill containerRef={railRef} selector="[aria-current='page']" watch={pathname} />
+          {NAV.filter((n) => n.perm === null || can(n.perm)).map((n) => (
+            <NavLink key={n.to} to={n.to} end={n.to === '/'} className="rail-link" title={t(n.key)}>
+              <n.icon size={20} aria-hidden="true" className="shrink-0" />
+              <span className="rail-label">{t(n.key)}</span>
+            </NavLink>
+          ))}
+        </div>
         <div className="mt-auto flex flex-col gap-1">
           <div className="rail-label px-3 pb-1 text-[0.7rem] text-[var(--rail-text)] opacity-70">
             {t('app.name')}
@@ -134,7 +146,7 @@ export function AppShell(): ReactNode {
             aria-label={t('shell.toggleLang')}
           >
             <Languages size={18} aria-hidden="true" />
-            <span className="text-sm">{lang === 'en' ? 'اردو' : 'English'}</span>
+            <span className="text-sm">{lang === 'en' ? 'Roman Urdu' : 'English'}</span>
           </Button>
           <div className="ms-2 flex items-center gap-2 border-s border-line ps-3">
             <div className="text-end leading-tight">

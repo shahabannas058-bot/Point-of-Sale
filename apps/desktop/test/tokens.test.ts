@@ -51,11 +51,11 @@ describe('design tokens', () => {
     for (const k of colourKeys) expect(darkExplicit, `dark is missing ${k}`).toHaveProperty(k);
   });
 
-  it('uses the blueprint values for the core tokens', () => {
-    expect(light['--primary']).toBe('#1d4ed8');
+  it('uses the Cobalt on Slate values for the core tokens', () => {
+    expect(light['--primary']).toBe('#2f54d4');
     expect(light['--text']).toBe('#0f172a');
-    expect(darkExplicit['--bg']).toBe('#0b1220');
-    expect(darkExplicit['--primary']).toBe('#60a5fa');
+    expect(darkExplicit['--bg']).toBe('#0b1120');
+    expect(darkExplicit['--primary']).toBe('#7c9cff');
   });
 
   it('body text meets WCAG AA (4.5:1) on every surface, in both themes', () => {

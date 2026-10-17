@@ -1,0 +1,29 @@
+{
+  "migrations": [
+    {
+      "version": 1,
+      "name": "masters",
+      "checksum": "e303793880e41d39551fda214061964356b1e948df8e7997b5cef4762e0d5d05"
+    },
+    {
+      "version": 2,
+      "name": "stock",
+      "checksum": "4b5f97270bb4e8a75a0316c864c5ae6920cc8025c1d338223abc9aad7b0fb789"
+    },
+    {
+      "version": 3,
+      "name": "sales",
+      "checksum": "84800e3d013e7a69a18d5814afc3cb51fb76a0ebab4e0046c63a58a6d7d501bd"
+    },
+    {
+      "version": 4,
+      "name": "ledger_outbox",
+      "checksum": "148dd31dea2c8a6c7ce9cbf0d9d482267f4b8e0037cfef1d67e28917945c332c"
+    },
+    {
+      "version": 5,
+      "name": "repairs_warranty",
+      "checksum": "bb3f91ba40cdaa513e70f23ce7c966ec483343d37305f74e0e62a58de99a87c1"
+    }
+  ]
+}

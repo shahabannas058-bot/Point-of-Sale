@@ -7,15 +7,14 @@ import { usePrintJob } from '../lib/print';
 import type { ReceiptModel } from '../lib/receipt-model';
 import { usePrefs, type ReceiptLang, type ReceiptWidth } from '../store/prefs';
 
-/** Label in the receipt language(s): "Total", "کل" or "Total / کل". Urdu runs are isolated RTL spans. */
+/** Label in the receipt language(s): "Raseed", "Receipt" or "Receipt / Raseed" (Roman Urdu). In "both", a
+    word that is the same in both languages (Total, Cash) is printed once. */
 function label(lang: ReceiptLang, key: TKey): ReactNode {
-  if (lang === 'en') return translate('en', key);
-  if (lang === 'ur') return <span className="r-ur">{translate('ur', key)}</span>;
-  return (
-    <>
-      {translate('en', key)} / <span className="r-ur">{translate('ur', key)}</span>
-    </>
-  );
+  const en = translate('en', key);
+  const ur = translate('ur', key);
+  if (lang === 'en') return en;
+  if (lang === 'ur' || en === ur) return lang === 'ur' ? ur : en;
+  return `${en} / ${ur}`;
 }
 
 const money = (p: number): string => formatRs(p, { symbol: null, decimals: 'auto' });
@@ -107,11 +106,11 @@ export function Receipt({
         </div>
       ))}
       <hr />
-      <div className={`r-center ${lang === 'ur' ? 'r-ur' : ''}`}>
+      <div className="r-center">
         {footer ?? translate(lang === 'ur' ? 'ur' : 'en', 'receipt.thanks')}
       </div>
       {lang === 'both' && !footer ? (
-        <div className="r-center r-ur">{translate('ur', 'receipt.thanks')}</div>
+        <div className="r-center">{translate('ur', 'receipt.thanks')}</div>
       ) : null}
     </div>
   );
