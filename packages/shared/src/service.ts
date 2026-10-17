@@ -36,6 +36,16 @@ import type {
   Role,
   SaleKind,
 } from './primitives';
+// repairs + warranty (Phase 3)
+import type {
+  ExpiringWarranty,
+  RepairStatus,
+  RepairTicket,
+  RepairTicketView,
+  Warranty,
+  WarrantyKind,
+  WarrantyLookup,
+} from './models';
 
 // ---------------- inputs ----------------
 
@@ -330,4 +340,115 @@ export interface PosService {
     verifyChain(): Promise<ChainReport>;
     checks(): Promise<IntegrityChecks>;
   };
+  // Phase 3: repair job tickets and IMEI warranty
+  repairs: PosRepairsApi;
+  warranty: PosWarrantyApi;
+}
+
+// ---------------- repairs + warranty (Phase 3) ----------------
+
+export interface NewRepairTicketInput {
+  /** An existing customer, OR a walk-in name (+ phone). */
+  customerId?: Id | null;
+  walkIn?: { name: string; phone?: string | null } | null;
+  deviceBrand: string;
+  deviceModel: string;
+  /** Luhn-checked when given. */
+  imei?: string | null;
+  serial?: string | null;
+  problem: string;
+  conditionNotes?: string | null;
+  accessories?: string | null;
+  estimatedCost: number;
+  advance?: {
+    amount: number;
+    method: Exclude<PaymentMethod, 'khata'>;
+    reference?: string | null;
+  } | null;
+  technicianId?: Id | null;
+  promisedAt?: EpochMs | null;
+}
+
+export interface RepairTicketPatch {
+  problem?: string;
+  conditionNotes?: string | null;
+  accessories?: string | null;
+  estimatedCost?: number;
+  finalCharge?: number | null;
+  technicianId?: Id | null;
+  promisedAt?: EpochMs | null;
+}
+
+export interface RepairStatusInput {
+  ticketId: Id;
+  /** Delivery and cancellation have their own methods (they move money). */
+  status: Exclude<RepairStatus, 'delivered' | 'cancelled'>;
+  note?: string | null;
+}
+
+export interface AddRepairPartInput {
+  ticketId: Id;
+  variantId: Id;
+  quantity: number;
+}
+
+export interface DeliverRepairInput {
+  ticketId: Id;
+  /** Defaults to the ticket's finalCharge, else its estimate. */
+  finalCharge?: number;
+  /**
+   * Positive amounts that add up to |finalCharge - paid so far|: collected when positive, refunded when the
+   * advance was larger (refunds cannot be khata). Empty when nothing is due.
+   */
+  payments: PaymentInput[];
+  note?: string | null;
+  /** Needed when finalCharge is below the estimate by more than cashierMaxDiscountBps (no discount_unlimited). */
+  approvalToken?: string;
+}
+
+export interface CancelRepairInput {
+  ticketId: Id;
+  reason: string;
+  /** How the advance is given back (default cash). */
+  refundMethod?: Exclude<PaymentMethod, 'khata'>;
+  /** Needed when money is refunded and the user lacks return_void. */
+  approvalToken?: string;
+}
+
+export interface RepairFilter {
+  q?: string;
+  status?: RepairStatus;
+  customerId?: Id;
+  /** Only tickets that are not delivered / cancelled. */
+  openOnly?: boolean;
+  limit?: number;
+}
+
+export interface RegisterWarrantyInput {
+  saleId: Id;
+  phoneUnitId: Id;
+  kind: WarrantyKind;
+  /** Exactly one of `days` (from the sale date) or `endsAt`. */
+  days?: number;
+  endsAt?: EpochMs;
+  note?: string | null;
+}
+
+export interface PosRepairsApi {
+  create(input: NewRepairTicketInput): Promise<RepairTicketView>;
+  get(idOrNo: string): Promise<RepairTicketView>;
+  list(filter?: RepairFilter): Promise<RepairTicket[]>;
+  update(id: Id, patch: RepairTicketPatch): Promise<RepairTicketView>;
+  setStatus(input: RepairStatusInput): Promise<RepairTicketView>;
+  addPart(input: AddRepairPartInput): Promise<RepairTicketView>;
+  deliver(input: DeliverRepairInput): Promise<RepairTicketView>;
+  cancel(input: CancelRepairInput): Promise<RepairTicketView>;
+}
+
+export interface PosWarrantyApi {
+  register(input: RegisterWarrantyInput): Promise<Warranty>;
+  /** NOT_FOUND when no phone unit has this IMEI / serial. */
+  lookup(imeiOrSerial: string): Promise<WarrantyLookup>;
+  /** Active warranties ending within the next `days` days, soonest first. */
+  listExpiring(days: number): Promise<ExpiringWarranty[]>;
 }

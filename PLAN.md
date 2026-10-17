@@ -94,6 +94,7 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 
 ### Phase 3 — Mobile-shop depth
 - [ ] Warranty, trade-in, repair tickets, easyload/agent registers
+  - _Repair tickets (status history, spare-part stock use, advance/balance payments) and IMEI warranty (register / lookup / expiring) backend exists: migration 0005 + `repairs` / `warranty` in `PosService`; UI pending_
 - [ ] Installment (qist) system with reminders
 - [ ] WhatsApp integration, owner PWA, cloud backup
 

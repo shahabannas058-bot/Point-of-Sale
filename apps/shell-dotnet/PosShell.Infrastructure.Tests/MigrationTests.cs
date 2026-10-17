@@ -51,9 +51,9 @@ public class MigrationTests
         try
         {
             using var db = new SqliteDatabase(file);
-            Assert.Equal(new[] { 1, 2, 3, 4 }, Migrator.Apply(db));
+            Assert.Equal(new[] { 1, 2, 3, 4, 5 }, Migrator.Apply(db));
             Assert.Empty(Migrator.Apply(db));
-            Assert.Equal(4, db.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
+            Assert.Equal(5, db.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
         }
         finally { Cleanup(file); }
     }

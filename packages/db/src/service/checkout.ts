@@ -222,7 +222,7 @@ async function priceCart(ctx: Ctx, draft: CheckoutDraft, meta: Meta): Promise<Ca
   };
 }
 
-function parsePayments(payments: unknown): PaymentInput[] {
+export function parsePayments(payments: unknown): PaymentInput[] {
   if (!Array.isArray(payments)) return invalid('payments', 'payments are required');
   return payments.map((p: unknown, idx) => {
     const field = `payments.${String(idx)}`;

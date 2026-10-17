@@ -26,7 +26,10 @@ export function mapError(e: unknown): ServiceError {
     return new ServiceError('UNIT_NOT_IN_STOCK', 'This phone is not in stock');
   if (has('seq must be previous seq + 1') || has('prev_hash must equal'))
     return new ServiceError('CHAIN_CONFLICT', 'The invoice chain moved; please retry');
-  if (has('khata requires a sale with a customer'))
+  if (
+    has('khata requires a sale with a customer') ||
+    has('khata requires a ticket with a customer')
+  )
     return new ServiceError('KHATA_NEEDS_CUSTOMER', 'Khata needs a customer');
   if (has('original_sale_id must reference'))
     return new ServiceError('RETURN_NOT_ALLOWED', 'Only a sale invoice can be returned');
