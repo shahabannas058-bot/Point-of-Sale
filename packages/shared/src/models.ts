@@ -179,10 +179,22 @@ export interface LedgerLine {
   entry: LedgerEntry;
   runningBalance: Paisa;
   invoiceNo: string | null;
+  /** Supplier ledgers only: the linked purchase's reference_no (supplier bill number). */
+  referenceNo?: string | null;
 }
 
 export interface CustomerLedger {
   customer: Customer;
+  balance: Paisa;
+  /** Newest first. */
+  lines: LedgerLine[];
+}
+
+// ---------------- supplier ledger ----------------
+
+export interface SupplierLedger {
+  supplier: Supplier;
+  /** Positive = the shop owes the supplier. */
   balance: Paisa;
   /** Newest first. */
   lines: LedgerLine[];

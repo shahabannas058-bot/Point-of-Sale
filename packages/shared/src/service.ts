@@ -19,6 +19,7 @@ import type {
   ShopInfo,
   ShopSettings,
   Supplier,
+  SupplierLedger,
   SummaryRange,
   User,
   VariantView,
@@ -127,6 +128,8 @@ export interface NewSupplierInput {
   name: string;
   phone?: string | null;
   address?: string | null;
+  /** Supplier ledger: amount the shop already owes this supplier (positive). */
+  openingBalance?: number | null;
 }
 
 export interface ReceivePurchaseInput {
@@ -286,6 +289,11 @@ export interface PosService {
       method?: Exclude<PaymentMethod, 'khata'>;
       note?: string | null;
     }): Promise<Paisa>;
+    // supplier ledger
+    getSupplierLedger(
+      supplierId: Id,
+      opts?: { limit?: number; beforeCreatedAt?: EpochMs },
+    ): Promise<SupplierLedger>;
   };
   checkout: {
     preview(draft: CheckoutDraft): Promise<CartPreview>;
