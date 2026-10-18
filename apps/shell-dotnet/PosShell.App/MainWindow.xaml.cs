@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     {
         _bridge = bridge;
         InitializeComponent();
+        FitOnScreen();
         Loaded += async (_, _) =>
         {
             try { await InitializeWebAsync(); }
@@ -34,6 +35,23 @@ public partial class MainWindow : Window
                 Close();
             }
         };
+    }
+
+    /// <summary>
+    /// Opens the window fully inside the screen's work area (the screen without the taskbar). The wanted size is the
+    /// 1280x800 from the XAML; on a smaller screen or a scaled display it shrinks, so the title bar with the minimize,
+    /// maximize and close buttons and the app header are never cut off at the top.
+    /// </summary>
+    private void FitOnScreen()
+    {
+        var wa = SystemParameters.WorkArea;
+        var fit = WindowFit.Fit(Width, Height, new Box(wa.Left, wa.Top, wa.Width, wa.Height), MinWidth, MinHeight);
+        MinWidth = Math.Min(MinWidth, fit.Width);
+        MinHeight = Math.Min(MinHeight, fit.Height);
+        Left = fit.Left;
+        Top = fit.Top;
+        Width = fit.Width;
+        Height = fit.Height;
     }
 
     private async Task InitializeWebAsync()
