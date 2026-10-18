@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { dynKey, translate, type TKey } from '../i18n';
 import { formatDateTime } from '../lib/dates';
 import { formatRs } from '../lib/money';
+import { perUnit, qtyText } from '../lib/qty';
 import { usePrintJob } from '../lib/print';
 import type { ReceiptModel } from '../lib/receipt-model';
 import { usePrefs, type ReceiptLang, type ReceiptWidth } from '../store/prefs';
@@ -76,7 +77,8 @@ export function Receipt({
           {it.sub ? <div>IMEI/SN: {it.sub}</div> : null}
           <div className="r-row">
             <span>
-              {it.qty} × {money(it.unitPrice)}
+              {qtyText(it.qty, it.unitScale, it.unitLabel)} × {money(it.unitPrice)}
+              {perUnit(it.unitScale, it.unitLabel)}
               {it.discount > 0 ? ` (-${money(it.discount)})` : ''}
             </span>
             <span className="r-b">{money(it.total)}</span>

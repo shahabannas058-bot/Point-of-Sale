@@ -1,41 +1,44 @@
-/* REAL SERVICE: @pos/db/service on top of sql.js (IndexedDB-persisted) in the browser.
-   Tauri will later swap the driver for the Rust/SQLite one without touching the UI. */
-import { createPosService, seedDemoData } from '@pos/db/service';
+/* REAL SERVICE: the TypeScript PosService from @pos/db on a database host.
+   Browser (development, tests): sql.js, persisted in IndexedDB.
+   Desktop shell (ADR-0010): the native pos.db through the WebView2 bridge. */
 import { openBrowserDb, resetBrowserDb } from '../db/browser-db';
 import type { SqlJsDriver } from '../db/sqljs-driver';
+import { createWebViewDriver } from '../db/webview-driver';
+import { isWebView2 } from '../native/webview-bridge';
 import type { AppRuntime } from './context';
+import { createRuntime, type DbHandle, type DbHost } from './runtime';
 
-/**
- * Opens the database, runs migrations and returns the runtime.
- * An empty database is filled with demo data unless the URL has `?fresh=1`
- * (then the first-run wizard is shown, with its own "Load demo data" button).
- */
-export async function createRealRuntime(): Promise<AppRuntime> {
-  let driver: SqlJsDriver = await openBrowserDb();
-  let service = createPosService({ driver });
-
-  const wantsFresh = new URLSearchParams(window.location.search).has('fresh');
-  if (!wantsFresh && !(await service.setup.isSetUp())) {
-    await seedDemoData({ driver });
-    service = createPosService({ driver });
-  }
-
+function browserHost(): DbHost {
+  let current: SqlJsDriver | null = null;
+  const handle = (driver: SqlJsDriver): DbHandle => {
+    current = driver;
+    return { driver, exportBytes: () => driver.exportBytes() };
+  };
   return {
-    get service() {
-      return service;
-    },
-    mode: 'real',
-    exportBytes: () => driver.exportBytes(),
-    resetDemo: async () => {
-      driver.close();
+    open: async () => handle(await openBrowserDb()),
+    reset: async () => {
+      current?.close();
       await resetBrowserDb();
-      driver = await openBrowserDb({ fresh: true });
-      await seedDemoData({ driver });
-      service = createPosService({ driver });
-    },
-    loadDemo: async () => {
-      await seedDemoData({ driver });
-      service = createPosService({ driver });
+      return handle(await openBrowserDb({ fresh: true }));
     },
   };
+}
+
+/**
+ * C# has already created, checked and migrated pos.db (and takes the daily backup) before the page loads, so there is
+ * no migrate() here, no raw export and no reset: the real database is never wiped from the page.
+ */
+const shellHost: DbHost = {
+  open: () => Promise.resolve({ driver: createWebViewDriver() }),
+};
+
+/**
+ * Opens the database and returns the runtime.
+ * In the browser an empty database is filled with the kiryana demo unless the URL has `?fresh=1`.
+ * In the desktop shell an empty database always shows the first-run wizard (which has its own "Load demo data" button).
+ */
+export function createRealRuntime(): Promise<AppRuntime> {
+  if (isWebView2()) return createRuntime(shellHost, { fresh: true });
+  const fresh = new URLSearchParams(window.location.search).has('fresh');
+  return createRuntime(browserHost(), { fresh });
 }

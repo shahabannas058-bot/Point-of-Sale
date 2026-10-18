@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { uuidv7 } from '@pos/core';
 import {
+  formatQuantity,
   isServiceError,
+  parseQuantity,
   type ApprovalReason,
   type CartPreview,
   type CatalogHit,
@@ -38,10 +40,26 @@ import { printReceipt } from '../lib/print';
 import { loadReceiptModel } from '../lib/receipt-model';
 import { useHotkeys } from '../lib/shortcuts';
 import { useService } from '../service/context';
-import { cartToDraft, useCart, type AddResult, type CartLine } from '../store/cart';
+import {
+  cartToDraft,
+  lineGrossOf,
+  lineScale,
+  useCart,
+  type AddResult,
+  type CartLine,
+} from '../store/cart';
 import { useDataVersion } from '../store/data-version';
 import { toast } from '../store/toast';
 import { formatTime } from '../lib/dates';
+import {
+  QUICK_AMOUNTS,
+  perUnit,
+  qtyStep,
+  qtyText,
+  quickLabel,
+  variantQtyText,
+  weightForAmount,
+} from '../lib/qty';
 
 // ---------------------------------------------------------------- line discount cell
 function DiscountCell({ line }: { line: CartLine }): ReactNode {
@@ -50,7 +68,7 @@ function DiscountCell({ line }: { line: CartLine }): ReactNode {
   const [mode, setMode] = useState<'rs' | 'pct'>('rs');
   const [draft, setDraft] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
-  const gross = line.unitPrice * line.qty;
+  const gross = lineGrossOf(line);
   const shown = draft ?? (line.discount > 0 ? paisaToInput(line.discount) : '');
 
   const commit = (): void => {
@@ -102,6 +120,144 @@ function DiscountCell({ line }: { line: CartLine }): ReactNode {
           }
         }}
       />
+    </div>
+  );
+}
+
+/** "12.5 kg" for the stock limit shown when a quantity is capped; undefined when the line has no limit. */
+const maxTextOf = (l: CartLine): string | undefined =>
+  l.maxQty === null ? undefined : qtyText(l.maxQty, lineScale(l), l.unitLabel);
+
+// ---------------------------------------------------------------- weight cell (loose goods)
+function WeightCell({
+  line,
+  onResult,
+}: {
+  line: CartLine;
+  onResult: (r: AddResult, maxText?: string) => void;
+}): ReactNode {
+  const t = useT();
+  const setQty = useCart((s) => s.setQty);
+  const scale = lineScale(line);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [bad, setBad] = useState(false);
+  const shown = draft ?? formatQuantity(line.qty, scale);
+
+  // The rupee box: the cashier types what the customer pays and the weight fills in (Rs 100 at Rs 150/kg -> 667 g).
+  // The few paisa that rounding the weight to a gram adds are taken off as a line discount, so the line total is
+  // exactly what was typed. When not being typed in, the box shows the line total, so it always agrees with the weight.
+  const setLineDiscount = useCart((s) => s.setLineDiscount);
+  const [amountDraft, setAmountDraft] = useState<string | null>(null);
+  const [amountBad, setAmountBad] = useState(false);
+  const lastResult = useRef<AddResult>('added');
+  const roundOff = useRef(0); // the discount the rupee box itself set, so a later weight change can take it back
+  const amountShown = amountDraft ?? paisaToInput(Math.max(0, lineGrossOf(line) - line.discount));
+
+  /** The weight is being changed some other way: the round-off that belonged to the old typed amount goes. */
+  const dropRoundOff = (): void => {
+    if (roundOff.current > 0 && line.discount === roundOff.current) setLineDiscount(line.key, 0);
+    roundOff.current = 0;
+  };
+
+  const typeAmount = (text: string): void => {
+    setAmountDraft(text);
+    if (text.trim() === '') {
+      setAmountBad(false);
+      return;
+    }
+    const paisa = parseRupees(text);
+    const w = paisa === null ? null : weightForAmount(paisa, line.unitPrice, scale);
+    setAmountBad(w === null);
+    if (w === null) return;
+    setDraft(null);
+    setBad(false);
+    const result = setQty(line.key, w.quantity);
+    lastResult.current = result;
+    // held back at the stock limit: the typed amount cannot be met, so there is nothing to round off
+    const discount = result === 'capped' ? 0 : w.discount;
+    setLineDiscount(line.key, discount);
+    roundOff.current = discount;
+  };
+  const finishAmount = (): void => {
+    setAmountDraft(null);
+    setAmountBad(false);
+    // the weight was held back at the stock limit while typing: say so once, when the cashier is done
+    if (lastResult.current === 'capped') onResult('capped', maxTextOf(line));
+    lastResult.current = 'added';
+  };
+
+  const commit = (): void => {
+    if (draft === null) return;
+    const q = parseQuantity(draft, scale);
+    setDraft(null);
+    if (q === null || q <= 0) {
+      setBad(true);
+      return;
+    }
+    setBad(false);
+    dropRoundOff();
+    onResult(setQty(line.key, q), maxTextOf(line));
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-1">
+        <Input
+          value={shown}
+          inputMode="decimal"
+          aria-label={t('billing.weight', { unit: line.unitLabel })}
+          title={bad ? t('billing.weightInvalid') : undefined}
+          invalid={bad}
+          className="input-sm ltr w-20 text-end"
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            }
+          }}
+        />
+        <span className="ltr text-xs font-semibold text-muted">{line.unitLabel}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <Input
+          value={amountShown}
+          inputMode="decimal"
+          aria-label={t('billing.weightAmount')}
+          title={amountBad ? t('billing.amountInvalid') : t('billing.weightAmount')}
+          invalid={amountBad}
+          className="input-sm ltr w-20 text-end"
+          onChange={(e) => typeAmount(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={finishAmount}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+        />
+        <span className="ltr text-xs font-semibold text-muted">Rs</span>
+      </div>
+      <div className="flex gap-1">
+        {QUICK_AMOUNTS.map((a) => (
+          <button
+            key={a}
+            type="button"
+            className="kbd cursor-pointer"
+            onClick={() => {
+              setDraft(null);
+              setBad(false);
+              dropRoundOff();
+              onResult(setQty(line.key, a), maxTextOf(line));
+            }}
+          >
+            {quickLabel(a, line.unitLabel)}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -269,9 +425,10 @@ export function Billing(): ReactNode {
 
   // ---- adding items ----
   const report = useCallback(
-    (r: AddResult, max?: number | null): void => {
+    (r: AddResult, maxText?: string): void => {
       if (r === 'duplicate') toast.warning(t('billing.alreadyInCart'));
-      else if (r === 'capped') toast.warning(t('billing.cappedStock', { n: max ?? 0 }));
+      else if (r === 'weighed') toast.info(t('billing.alreadyWeighed'));
+      else if (r === 'capped') toast.warning(t('billing.cappedStock', { n: maxText ?? '' }));
       else if (r === 'out') toast.error(t('billing.outOfStock'));
     },
     [t],
@@ -279,7 +436,11 @@ export function Billing(): ReactNode {
   const addHit = useCallback(
     (h: CatalogHit): void => {
       if (h.kind === 'phone_unit') report(useCart.getState().addPhone(h.item));
-      else report(useCart.getState().addVariant(h.item), h.item.onHand);
+      else
+        report(
+          useCart.getState().addVariant(h.item),
+          variantQtyText(h.item.onHand, h.item.variant),
+        );
       setQ('');
       setHits([]);
       setDropOpen(false);
@@ -452,10 +613,16 @@ export function Billing(): ReactNode {
     },
     '+': () => {
       if (selectedLine && !anyDialogOpen())
-        report(cart.setQty(selectedLine.key, selectedLine.qty + 1), selectedLine.maxQty);
+        report(
+          cart.setQty(selectedLine.key, selectedLine.qty + qtyStep(lineScale(selectedLine))),
+          maxTextOf(selectedLine),
+        );
     },
     '-': () => {
-      if (selectedLine && !anyDialogOpen()) cart.setQty(selectedLine.key, selectedLine.qty - 1);
+      if (selectedLine && !anyDialogOpen()) {
+        const step = qtyStep(lineScale(selectedLine));
+        cart.setQty(selectedLine.key, Math.max(step, selectedLine.qty - step));
+      }
     },
   });
 
@@ -476,8 +643,8 @@ export function Billing(): ReactNode {
   ];
 
   const lineTotalOf = (i: number, l: CartLine): number =>
-    preview?.lines[i]?.lineTotal ?? l.unitPrice * l.qty - l.discount;
-  const gross = preview?.grossTotal ?? lines.reduce((a, l) => a + l.unitPrice * l.qty, 0);
+    preview?.lines[i]?.lineTotal ?? lineGrossOf(l) - l.discount;
+  const gross = preview?.grossTotal ?? lines.reduce((a, l) => a + lineGrossOf(l), 0);
 
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
@@ -557,9 +724,14 @@ export function Billing(): ReactNode {
                         <span className="ltr block text-xs text-muted">{h.item.variant.sku}</span>
                       </span>
                       <Badge tone={h.item.lowStock ? 'warning' : 'muted'}>
-                        {t('inv.onHand', { n: h.item.onHand })}
+                        {t('inv.onHand', { n: variantQtyText(h.item.onHand, h.item.variant) })}
                       </Badge>
-                      <Money value={h.item.variant.salePrice} className="font-semibold" />
+                      <span className="whitespace-nowrap">
+                        <Money value={h.item.variant.salePrice} className="font-semibold" />
+                        <span className="ltr text-xs text-muted">
+                          {perUnit(h.item.variant.unitScale, h.item.variant.unitLabel)}
+                        </span>
+                      </span>
                     </>
                   )}
                 </li>
@@ -582,7 +754,7 @@ export function Billing(): ReactNode {
               }
             />
           ) : (
-            <table className="tbl">
+            <table className="tbl tbl-cards">
               <thead>
                 <tr>
                   <th className="w-10">#</th>
@@ -603,14 +775,16 @@ export function Billing(): ReactNode {
                     aria-selected={i === cart.selected}
                     onClick={() => cart.select(i)}
                   >
-                    <td className="num text-muted">{i + 1}</td>
-                    <td>
+                    <td className="cart-n num text-muted">{i + 1}</td>
+                    <td className="cart-item">
                       <div className="font-semibold">{l.label}</div>
                       {l.sub ? <div className="ltr text-xs text-muted">{l.sub}</div> : null}
                     </td>
-                    <td>
+                    <td className="cart-qty">
                       {l.kind === 'phone' ? (
                         <div className="text-center font-semibold">1</div>
+                      ) : lineScale(l) !== 1 ? (
+                        <WeightCell line={l} onResult={report} />
                       ) : (
                         <div className="flex items-center justify-center gap-1">
                           <Button
@@ -631,21 +805,28 @@ export function Billing(): ReactNode {
                             icon
                             size="sm"
                             aria-label={t('billing.increase')}
-                            onClick={() => report(cart.setQty(l.key, l.qty + 1), l.maxQty)}
+                            onClick={() => report(cart.setQty(l.key, l.qty + 1), maxTextOf(l))}
                           >
                             <Plus size={14} aria-hidden="true" />
                           </Button>
                         </div>
                       )}
                     </td>
-                    <td className="num ltr">{formatRs(l.unitPrice, { symbol: null })}</td>
-                    <td>
+                    <td className="cart-price num ltr">
+                      {formatRs(l.unitPrice, { symbol: null })}
+                      {lineScale(l) !== 1 ? (
+                        <span className="text-xs text-muted">
+                          {perUnit(lineScale(l), l.unitLabel)}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="cart-disc">
                       <DiscountCell line={l} />
                     </td>
-                    <td className="num ltr font-semibold">
+                    <td className="cart-total num ltr font-semibold">
                       {formatRs(lineTotalOf(i, l), { symbol: null })}
                     </td>
-                    <td>
+                    <td className="cart-del">
                       <Button
                         variant="ghost"
                         icon
@@ -742,7 +923,7 @@ export function Billing(): ReactNode {
                 {t('billing.invoiceDiscount')}
                 <button
                   type="button"
-                  className="rounded-md p-1 text-primary hover:bg-primary-soft disabled:opacity-40"
+                  className="rounded-md p-1 text-primary-ink hover:bg-primary-soft disabled:opacity-40"
                   aria-label={t('billing.invoiceDiscount')}
                   disabled={lines.length === 0}
                   onClick={() => setDiscountOpen(true)}

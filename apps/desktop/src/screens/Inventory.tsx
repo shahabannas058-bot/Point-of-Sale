@@ -3,9 +3,13 @@ import { PackagePlus, Pencil, Plus, Search, SlidersHorizontal } from 'lucide-rea
 import {
   PHONE_CONDITIONS,
   PTA_STATUSES,
+  formatQuantity,
+  parseQuantity,
+  unitScaleFor,
   type PhoneCondition,
   type PhoneUnitView,
   type PtaStatus,
+  type UnitLabel,
   type VariantView,
 } from '@pos/shared';
 import {
@@ -23,8 +27,11 @@ import { Field, Input, Select } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows, Tabs } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
+import { showsModelAndColour } from '../lib/item-fields';
 import { paisaToInput, parseRupees } from '../lib/money';
+import { adjustmentDelta, perUnit, qtyWithUnit, unitWord, variantQtyText } from '../lib/qty';
 import { useService } from '../service/context';
+import { useShopModules } from '../service/use-modules';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { useCan } from '../store/session';
@@ -134,6 +141,8 @@ function AccessoryDialog({
   const t = useT();
   const service = useService();
   const bump = useDataVersion((s) => s.bump);
+  const { has, modules } = useShopModules();
+  const fitsModels = showsModelAndColour(modules);
   const empty = {
     brand: 'Generic',
     name: '',
@@ -145,6 +154,7 @@ function AccessoryDialog({
     price: '',
     reorder: '5',
     opening: '0',
+    unit: 'pcs' as UnitLabel,
   };
   const [f, setF] = useState(empty);
   const [busy, setBusy] = useState(false);
@@ -163,24 +173,28 @@ function AccessoryDialog({
             colour: item.variant.colour ?? '',
             cost: paisaToInput(item.variant.costPrice),
             price: paisaToInput(item.variant.salePrice),
-            reorder: String(item.variant.reorderLevel),
+            reorder: formatQuantity(item.variant.reorderLevel, item.variant.unitScale),
             opening: '0',
+            unit: item.variant.unitLabel,
           }
         : empty,
     );
   }, [open, item]);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
+  // an existing item keeps its unit for ever (the database refuses a change once stock exists)
+  const unit: UnitLabel = item ? item.variant.unitLabel : f.unit;
+  const scale = unitScaleFor(unit);
 
   const save = async (): Promise<void> => {
     const cost = parseRupees(f.cost);
     const price = parseRupees(f.price);
-    const reorder = Number(f.reorder);
-    const opening = Number(f.opening || '0');
+    const reorder = parseQuantity(f.reorder.trim() === '' ? '0' : f.reorder, scale);
+    const opening = parseQuantity(f.opening.trim() === '' ? '0' : f.opening, scale);
     if (!item && (!f.name.trim() || !f.sku.trim())) return setError(t('inv.errProduct'));
     if (cost === null || price === null) return setError(t('inv.errPrice'));
-    if (!Number.isInteger(reorder) || reorder < 0 || !Number.isInteger(opening) || opening < 0)
-      return setError(t('inv.errQty'));
+    if (reorder === null || opening === null)
+      return setError(t(scale === 1 ? 'inv.errQty' : 'inv.errQtyUnit'));
     setBusy(true);
     setError(null);
     try {
@@ -208,6 +222,7 @@ function AccessoryDialog({
           salePrice: price,
           reorderLevel: reorder,
           openingQty: opening,
+          unit,
         });
       }
       bump();
@@ -262,31 +277,58 @@ function AccessoryDialog({
         <Field label={t('inv.barcode')}>
           <Input value={f.barcode} onChange={set('barcode')} className="ltr" inputMode="numeric" />
         </Field>
-        <Field label={t('inv.reorder')}>
-          <Input value={f.reorder} onChange={set('reorder')} className="ltr" inputMode="numeric" />
+        {item === null && has('weight_units') ? (
+          <Field label={t('inv.soldBy')}>
+            <Select
+              value={f.unit}
+              onChange={(e) => setF((s) => ({ ...s, unit: e.target.value as UnitLabel }))}
+            >
+              <option value="pcs">{t('inv.unitPcs')}</option>
+              <option value="kg">{t('inv.unitKg')}</option>
+              <option value="L">{t('inv.unitL')}</option>
+            </Select>
+          </Field>
+        ) : null}
+        <Field label={scale === 1 ? t('inv.reorder') : `${t('inv.reorder')} (${unit})`}>
+          <Input
+            value={f.reorder}
+            onChange={set('reorder')}
+            className="ltr"
+            inputMode={scale === 1 ? 'numeric' : 'decimal'}
+          />
         </Field>
-        <Field label={t('inv.forModel')}>
-          <Input value={f.model} onChange={set('model')} />
-        </Field>
-        <Field label={t('inv.colour')}>
-          <Input value={f.colour} onChange={set('colour')} />
-        </Field>
+        {fitsModels ? (
+          <>
+            <Field label={t('inv.forModel')}>
+              <Input value={f.model} onChange={set('model')} />
+            </Field>
+            <Field label={t('inv.colour')}>
+              <Input value={f.colour} onChange={set('colour')} />
+            </Field>
+          </>
+        ) : null}
         {item === null ? (
-          <Field label={t('inv.openingQty')}>
+          <Field label={scale === 1 ? t('inv.openingQty') : `${t('inv.openingQty')} (${unit})`}>
             <Input
               value={f.opening}
               onChange={set('opening')}
               className="ltr"
-              inputMode="numeric"
+              inputMode={scale === 1 ? 'numeric' : 'decimal'}
             />
           </Field>
         ) : (
           <span />
         )}
-        <Field label={t('inv.cost')}>
+        <Field
+          label={t('inv.cost')}
+          hint={scale === 1 ? undefined : t('inv.perUnitHint', { unit })}
+        >
           <Input value={f.cost} onChange={set('cost')} className="ltr" inputMode="decimal" />
         </Field>
-        <Field label={t('inv.price')}>
+        <Field
+          label={t('inv.price')}
+          hint={scale === 1 ? undefined : t('inv.perUnitHint', { unit })}
+        >
           <Input value={f.price} onChange={set('price')} className="ltr" inputMode="decimal" />
         </Field>
         <button type="submit" className="sr-only" tabIndex={-1}>
@@ -311,29 +353,36 @@ function AdjustDialog({
   const t = useT();
   const service = useService();
   const bump = useDataVersion((s) => s.bump);
-  const [delta, setDelta] = useState('');
+  const [mode, setMode] = useState<'add' | 'remove'>('add');
+  const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (item) {
-      setDelta('');
+      setMode('add');
+      setAmount('');
       setReason('');
       setError(null);
     }
   }, [item]);
-  const d = Number(delta);
-  const valid = delta.trim() !== '' && Number.isInteger(d) && d !== 0 && reason.trim().length > 0;
+  const scale = item?.variant.unitScale ?? 1;
+  const unit = item?.variant.unitLabel ?? 'pcs';
+  const piece = t('unit.piece');
+  const d = adjustmentDelta(mode, amount, scale);
+  const after = item !== null && d !== null ? item.onHand + d : null;
+  const valid = d !== null;
 
   const save = async (): Promise<void> => {
-    if (!item || !valid) return;
+    if (!item || !valid || d === null) return;
     setBusy(true);
     setError(null);
     try {
       await service.catalog.adjustStock({
         variantId: item.variant.id,
         delta: d,
-        reason: reason.trim(),
+        // the reason is optional for the cashier; the stock history always gets one
+        reason: reason.trim() || t(mode === 'add' ? 'inv.reasonAdded' : 'inv.reasonRemoved'),
       });
       bump();
       toast.success(t('common.saved'));
@@ -368,20 +417,58 @@ function AdjustDialog({
         }}
       >
         <p className="text-sm">
-          <span className="font-semibold">{item?.label}</span> —{' '}
-          {t('inv.onHand', { n: item?.onHand ?? 0 })}
+          <span className="font-semibold">{item?.label}</span>
+          <br />
+          {t('inv.adjustNow', {
+            n: item ? qtyWithUnit(item.onHand, scale, unit, piece) : 0,
+          })}
         </p>
-        <Field label={t('inv.adjustDelta')} hint={t('inv.adjustDeltaHint')}>
-          <Input
-            value={delta}
-            onChange={(e) => setDelta(e.target.value.replace(/[^\d-]/g, ''))}
-            inputMode="numeric"
-            className="ltr"
-            data-autofocus
-          />
+        <Tabs<'add' | 'remove'>
+          label={t('inv.adjustStock')}
+          value={mode}
+          onChange={setMode}
+          items={[
+            { value: 'add', label: t('inv.adjustAdd') },
+            { value: 'remove', label: t('inv.adjustRemove') },
+          ]}
+        />
+        <Field
+          label={t('inv.adjustAmount')}
+          hint={t(scale === 1 ? 'inv.adjustHintPcs' : 'inv.adjustHintDecimal')}
+        >
+          <div className="relative">
+            <Input
+              value={amount}
+              onChange={(e) =>
+                setAmount(e.target.value.replace(scale === 1 ? /\D/g : /[^\d.]/g, ''))
+              }
+              inputMode={scale === 1 ? 'numeric' : 'decimal'}
+              placeholder="1"
+              className="ltr pe-20 text-lg"
+              data-autofocus
+            />
+            <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">
+              {unitWord(unit, piece)}
+            </span>
+          </div>
         </Field>
-        <Field label={t('inv.adjustReason')}>
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+        {after !== null ? (
+          after < 0 ? (
+            <p className="text-sm font-semibold text-[var(--danger-ink)]">
+              {t('inv.adjustTooMuch')}
+            </p>
+          ) : (
+            <p className="text-sm font-semibold">
+              {t('inv.adjustNew', { n: qtyWithUnit(after, scale, unit, piece) })}
+            </p>
+          )
+        ) : null}
+        <Field label={t('inv.adjustReasonOptional')}>
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={t('inv.adjustReasonPlaceholder')}
+          />
         </Field>
         <div role="alert" className="min-h-5 text-sm font-medium text-[var(--danger-ink)]">
           {error}
@@ -416,6 +503,13 @@ export function Inventory(): ReactNode {
 
   const canEdit = can('edit_catalog');
   const showCost = can('view_cost');
+  // a shop without the imei module (kiryana) has no phones: its stock is just "items"
+  const shopModules = useShopModules();
+  const showModelColour = showsModelAndColour(shopModules.modules);
+  const noPhones = shopModules.modules !== undefined && !shopModules.has('imei');
+  useEffect(() => {
+    if (noPhones && tab === 'phones') setTab('accessories');
+  }, [noPhones, tab]);
 
   const phones = useServiceQuery(
     (s) =>
@@ -448,13 +542,15 @@ export function Inventory(): ReactNode {
             ) : null}
             {canEdit ? (
               <>
-                <Button onClick={() => setPhoneEdit({ open: true, unit: null })}>
-                  <Plus size={16} aria-hidden="true" />
-                  {t('inv.addPhone')}
-                </Button>
+                {noPhones ? null : (
+                  <Button onClick={() => setPhoneEdit({ open: true, unit: null })}>
+                    <Plus size={16} aria-hidden="true" />
+                    {t('inv.addPhone')}
+                  </Button>
+                )}
                 <Button onClick={() => setAccEdit({ open: true, item: null })}>
                   <Plus size={16} aria-hidden="true" />
-                  {t('inv.addAccessory')}
+                  {noPhones ? t('inv.addItem') : t('inv.addAccessory')}
                 </Button>
               </>
             ) : null}
@@ -468,9 +564,12 @@ export function Inventory(): ReactNode {
           value={tab}
           onChange={setTab}
           items={[
-            { value: 'phones', label: t('inv.tabPhones') },
-            { value: 'accessories', label: t('inv.tabAccessories') },
-            { value: 'low', label: t('inv.tabLow') },
+            ...(noPhones ? [] : [{ value: 'phones' as const, label: t('inv.tabPhones') }]),
+            {
+              value: 'accessories' as const,
+              label: noPhones ? t('inv.tabItems') : t('inv.tabAccessories'),
+            },
+            { value: 'low' as const, label: t('inv.tabLow') },
           ]}
         />
         <div className="relative min-w-60 flex-1 sm:max-w-sm">
@@ -630,8 +729,8 @@ export function Inventory(): ReactNode {
               <thead>
                 <tr>
                   <th>{t('inv.product')}</th>
-                  <th>{t('inv.forModel')}</th>
-                  <th>{t('inv.colour')}</th>
+                  {showModelColour ? <th>{t('inv.forModel')}</th> : null}
+                  {showModelColour ? <th>{t('inv.colour')}</th> : null}
                   <th>SKU</th>
                   <th>{t('inv.barcode')}</th>
                   <th className="num">{t('inv.stock')}</th>
@@ -648,14 +747,14 @@ export function Inventory(): ReactNode {
                 {(accessories.data ?? []).map((v) => (
                   <tr key={v.variant.id}>
                     <td className="font-semibold">{v.product.name}</td>
-                    <td>{v.variant.model ?? '—'}</td>
-                    <td>{v.variant.colour ?? '—'}</td>
+                    {showModelColour ? <td>{v.variant.model ?? '—'}</td> : null}
+                    {showModelColour ? <td>{v.variant.colour ?? '—'}</td> : null}
                     <td className="ltr font-mono text-xs">{v.variant.sku}</td>
                     <td className="ltr font-mono text-xs">{v.variant.barcode ?? '—'}</td>
                     <td className="num">
                       <span className="inline-flex items-center gap-2">
                         {v.lowStock ? <Badge tone="danger">{t('inv.low')}</Badge> : null}
-                        <b>{v.onHand}</b>
+                        <b>{variantQtyText(v.onHand, v.variant)}</b>
                       </span>
                     </td>
                     {showCost ? (
@@ -665,6 +764,9 @@ export function Inventory(): ReactNode {
                     ) : null}
                     <td className="num">
                       <Money value={v.variant.salePrice} symbol={null} className="font-semibold" />
+                      <span className="ltr text-xs text-muted">
+                        {perUnit(v.variant.unitScale, v.variant.unitLabel)}
+                      </span>
                     </td>
                     {canEdit ? (
                       <td>

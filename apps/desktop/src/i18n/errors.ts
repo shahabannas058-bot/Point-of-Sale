@@ -5,8 +5,12 @@ import { usePrefs } from '../store/prefs';
 /** ServiceError -> localized sentence. Unknown errors map to err.generic (details are never shown raw). */
 export function errorMessage(e: unknown, t: TFn): string {
   if (isServiceError(e)) {
-    const key = dynKey('err', e.code);
     const d = e.details;
+    // short because the rest of the batches are past their expiry date, not because the shelf is empty
+    const key =
+      e.code === 'STOCK_INSUFFICIENT' && typeof d.expiredOnHand === 'number'
+        ? 'err.STOCK_EXPIRED'
+        : dynKey('err', e.code);
     const params: Record<string, string | number> = {};
     for (const [k, v] of Object.entries(d)) {
       if (typeof v === 'string' || typeof v === 'number') params[k] = v;

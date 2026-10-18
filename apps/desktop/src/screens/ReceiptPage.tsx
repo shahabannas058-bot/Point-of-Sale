@@ -31,7 +31,7 @@ export function ReceiptPage(): ReactNode {
       <div className="no-print flex items-center justify-between">
         <Link
           to="/sales"
-          className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary"
+          className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary-ink"
         >
           <ArrowLeft size={16} className="rtl:-scale-x-100" aria-hidden="true" />
           {t('nav.sales')}

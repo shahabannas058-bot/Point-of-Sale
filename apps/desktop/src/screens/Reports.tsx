@@ -7,6 +7,7 @@ import { Input } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { localDayRange, todayYmd } from '../lib/dates';
+import { variantQtyText } from '../lib/qty';
 import { printPage } from '../lib/print';
 import { useServiceQuery } from '../service/use-query';
 import { useCan } from '../store/session';
@@ -197,8 +198,10 @@ export function Reports(): ReactNode {
                     <tr key={v.variant.id}>
                       <td className="font-semibold">{v.label}</td>
                       <td className="ltr font-mono text-xs">{v.variant.sku}</td>
-                      <td className="num font-bold text-[var(--danger-ink)]">{v.onHand}</td>
-                      <td className="num">{v.variant.reorderLevel}</td>
+                      <td className="num font-bold text-[var(--danger-ink)]">
+                        {variantQtyText(v.onHand, v.variant)}
+                      </td>
+                      <td className="num">{variantQtyText(v.variant.reorderLevel, v.variant)}</td>
                     </tr>
                   ))}
                 </tbody>

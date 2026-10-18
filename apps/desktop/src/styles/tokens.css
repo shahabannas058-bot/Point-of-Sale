@@ -1,133 +1,146 @@
-/* Design tokens: "Cobalt on Slate". A single cobalt action colour on cool slate neutrals (the shadcn /
-   Linear / Stripe dashboard base, and the blue CTA used by Square and Shopify POS); green, amber and red are
-   reserved for status (paid, khata due, error). Light is the default; dark is applied by [data-theme='dark']
-   or, when no explicit choice is stored, by the OS preference. The two dark blocks MUST stay identical
-   (see test/tokens.test.ts). */
+/* Design tokens: "Teal & Mint". The brand palette is six colours:
+     #fbfcfc  near-white   page and cards
+     #e0e5e9  mist         fills, table headers, hovered rows
+     #b2c9c5  sage         borders, dark-theme muted text
+     #1bd488  mint         the accent: active navigation, highlights, dark-theme action colour
+     #45828b  teal         focus rings
+     #055b65  deep teal    buttons, sidebar, links, light-theme headings
+   A few supporting shades are needed for contrast only: a near-black teal for body text, a mid teal for muted
+   text, and a darker teal for button hover. Text ON mint is a deep teal (--on-accent). Red and amber stay as
+   error / warning colours so problems still stand out. Light is the default; dark is applied by
+   [data-theme='dark'] or, when no explicit choice is stored, by the OS preference. The two dark blocks MUST
+   stay identical (see test/tokens.test.ts). */
 :root {
-  --bg: #f1f4f9; /* soft off-white, less glare on long shifts */
-  --surface: #ffffff;
-  --surface-2: #e9eef5;
-  --border: #d5dce7;
-  --text: #0f172a; /* 17.85:1 on surface (AAA) */
-  --text-muted: #475569; /* 6.50:1 on surface-2 */
-  --primary: #2f54d4; /* cobalt: the only action colour; green / amber / red mean status */
-  --primary-hover: #2443b8;
-  --on-primary: #ffffff; /* 6.29:1 */
+  --bg: #fbfcfc;
+  --surface: #fbfcfc;
+  --surface-2: #e0e5e9;
+  --border: #b2c9c5;
+  --text: #0c2a2e; /* near-black teal, 11.9:1 on surface-2 (AAA) */
+  --text-muted: #3f6b72; /* 4.65:1 on surface-2 */
+  --primary: #055b65; /* deep teal: buttons and links; mint marks the active state */
+  --primary-hover: #044a52;
+  --on-primary: #fbfcfc; /* 7.6:1 on --primary */
+  --accent: #1bd488;
+  --on-accent: #04373d; /* 6.7:1 on --accent */
   --success: #0f7a55;
-  --warning: #b45309;
+  --warning: #a16207;
   --danger: #c42b2b;
-  --primary-soft: #e3eaff;
-  --primary-ink: #1e3a9e;
+  --primary-soft: #dbe7e5;
+  --primary-ink: #055b65; /* teal text on the page and on soft fills, 6.1:1 */
   --success-soft: #dcf5e8;
   --success-ink: #065f46;
   --warning-soft: #fdf0d5;
   --warning-ink: #854d0e;
   --danger-soft: #fde4e4;
   --danger-ink: #9f1d1d;
-  --rail: #111a2e;
-  --rail-text: #cbd5e1;
-  --rail-active: #2f54d4;
-  --scrim: rgb(15 23 42 / 0.55);
-  --focus: #2f54d4;
+  --rail: #055b65;
+  --rail-text: #e0e5e9;
+  --rail-active: #1bd488;
+  --scrim: rgb(5 40 46 / 0.55);
+  --focus: #45828b;
   --radius: 10px;
   --dur: 180ms;
   /* Liquid glass: translucent layers over a soft ambient backdrop. The solid --surface values above stay
      the contrast reference; glass behind text stays >= 70% opaque so the ratios hold. */
-  --glass: rgb(255 255 255 / 0.72);
-  --glass-strong: rgb(255 255 255 / 0.86);
-  --glass-hover: rgb(255 255 255 / 0.84);
+  --glass: rgb(251 252 252 / 0.72);
+  --glass-strong: rgb(251 252 252 / 0.88);
+  --glass-hover: rgb(251 252 252 / 0.84);
   --glass-border: rgb(255 255 255 / 0.8);
-  --glass-edge: rgb(15 23 42 / 0.09);
+  --glass-edge: rgb(5 91 101 / 0.1);
   --glass-highlight: rgb(255 255 255 / 0.95);
   --glass-shine: rgb(255 255 255 / 0.55);
-  --glass-shadow: rgb(30 41 82 / 0.12);
-  --rail-glass: rgb(17 26 46 / 0.84);
-  --ambient-a: rgb(99 132 255 / 0.32);
-  --ambient-b: rgb(56 189 168 / 0.22);
-  --ambient-c: rgb(167 139 250 / 0.2);
+  --glass-shadow: rgb(5 91 101 / 0.14);
+  --rail-glass: rgb(5 91 101 / 0.9);
+  --ambient-a: rgb(27 212 136 / 0.2);
+  --ambient-b: rgb(69 130 139 / 0.2);
+  --ambient-c: rgb(178 201 197 / 0.5);
   --blur: 22px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0b1120;
-    --surface: #131b2e;
-    --surface-2: #1b2540;
-    --border: #2a3654;
-    --text: #e8edf5;
-    --text-muted: #9aa7bd;
-    --primary: #7c9cff;
-    --primary-hover: #a3b8ff;
-    --on-primary: #0b1120;
+    --bg: #04262b;
+    --surface: #07323a;
+    --surface-2: #0b4048;
+    --border: #17555e;
+    --text: #fbfcfc;
+    --text-muted: #b2c9c5;
+    --primary: #1bd488;
+    --primary-hover: #5ae3ab;
+    --on-primary: #04373d;
+    --accent: #1bd488;
+    --on-accent: #04373d;
     --success: #34d399;
     --warning: #fbbf24;
     --danger: #f87171;
-    --primary-soft: #1c2b5a;
-    --primary-ink: #c7d4ff;
+    --primary-soft: #0e4a4f;
+    --primary-ink: #1bd488;
     --success-soft: #0f3a2c;
     --success-ink: #a7f3d0;
     --warning-soft: #3d2c0a;
     --warning-ink: #fde68a;
     --danger-soft: #451a1f;
     --danger-ink: #fecaca;
-    --rail: #070b16;
-    --rail-text: #b8c3d6;
-    --rail-active: #3a5fe0;
-    --scrim: rgb(2 6 23 / 0.7);
-    --focus: #a3b8ff;
-    --glass: rgb(19 27 46 / 0.7);
-    --glass-strong: rgb(19 27 46 / 0.86);
-    --glass-hover: rgb(32 43 70 / 0.78);
+    --rail: #021a1e;
+    --rail-text: #b2c9c5;
+    --rail-active: #1bd488;
+    --scrim: rgb(1 12 14 / 0.7);
+    --focus: #1bd488;
+    --glass: rgb(7 50 58 / 0.7);
+    --glass-strong: rgb(7 50 58 / 0.86);
+    --glass-hover: rgb(12 70 80 / 0.78);
     --glass-border: rgb(255 255 255 / 0.1);
     --glass-edge: rgb(0 0 0 / 0.4);
     --glass-highlight: rgb(255 255 255 / 0.16);
     --glass-shine: rgb(255 255 255 / 0.07);
     --glass-shadow: rgb(0 0 0 / 0.45);
-    --rail-glass: rgb(7 11 22 / 0.66);
-    --ambient-a: rgb(70 100 230 / 0.4);
-    --ambient-b: rgb(20 150 130 / 0.26);
-    --ambient-c: rgb(120 80 220 / 0.28);
+    --rail-glass: rgb(2 26 30 / 0.66);
+    --ambient-a: rgb(27 212 136 / 0.22);
+    --ambient-b: rgb(69 130 139 / 0.3);
+    --ambient-c: rgb(5 91 101 / 0.35);
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #0b1120;
-  --surface: #131b2e;
-  --surface-2: #1b2540;
-  --border: #2a3654;
-  --text: #e8edf5;
-  --text-muted: #9aa7bd;
-  --primary: #7c9cff;
-  --primary-hover: #a3b8ff;
-  --on-primary: #0b1120;
+  --bg: #04262b;
+  --surface: #07323a;
+  --surface-2: #0b4048;
+  --border: #17555e;
+  --text: #fbfcfc;
+  --text-muted: #b2c9c5;
+  --primary: #1bd488;
+  --primary-hover: #5ae3ab;
+  --on-primary: #04373d;
+  --accent: #1bd488;
+  --on-accent: #04373d;
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
-  --primary-soft: #1c2b5a;
-  --primary-ink: #c7d4ff;
+  --primary-soft: #0e4a4f;
+  --primary-ink: #1bd488;
   --success-soft: #0f3a2c;
   --success-ink: #a7f3d0;
   --warning-soft: #3d2c0a;
   --warning-ink: #fde68a;
   --danger-soft: #451a1f;
   --danger-ink: #fecaca;
-  --rail: #070b16;
-  --rail-text: #b8c3d6;
-  --rail-active: #3a5fe0;
-  --scrim: rgb(2 6 23 / 0.7);
-  --focus: #a3b8ff;
-  --glass: rgb(19 27 46 / 0.7);
-  --glass-strong: rgb(19 27 46 / 0.86);
-  --glass-hover: rgb(32 43 70 / 0.78);
+  --rail: #021a1e;
+  --rail-text: #b2c9c5;
+  --rail-active: #1bd488;
+  --scrim: rgb(1 12 14 / 0.7);
+  --focus: #1bd488;
+  --glass: rgb(7 50 58 / 0.7);
+  --glass-strong: rgb(7 50 58 / 0.86);
+  --glass-hover: rgb(12 70 80 / 0.78);
   --glass-border: rgb(255 255 255 / 0.1);
   --glass-edge: rgb(0 0 0 / 0.4);
   --glass-highlight: rgb(255 255 255 / 0.16);
   --glass-shine: rgb(255 255 255 / 0.07);
   --glass-shadow: rgb(0 0 0 / 0.45);
-  --rail-glass: rgb(7 11 22 / 0.66);
-  --ambient-a: rgb(70 100 230 / 0.4);
-  --ambient-b: rgb(20 150 130 / 0.26);
-  --ambient-c: rgb(120 80 220 / 0.28);
+  --rail-glass: rgb(2 26 30 / 0.66);
+  --ambient-a: rgb(27 212 136 / 0.22);
+  --ambient-b: rgb(69 130 139 / 0.3);
+  --ambient-c: rgb(5 91 101 / 0.35);
 }
 
 @media (prefers-reduced-motion: reduce) {

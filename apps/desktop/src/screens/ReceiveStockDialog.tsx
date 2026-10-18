@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PackagePlus, Plus, Trash } from 'lucide-react';
 import {
   PAYMENT_METHODS,
+  lineGross,
+  parseQuantity,
+  type BatchInput,
   type NewPhoneUnitInput,
   type PaymentMethod,
   type VariantView,
@@ -19,7 +22,9 @@ import { Money } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { paisaToInput, parseRupees } from '../lib/money';
+import { perUnit } from '../lib/qty';
 import { useService } from '../service/context';
+import { useShopModules } from '../service/use-modules';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { toast } from '../store/toast';
@@ -29,6 +34,9 @@ interface AccRow {
   variantId: string;
   qty: string;
   cost: string;
+  /** Module batch_expiry. A date from <input type="date">, so always YYYY-MM-DD or ''. */
+  batchNo: string;
+  expiry: string;
 }
 
 export function ReceiveStockDialog({
@@ -43,6 +51,11 @@ export function ReceiveStockDialog({
   const bump = useDataVersion((s) => s.bump);
   const suppliers = useServiceQuery((s) => s.purchasing.listSuppliers(), [], open);
   const accessories = useServiceQuery((s) => s.catalog.listAccessories(), [], open);
+  // a shop without the imei module (kiryana) receives only items, never phones
+  const shopModules = useShopModules();
+  const hasPhones = shopModules.modules === undefined || shopModules.has('imei');
+  // perishable goods (kiryana): each line may carry a batch number and an expiry date
+  const hasBatches = shopModules.has('batch_expiry');
 
   const [supplierId, setSupplierId] = useState('');
   const [newSupplier, setNewSupplier] = useState<string | null>(null);
@@ -80,9 +93,12 @@ export function ReceiveStockDialog({
   const total = useMemo(() => {
     let sum = 0;
     for (const p of phones) sum += parseRupees(p.draft.cost) ?? 0;
-    for (const a of accs) sum += (Number(a.qty) || 0) * (parseRupees(a.cost) ?? 0);
+    for (const a of accs) {
+      const scale = variantById.get(a.variantId)?.variant.unitScale ?? 1;
+      sum += lineGross(parseQuantity(a.qty, scale) ?? 0, parseRupees(a.cost) ?? 0, scale);
+    }
     return sum;
-  }, [phones, accs]);
+  }, [phones, accs, variantById]);
 
   const addSupplier = async (): Promise<void> => {
     if (!newSupplier?.trim()) return;
@@ -105,13 +121,27 @@ export function ReceiveStockDialog({
       if ('error' in r) return setError(t(r.error));
       phoneInputs.push(r.input);
     }
-    const accInputs: { variantId: string; quantity: number; unitCost: number }[] = [];
+    const accInputs: {
+      variantId: string;
+      quantity: number;
+      unitCost: number;
+      batch?: BatchInput | null;
+    }[] = [];
     for (const a of accs) {
-      const qty = Number(a.qty);
+      const qty = parseQuantity(a.qty, variantById.get(a.variantId)?.variant.unitScale ?? 1);
       const cost = parseRupees(a.cost);
-      if (!a.variantId || !Number.isInteger(qty) || qty <= 0 || cost === null)
+      if (!a.variantId || qty === null || qty <= 0 || cost === null)
         return setError(t('recv.errAccessory'));
-      accInputs.push({ variantId: a.variantId, quantity: qty, unitCost: cost });
+      if (hasBatches && a.batchNo.trim() !== '' && a.expiry === '')
+        return setError(t('recv.errExpiry'));
+      accInputs.push({
+        variantId: a.variantId,
+        quantity: qty,
+        unitCost: cost,
+        ...(hasBatches && a.expiry !== ''
+          ? { batch: { batchNo: a.batchNo.trim() || null, expiryDate: a.expiry } }
+          : {}),
+      });
     }
     if (phoneInputs.length + accInputs.length === 0) return setError(t('recv.errEmpty'));
     const paidP = paid.trim() === '' ? 0 : parseRupees(paid);
@@ -176,7 +206,7 @@ export function ReceiveStockDialog({
           {newSupplier === null ? (
             <button
               type="button"
-              className="self-start text-sm font-semibold text-primary"
+              className="self-start text-sm font-semibold text-primary-ink"
               onClick={() => setNewSupplier('')}
             >
               + {t('recv.newSupplier')}
@@ -223,8 +253,8 @@ export function ReceiveStockDialog({
         </div>
       </div>
 
-      <h3 className="mb-2 mt-5 text-base">{t('recv.phones')}</h3>
-      <div className="flex flex-col gap-3">
+      {hasPhones ? <h3 className="mb-2 mt-5 text-base">{t('recv.phones')}</h3> : null}
+      <div className={hasPhones ? 'flex flex-col gap-3' : 'hidden'}>
         {phones.map((p, i) => (
           <div key={p.id} className="relative rounded-xl border border-line bg-surface-2 p-3">
             <div className="mb-2 flex items-center justify-between">
@@ -278,80 +308,129 @@ export function ReceiveStockDialog({
         </Button>
       </div>
 
-      <h3 className="mb-2 mt-5 text-base">{t('recv.accessories')}</h3>
+      <h3 className="mb-2 mt-5 text-base">
+        {hasPhones ? t('recv.accessories') : t('inv.tabItems')}
+      </h3>
       <div className="flex flex-col gap-2">
-        {accs.map((a) => (
-          <div
-            key={a.id}
-            className="grid grid-cols-[minmax(0,2fr)_90px_130px_44px] items-end gap-2"
-          >
-            <Field label={t('recv.item')}>
-              <Select
-                value={a.variantId}
-                onChange={(e) => {
-                  const v = variantById.get(e.target.value);
-                  setAccs((rs) =>
-                    rs.map((x) =>
-                      x.id === a.id
-                        ? {
-                            ...x,
-                            variantId: e.target.value,
-                            cost: v ? paisaToInput(v.variant.costPrice) : x.cost,
-                          }
-                        : x,
-                    ),
-                  );
-                }}
-              >
-                <option value="">—</option>
-                {(accessories.data ?? []).map((v) => (
-                  <option key={v.variant.id} value={v.variant.id}>
-                    {v.label} · {v.variant.sku}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t('billing.qty')}>
-              <Input
-                value={a.qty}
-                onChange={(e) =>
-                  setAccs((rs) =>
-                    rs.map((x) =>
-                      x.id === a.id ? { ...x, qty: e.target.value.replace(/\D/g, '') } : x,
-                    ),
-                  )
-                }
-                inputMode="numeric"
-                className="ltr"
-              />
-            </Field>
-            <Field label={t('recv.unitCost')}>
-              <Input
-                value={a.cost}
-                onChange={(e) =>
-                  setAccs((rs) =>
-                    rs.map((x) => (x.id === a.id ? { ...x, cost: e.target.value } : x)),
-                  )
-                }
-                inputMode="decimal"
-                className="ltr"
-              />
-            </Field>
-            <Button
-              variant="ghost"
-              icon
-              aria-label={t('common.remove')}
-              onClick={() => setAccs((rs) => rs.filter((x) => x.id !== a.id))}
-            >
-              <Trash size={16} aria-hidden="true" />
-            </Button>
-          </div>
-        ))}
+        {accs.map((a) => {
+          const picked = variantById.get(a.variantId)?.variant;
+          const scale = picked?.unitScale ?? 1;
+          return (
+            <div key={a.id} className="flex flex-col gap-2">
+              <div className="grid grid-cols-[minmax(0,2fr)_110px_150px_44px] items-end gap-2">
+                <Field label={t('recv.item')}>
+                  <Select
+                    value={a.variantId}
+                    onChange={(e) => {
+                      const v = variantById.get(e.target.value);
+                      setAccs((rs) =>
+                        rs.map((x) =>
+                          x.id === a.id
+                            ? {
+                                ...x,
+                                variantId: e.target.value,
+                                cost: v ? paisaToInput(v.variant.costPrice) : x.cost,
+                              }
+                            : x,
+                        ),
+                      );
+                    }}
+                  >
+                    <option value="">—</option>
+                    {(accessories.data ?? []).map((v) => (
+                      <option key={v.variant.id} value={v.variant.id}>
+                        {v.label} · {v.variant.sku}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field
+                  label={
+                    scale === 1
+                      ? t('billing.qty')
+                      : t('inv.qtyIn', { unit: picked?.unitLabel ?? '' })
+                  }
+                >
+                  <Input
+                    value={a.qty}
+                    onChange={(e) =>
+                      setAccs((rs) =>
+                        rs.map((x) =>
+                          x.id === a.id
+                            ? {
+                                ...x,
+                                qty: e.target.value.replace(scale === 1 ? /\D/g : /[^\d.]/g, ''),
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                    inputMode={scale === 1 ? 'numeric' : 'decimal'}
+                    className="ltr"
+                  />
+                </Field>
+                <Field
+                  label={`${t('recv.unitCost')}${picked ? ` ${perUnit(picked.unitScale, picked.unitLabel)}` : ''}`}
+                >
+                  <Input
+                    value={a.cost}
+                    onChange={(e) =>
+                      setAccs((rs) =>
+                        rs.map((x) => (x.id === a.id ? { ...x, cost: e.target.value } : x)),
+                      )
+                    }
+                    inputMode="decimal"
+                    className="ltr"
+                  />
+                </Field>
+                <Button
+                  variant="ghost"
+                  icon
+                  aria-label={t('common.remove')}
+                  onClick={() => setAccs((rs) => rs.filter((x) => x.id !== a.id))}
+                >
+                  <Trash size={16} aria-hidden="true" />
+                </Button>
+              </div>
+              {hasBatches ? (
+                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+                  <Field label={t('recv.batchNo')}>
+                    <Input
+                      value={a.batchNo}
+                      onChange={(e) =>
+                        setAccs((rs) =>
+                          rs.map((x) => (x.id === a.id ? { ...x, batchNo: e.target.value } : x)),
+                        )
+                      }
+                      maxLength={60}
+                      className="ltr"
+                    />
+                  </Field>
+                  <Field label={t('recv.expiry')}>
+                    <Input
+                      type="date"
+                      value={a.expiry}
+                      onChange={(e) =>
+                        setAccs((rs) =>
+                          rs.map((x) => (x.id === a.id ? { ...x, expiry: e.target.value } : x)),
+                        )
+                      }
+                      className="ltr"
+                    />
+                  </Field>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
         <Button
           variant="secondary"
           className="self-start"
           onClick={() => {
-            setAccs((rs) => [...rs, { id: seq, variantId: '', qty: '1', cost: '' }]);
+            setAccs((rs) => [
+              ...rs,
+              { id: seq, variantId: '', qty: '1', cost: '', batchNo: '', expiry: '' },
+            ]);
             setSeq((s) => s + 1);
           }}
         >

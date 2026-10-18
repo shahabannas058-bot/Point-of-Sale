@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router';
-import { Languages, Lock, Store, WifiOff, ShieldCheck, Sparkles } from 'lucide-react';
-import { isServiceError, type Role } from '@pos/shared';
+import { Languages, LoaderCircle, WifiOff, ShieldCheck, Sparkles } from 'lucide-react';
+import { BUSINESS_TYPES, isServiceError, type BusinessType, type Role } from '@pos/shared';
+import logoUrl from '../assets/hs-pos-logo.png';
+import { LanguageSwitch } from '../components/LanguageSwitch';
 import { Button } from '../components/ui/Button';
 import { Field, Input } from '../components/ui/Field';
 import { Badge } from '../components/ui/Badge';
-import { PinPad } from '../components/ui/PinPad';
+import { PIN_LENGTH, PinPad } from '../components/ui/PinPad';
 import { ErrorBox } from '../components/ui/misc';
 import { useT, type TKey } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { useRuntime } from '../service/context';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
-import { usePrefs } from '../store/prefs';
 import { useSession } from '../store/session';
 
 const LAST_USER_KEY = 'pos-last-user';
@@ -34,14 +35,8 @@ function BrandPanel({ shopName }: { shopName: string }): ReactNode {
   ];
   return (
     <aside className="brand-grid relative hidden flex-col justify-between overflow-hidden bg-[var(--rail)] p-10 text-white lg:flex">
-      <div className="flex items-center gap-3">
-        <div
-          className="grid size-11 place-items-center rounded-xl bg-primary text-on-primary"
-          aria-hidden="true"
-        >
-          <Store size={24} />
-        </div>
-        <span className="text-sm font-semibold text-slate-300">{t('app.name')}</span>
+      <div className="self-start rounded-3xl bg-[#fbfcfc] p-3 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.5)]">
+        <img src={logoUrl} alt={t('app.name')} className="h-28 w-auto" draggable={false} />
       </div>
       <div>
         <h1 className="display text-4xl font-bold leading-tight tracking-tight">{shopName}</h1>
@@ -80,6 +75,8 @@ function SetupWizard(): ReactNode {
     pin: '',
     pin2: '',
   });
+  // kiryana is the first business type we ship, so it is pre-selected
+  const [businessType, setBusinessType] = useState<BusinessType>('kiryana');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
@@ -91,7 +88,7 @@ function SetupWizard(): ReactNode {
   const errs = {
     prefix: /^[A-Z0-9]{1,4}$/.test(form.invoicePrefix) ? null : t('setup.errPrefix'),
     username: /^[a-z0-9._-]{3,32}$/.test(form.username) ? null : t('setup.errUsername'),
-    pin: /^\d{4,6}$/.test(form.pin) ? null : t('setup.errPin'),
+    pin: /^\d{4}$/.test(form.pin) ? null : t('setup.errPin'),
     pin2: form.pin === form.pin2 ? null : t('setup.errPinMatch'),
   };
   const valid =
@@ -114,6 +111,7 @@ function SetupWizard(): ReactNode {
         branchName: form.branchName.trim(),
         invoicePrefix: form.invoicePrefix,
         owner: { username: form.username, displayName: form.displayName.trim(), pin: form.pin },
+        businessType,
       });
       bump();
     } catch (err) {
@@ -127,7 +125,7 @@ function SetupWizard(): ReactNode {
     setBusy(true);
     setError(null);
     try {
-      await rt.loadDemo();
+      await rt.loadDemo(businessType);
       window.location.reload();
     } catch (err) {
       setError(err);
@@ -155,6 +153,31 @@ function SetupWizard(): ReactNode {
             required
           />
         </Field>
+        <div className="sm:col-span-2" role="radiogroup" aria-label={t('setup.businessType')}>
+          <div className="mb-1.5 text-sm font-semibold">{t('setup.businessType')}</div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {BUSINESS_TYPES.map((bt) => {
+              const on = businessType === bt;
+              return (
+                <button
+                  key={bt}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setBusinessType(bt)}
+                  className={`flex min-h-14 flex-col justify-center rounded-xl border px-4 py-2 text-start transition-colors ${
+                    on
+                      ? 'border-primary bg-primary-soft'
+                      : 'border-line bg-surface hover:bg-surface-2'
+                  }`}
+                >
+                  <span className="font-semibold">{t(`setup.bt.${bt}` as TKey)}</span>
+                  <span className="text-xs text-muted">{t(`setup.bt.${bt}Hint` as TKey)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <Field label={t('setup.branchName')}>
           <Input value={form.branchName} onChange={set('branchName')} required />
         </Field>
@@ -185,7 +208,7 @@ function SetupWizard(): ReactNode {
             onChange={set('pin')}
             type="password"
             inputMode="numeric"
-            maxLength={6}
+            maxLength={4}
             className="ltr"
             autoComplete="new-password"
           />
@@ -196,7 +219,7 @@ function SetupWizard(): ReactNode {
             onChange={set('pin2')}
             type="password"
             inputMode="numeric"
-            maxLength={6}
+            maxLength={4}
             className="ltr"
             autoComplete="new-password"
           />
@@ -317,7 +340,11 @@ function PinLogin(): ReactNode {
         <div className="flex flex-col gap-4">
           <PinPad
             value={pin}
-            onChange={setPin}
+            onChange={(v) => {
+              setPin(v);
+              // the PIN has a fixed length, so sign in as soon as the last digit is typed
+              if (v.length === PIN_LENGTH) void submit(v);
+            }}
             onSubmit={() => void submit(pin)}
             disabled={busy || locked}
           />
@@ -331,16 +358,15 @@ function PinLogin(): ReactNode {
                 ? errorMessage(error, t)
                 : null}
           </div>
-          <Button
-            variant="primary"
-            size="lg"
-            disabled={pin.length < 4 || locked}
-            loading={busy}
-            onClick={() => void submit(pin)}
-          >
-            <Lock size={18} aria-hidden="true" />
-            {t('login.signIn')}
-          </Button>
+          {busy ? (
+            <div
+              className="flex justify-center text-muted"
+              role="status"
+              aria-label={t('login.signIn')}
+            >
+              <LoaderCircle size={22} className="spin" aria-hidden="true" />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -360,10 +386,7 @@ function PinLogin(): ReactNode {
 
 export function Login(): ReactNode {
   const t = useT();
-  const rt = useRuntime();
   const session = useSession((s) => s.session);
-  const lang = usePrefs((s) => s.lang);
-  const setLang = usePrefs((s) => s.setLang);
   const setupQ = useServiceQuery((s) => s.setup.isSetUp(), []);
   const settingsQ = useServiceQuery((s) => s.settings.get(), [], setupQ.data === true);
 
@@ -375,14 +398,7 @@ export function Login(): ReactNode {
       <BrandPanel shopName={setupQ.data === false ? t('app.name') : shopName} />
       <main className="relative grid place-items-center p-6">
         <div className="absolute end-4 top-4">
-          <Button
-            variant="ghost"
-            onClick={() => setLang(lang === 'en' ? 'ur' : 'en')}
-            aria-label={t('shell.toggleLang')}
-          >
-            <Languages size={18} aria-hidden="true" />
-            {lang === 'en' ? 'Roman Urdu' : 'English'}
-          </Button>
+          <LanguageSwitch />
         </div>
         {setupQ.loading && setupQ.data === undefined ? (
           <div className="skeleton h-64 w-full max-w-md" aria-hidden="true" />
@@ -393,9 +409,6 @@ export function Login(): ReactNode {
         ) : (
           <SetupWizard />
         )}
-        <div className="absolute bottom-4 text-xs text-muted">
-          {rt.mode === 'mock' ? t('login.mockMode') : null}
-        </div>
       </main>
     </div>
   );

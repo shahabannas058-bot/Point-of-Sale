@@ -157,7 +157,7 @@ export function SupplierDetail(): ReactNode {
       <div className="no-print mb-2">
         <Link
           to="/suppliers"
-          className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary"
+          className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary-ink"
         >
           <ArrowLeft size={16} className="rtl:-scale-x-100" aria-hidden="true" />
           {t('nav.suppliers')}

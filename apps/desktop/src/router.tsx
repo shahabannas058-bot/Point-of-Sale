@@ -1,8 +1,10 @@
 import { Navigate, createHashRouter } from 'react-router';
 import { AppShell, RequireSession } from './components/AppShell';
+import { RequireModule } from './components/RequireModule';
 import { Billing } from './screens/Billing';
 import { CustomerDetail } from './screens/CustomerDetail';
 import { Customers } from './screens/Customers';
+import { Expiry } from './screens/Expiry';
 import { Inventory } from './screens/Inventory';
 import { Login } from './screens/Login';
 import { ReceiptPage } from './screens/ReceiptPage';
@@ -31,9 +33,38 @@ export const router = createHashRouter([
       { path: 'customers/:id', element: <CustomerDetail /> },
       { path: 'suppliers', element: <Suppliers /> },
       { path: 'suppliers/:id', element: <SupplierDetail /> },
-      { path: 'repairs', element: <Repairs /> },
-      { path: 'repairs/:id', element: <RepairDetail /> },
-      { path: 'warranty', element: <Warranty /> },
+      {
+        path: 'repairs',
+        element: (
+          <RequireModule module="repair">
+            <Repairs />
+          </RequireModule>
+        ),
+      },
+      {
+        path: 'repairs/:id',
+        element: (
+          <RequireModule module="repair">
+            <RepairDetail />
+          </RequireModule>
+        ),
+      },
+      {
+        path: 'warranty',
+        element: (
+          <RequireModule module="warranty">
+            <Warranty />
+          </RequireModule>
+        ),
+      },
+      {
+        path: 'expiry',
+        element: (
+          <RequireModule module="batch_expiry">
+            <Expiry />
+          </RequireModule>
+        ),
+      },
       { path: 'reports', element: <Reports /> },
       { path: 'settings', element: <Settings /> },
     ],

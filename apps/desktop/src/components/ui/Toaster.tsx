@@ -1,7 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { TriangleAlert, CircleCheck, Info, CircleX, X, type LucideIcon } from 'lucide-react';
 import { useT } from '../../i18n';
-import { useToasts, type ToastKind } from '../../store/toast';
+import { toastDuration, useToasts, type ToastKind } from '../../store/toast';
 
 const ICONS: Record<ToastKind, LucideIcon> = {
   success: CircleCheck,
@@ -49,12 +49,15 @@ export function Toaster(): ReactNode {
             className="toast"
             data-kind={it.kind}
             role={it.kind === 'error' ? 'alert' : 'status'}
+            style={{ '--toast-ms': `${toastDuration(it.kind)}ms` } as CSSProperties}
           >
-            <Icon size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
-            <div className="flex-1 text-sm font-medium">{it.message}</div>
+            <span className="toast-icon" aria-hidden="true">
+              <Icon size={18} />
+            </span>
+            <div className="toast-msg">{it.message}</div>
             <button
               type="button"
-              className="shrink-0 rounded p-1 text-muted hover:text-ink"
+              className="toast-close"
               aria-label={t('common.close')}
               onClick={() => dismiss(it.id)}
             >

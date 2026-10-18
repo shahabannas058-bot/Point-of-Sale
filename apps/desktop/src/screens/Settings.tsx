@@ -239,9 +239,7 @@ function UsersSection(): ReactNode {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const valid =
-    /^[a-z0-9._-]{3,32}$/.test(f.username) &&
-    f.displayName.trim() !== '' &&
-    /^\d{4,6}$/.test(f.pin);
+    /^[a-z0-9._-]{3,32}$/.test(f.username) && f.displayName.trim() !== '' && /^\d{4}$/.test(f.pin);
 
   const create = async (): Promise<void> => {
     if (!valid) return;
@@ -386,7 +384,7 @@ function ChangePin(): ReactNode {
       setError(null);
     }
   }, [open]);
-  const valid = /^\d{4,6}$/.test(oldPin) && /^\d{4,6}$/.test(newPin);
+  const valid = /^\d{4}$/.test(oldPin) && /^\d{4}$/.test(newPin);
   const save = async (): Promise<void> => {
     if (!valid) return;
     setBusy(true);
@@ -487,7 +485,7 @@ export function Settings(): ReactNode {
   const reset = async (): Promise<void> => {
     setBusy(true);
     try {
-      await rt.resetDemo();
+      await rt.resetDemo?.();
       window.location.hash = '#/login';
       window.location.reload();
     } catch (e) {
@@ -598,7 +596,7 @@ export function Settings(): ReactNode {
         </div>
       </Section>
 
-      {shop.data?.isDemo && can('manage_settings') ? (
+      {shop.data?.isDemo && can('manage_settings') && rt.resetDemo !== undefined ? (
         <Section title={t('settings.demo')} hint={t('settings.demoHint')}>
           <Button
             variant="danger-outline"

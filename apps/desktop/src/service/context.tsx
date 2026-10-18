@@ -1,16 +1,17 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { PosService } from '@pos/shared';
+import type { BusinessType, PosService } from '@pos/shared';
 
 export interface AppRuntime {
   service: PosService;
-  /** 'real' = @pos/db service on sql.js; 'mock' = in-memory demo (?mock=1 or fallback) */
-  mode: 'real' | 'mock';
   /** Raw database bytes for the backup button (real mode only). */
   exportBytes?: () => Uint8Array;
-  /** Wipes demo data and reseeds. Resolves when the app should navigate to /login. */
-  resetDemo: () => Promise<void>;
-  /** First-run only: fills an empty database with the demo shop. */
-  loadDemo: () => Promise<void>;
+  /**
+   * Wipes demo data and reseeds. Resolves when the app should navigate to /login.
+   * Absent in the desktop shell, where the real database can never be wiped from the page.
+   */
+  resetDemo?: () => Promise<void>;
+  /** First-run only: fills an empty database with the demo shop ('kiryana' = grocery demo, else mobile shop). */
+  loadDemo: (businessType?: BusinessType) => Promise<void>;
 }
 
 const Ctx = createContext<AppRuntime | null>(null);

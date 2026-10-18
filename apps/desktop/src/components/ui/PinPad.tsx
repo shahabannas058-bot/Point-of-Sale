@@ -2,6 +2,9 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Delete } from 'lucide-react';
 import { useT } from '../../i18n';
 
+/** A PIN is exactly this many digits (the service enforces the same rule). */
+export const PIN_LENGTH = 4;
+
 export interface PinPadProps {
   value: string;
   onChange: (v: string) => void;
@@ -18,8 +21,8 @@ export function PinPad({
   value,
   onChange,
   onSubmit,
-  maxLength = 6,
-  minLength = 4,
+  maxLength = PIN_LENGTH,
+  minLength = PIN_LENGTH,
   disabled = false,
   keyboard = true,
 }: PinPadProps): ReactNode {
@@ -54,7 +57,7 @@ export function PinPad({
     if (!disabled && value.length < maxLength) onChange(value + d);
   };
 
-  const dots = Math.max(maxLength === 6 ? 6 : maxLength, value.length);
+  const dots = Math.max(maxLength, value.length);
   return (
     <div className="flex flex-col gap-4" dir="ltr">
       <div className="pin-dots" aria-hidden="true">

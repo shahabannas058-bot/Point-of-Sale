@@ -156,7 +156,7 @@ export function CustomerDetail(): ReactNode {
       <div className="no-print mb-2">
         <Link
           to="/customers"
-          className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary"
+          className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary-ink"
         >
           <ArrowLeft size={16} className="rtl:-scale-x-100" aria-hidden="true" />
           {t('nav.customers')}
@@ -242,7 +242,7 @@ export function CustomerDetail(): ReactNode {
                     {l.entry.saleId && l.invoiceNo ? (
                       <button
                         type="button"
-                        className="font-semibold text-primary underline-offset-2 hover:underline"
+                        className="font-semibold text-primary-ink underline-offset-2 hover:underline"
                         onClick={() => setReceipt(l.entry.saleId)}
                       >
                         {l.invoiceNo}

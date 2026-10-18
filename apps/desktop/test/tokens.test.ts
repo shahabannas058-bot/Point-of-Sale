@@ -51,11 +51,33 @@ describe('design tokens', () => {
     for (const k of colourKeys) expect(darkExplicit, `dark is missing ${k}`).toHaveProperty(k);
   });
 
-  it('uses the Cobalt on Slate values for the core tokens', () => {
-    expect(light['--primary']).toBe('#2f54d4');
-    expect(light['--text']).toBe('#0f172a');
-    expect(darkExplicit['--bg']).toBe('#0b1120');
-    expect(darkExplicit['--primary']).toBe('#7c9cff');
+  it('uses the six brand colours for the core tokens', () => {
+    expect(light['--bg']).toBe('#fbfcfc');
+    expect(light['--surface-2']).toBe('#e0e5e9');
+    expect(light['--border']).toBe('#b2c9c5');
+    expect(light['--primary']).toBe('#055b65');
+    expect(light['--accent']).toBe('#1bd488');
+    expect(light['--focus']).toBe('#45828b');
+    expect(darkExplicit['--primary']).toBe('#1bd488');
+  });
+
+  it('text on the mint accent is readable (>= 4.5:1), in both themes', () => {
+    for (const t of [light, darkExplicit])
+      expect(contrast(t['--on-accent'] ?? '', t['--accent'] ?? '')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('link text (--primary-ink) is readable on every surface and on soft fills, in both themes', () => {
+    for (const [name, t] of [
+      ['light', light],
+      ['dark', darkExplicit],
+    ] as const) {
+      for (const surface of ['--bg', '--surface', '--surface-2', '--primary-soft']) {
+        expect(
+          contrast(t['--primary-ink'] ?? '', t[surface] ?? ''),
+          `${name} primary-ink on ${surface}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
   });
 
   it('body text meets WCAG AA (4.5:1) on every surface, in both themes', () => {
@@ -89,6 +111,36 @@ describe('design tokens', () => {
         expect(
           contrast(t[`--${tone}-ink`] ?? '', t[`--${tone}-soft`] ?? ''),
           `${name} ${tone} badge`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it('toast text (white) is readable on the sidebar colour the toasts use, in both themes (>= 7:1)', () => {
+    const toastText = '#fbfcfc';
+    for (const [name, t] of [
+      ['light', light],
+      ['dark', darkExplicit],
+    ] as const)
+      expect(
+        contrast(toastText, t['--rail'] ?? ''),
+        `${name} toast text on --rail`,
+      ).toBeGreaterThanOrEqual(7);
+  });
+
+  it('the toast icon chips are readable: mint chip and the soft badge colours', () => {
+    for (const [name, t] of [
+      ['light', light],
+      ['dark', darkExplicit],
+    ] as const) {
+      expect(
+        contrast(t['--on-accent'] ?? '', t['--rail-active'] ?? ''),
+        `${name} success chip`,
+      ).toBeGreaterThanOrEqual(4.5);
+      for (const tone of ['danger', 'warning', 'primary']) {
+        expect(
+          contrast(t[`--${tone}-ink`] ?? '', t[`--${tone}-soft`] ?? ''),
+          `${name} ${tone} chip`,
         ).toBeGreaterThanOrEqual(4.5);
       }
     }

@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CheckoutDraft, PhoneUnitView, VariantView } from '@pos/shared';
+import {
+  lineGross,
+  type CheckoutDraft,
+  type PhoneUnitView,
+  type UnitLabel,
+  type UnitScale,
+  type VariantView,
+} from '@pos/shared';
 
 export interface CartLine {
   key: string;
@@ -9,13 +16,26 @@ export interface CartLine {
   variantId?: string;
   label: string;
   sub: string;
+  /** per piece, or per kg / litre for loose goods (integer paisa) */
   unitPrice: number;
+  /** 1 for pieces, 1000 for kg / litre. Held bills saved by an older version lack it: read it with lineScale(). */
+  unitScale: UnitScale;
+  unitLabel: UnitLabel;
+  /** in base units: pieces, or grams / millilitres for loose goods */
   qty: number;
   /** accessory on-hand at the time it was added; null for phones (qty fixed at 1) */
   maxQty: number | null;
   /** discount on the whole line, integer paisa */
   discount: number;
 }
+
+/** Held bills saved before weights existed have no unitScale: they are piece lines. */
+export const lineScale = (l: Pick<CartLine, 'unitScale'>): UnitScale =>
+  l.unitScale === 1000 ? 1000 : 1;
+
+/** qty x unitPrice / unitScale before any discount, rounded half away from zero (the service's rule). */
+export const lineGrossOf = (l: Pick<CartLine, 'qty' | 'unitPrice' | 'unitScale'>): number =>
+  lineGross(l.qty, l.unitPrice, lineScale(l));
 
 export interface CartCustomer {
   id: string;
@@ -31,7 +51,8 @@ export interface HeldBill {
   invoiceDiscount: number;
 }
 
-export type AddResult = 'added' | 'capped' | 'duplicate' | 'out';
+/** 'weighed' = a loose item that is already on the bill: its weight is edited, not added to. */
+export type AddResult = 'added' | 'capped' | 'duplicate' | 'out' | 'weighed';
 
 interface CartState {
   lines: CartLine[];
@@ -88,6 +109,8 @@ export const useCart = create<CartState>()(
           label: phoneLabel(v),
           sub: phoneSub(v),
           unitPrice: v.unit.salePrice,
+          unitScale: 1,
+          unitLabel: 'pcs',
           qty: 1,
           maxQty: null,
           discount: 0,
@@ -95,21 +118,30 @@ export const useCart = create<CartState>()(
         set({ lines: [...lines, line], selected: lines.length, approvalToken: null });
         return 'added';
       },
-      addVariant: (v, qty = 1) => {
+      addVariant: (v, qty) => {
         if (v.onHand <= 0) return 'out';
+        const scale = v.variant.unitScale;
         const { lines } = get();
         const idx = lines.findIndex((l) => l.variantId === v.variant.id);
         if (idx >= 0) {
           const cur = lines[idx];
           if (!cur) return 'out';
-          const next = Math.min(cur.qty + qty, v.onHand);
-          const capped = cur.qty + qty > v.onHand;
+          if (scale !== 1) {
+            // loose goods: scanning again must not silently add another kilo; the cashier edits the weight
+            set({ selected: idx });
+            return 'weighed';
+          }
+          const add = qty ?? 1;
+          const next = Math.min(cur.qty + add, v.onHand);
+          const capped = cur.qty + add > v.onHand;
           set({
             lines: lines.map((l, i) => (i === idx ? { ...l, qty: next, maxQty: v.onHand } : l)),
             selected: idx,
           });
           return capped ? 'capped' : 'added';
         }
+        // loose goods start at 1 kg (1000 g); the cashier then types the real weight
+        const start = qty ?? (scale === 1 ? 1 : 1000);
         const line: CartLine = {
           key: `v:${v.variant.id}`,
           kind: 'accessory',
@@ -117,12 +149,14 @@ export const useCart = create<CartState>()(
           label: v.label,
           sub: variantSub(v),
           unitPrice: v.variant.salePrice,
-          qty: Math.min(qty, v.onHand),
+          unitScale: scale,
+          unitLabel: v.variant.unitLabel,
+          qty: Math.min(start, v.onHand),
           maxQty: v.onHand,
           discount: 0,
         };
         set({ lines: [...lines, line], selected: lines.length });
-        return qty > v.onHand ? 'capped' : 'added';
+        return start > v.onHand ? 'capped' : 'added';
       },
       setQty: (key, qty) => {
         const line = get().lines.find((l) => l.key === key);
@@ -130,7 +164,7 @@ export const useCart = create<CartState>()(
         const max = line.maxQty ?? Number.MAX_SAFE_INTEGER;
         const next = Math.max(1, Math.min(Math.trunc(qty), max));
         // keep the line discount below the new gross so the service never sees discount > gross
-        const gross = next * line.unitPrice;
+        const gross = lineGross(next, line.unitPrice, lineScale(line));
         set({
           lines: get().lines.map((l) =>
             l.key === key ? { ...l, qty: next, discount: Math.min(l.discount, gross) } : l,
@@ -146,9 +180,7 @@ export const useCart = create<CartState>()(
       setLineDiscount: (key, paisa) =>
         set({
           lines: get().lines.map((l) =>
-            l.key === key
-              ? { ...l, discount: Math.max(0, Math.min(paisa, l.unitPrice * l.qty)) }
-              : l,
+            l.key === key ? { ...l, discount: Math.max(0, Math.min(paisa, lineGrossOf(l))) } : l,
           ),
           approvalToken: null,
         }),
