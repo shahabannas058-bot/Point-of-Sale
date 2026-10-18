@@ -1,4 +1,12 @@
-import { ServiceError, type ShopSettings } from '@pos/shared';
+import {
+  BusinessTypeSchema,
+  MODULE_IDS,
+  ServiceError,
+  parseModuleList,
+  type BusinessType,
+  type ModuleId,
+  type ShopSettings,
+} from '@pos/shared';
 import type { SqlDriver, Statement } from '../types';
 
 /** app_meta keys owned by the service. `tenant_id` and `sync_cursor` belong to the sync slice. */
@@ -15,6 +23,10 @@ export const META = {
   allowNegativeStock: 'allow_negative_stock',
   demoData: 'demo_data',
   setupAt: 'setup_at',
+  /** BusinessType. Missing on shops created before modules existed: they keep every module. */
+  businessType: 'business_type',
+  /** Comma-separated ModuleId list. Later written by the licence token (ADR-0003). */
+  modules: 'modules',
 } as const;
 
 export const DEFAULT_CASHIER_MAX_DISCOUNT_BPS = 500;
@@ -25,6 +37,8 @@ export interface ShopMeta {
   invoicePrefix: string;
   setupAt: number;
   isDemo: boolean;
+  businessType: BusinessType;
+  modules: ModuleId[];
   settings: ShopSettings;
 }
 
@@ -52,12 +66,16 @@ export async function loadShop(driver: SqlDriver): Promise<ShopMeta> {
   if (deviceId === undefined || branchId === undefined || invoicePrefix === undefined)
     throw new ServiceError('NOT_SETUP', 'Shop has not been set up yet');
   const bps = Number(m.get(META.cashierMaxDiscountBps) ?? DEFAULT_CASHIER_MAX_DISCOUNT_BPS);
+  const type = BusinessTypeSchema.safeParse(m.get(META.businessType));
+  const rawModules = m.get(META.modules);
   return {
     deviceId,
     branchId,
     invoicePrefix,
     setupAt: Number(m.get(META.setupAt) ?? 0),
     isDemo: m.get(META.demoData) === '1',
+    businessType: type.success ? type.data : 'custom',
+    modules: rawModules === undefined ? [...MODULE_IDS] : parseModuleList(rawModules),
     settings: {
       shopName: m.get(META.shopName) ?? '',
       address: m.get(META.shopAddress) ?? null,

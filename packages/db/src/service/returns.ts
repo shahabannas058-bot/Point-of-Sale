@@ -1,4 +1,5 @@
 import {
+  MAX_QUANTITY_ANY,
   PaymentMethodSchema,
   ServiceError,
   UuidV7Schema,
@@ -115,7 +116,7 @@ function computeReturn(
   for (const r of requested) {
     if (!byId.has(r.lineId))
       throw new ServiceError('NOT_FOUND', 'Line not found on this invoice', { lineId: r.lineId });
-    const q = intIn(r.quantity, 'quantity', 1, 1_000_000);
+    const q = intIn(r.quantity, 'quantity', 1, MAX_QUANTITY_ANY);
     qtyByLine.set(r.lineId, (qtyByLine.get(r.lineId) ?? 0) + q);
   }
   const specs: LineSpec[] = [];
@@ -138,6 +139,7 @@ function computeReturn(
       variantId: st.line.variantId,
       description: st.line.description,
       quantity: -q,
+      unitScale: st.line.unitScale,
       unitPrice: st.line.unitPrice,
       costPrice: st.line.costPrice,
       discountAmount: paisa(-share),
@@ -154,6 +156,7 @@ function computeReturn(
 
   const priced = specs.map((s): PricedLine => ({
     quantity: s.quantity,
+    unitScale: s.unitScale,
     unitPrice: s.unitPrice,
     discountAmount: s.discountAmount,
   }));
@@ -204,6 +207,7 @@ const toReturnableLines = (states: LineState[]): ReturnableLine[] =>
     soldQty: st.line.quantity,
     returnedQty: st.returnedQty,
     remainingQty: st.remainingQty,
+    unitScale: st.line.unitScale,
     unitPrice: st.line.unitPrice,
   }));
 

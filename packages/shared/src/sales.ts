@@ -17,6 +17,7 @@ import {
   VariantIdSchema,
   makeIssue,
 } from './primitives';
+import { UnitScaleSchema, lineGross } from './units';
 
 export const PaymentSchema = z.object({
   id: PaymentIdSchema,
@@ -38,15 +39,19 @@ export const SaleLineSchema = z
     phoneUnitId: PhoneUnitIdSchema.nullable(),
     variantId: VariantIdSchema.nullable(),
     description: z.string().min(1).max(200), // name snapshot at time of sale
+    /** Base units (pieces, or grams / millilitres when unitScale is 1000). */
     quantity: z
       .number()
       .int()
       .safe()
       .refine((n) => n !== 0, 'Quantity cannot be zero'),
+    /** Per priced unit (per piece, or per kg / litre). */
     unitPrice: NonNegativePaisaSchema,
-    costPrice: NonNegativePaisaSchema, // snapshot for profit reports
+    costPrice: NonNegativePaisaSchema, // snapshot for profit reports, per priced unit
     discountAmount: PaisaSchema, // same sign as quantity * unitPrice
     lineTotal: PaisaSchema,
+    /** Snapshot of the item's unit scale. Part of the hash from hashVersion 2; always 1 on hashVersion 1. */
+    unitScale: UnitScaleSchema.default(1),
     createdAt: EpochMsSchema,
   })
   .superRefine((l, ctx) => {
@@ -55,8 +60,13 @@ export const SaleLineSchema = z
       issue(['variantId'], 'Exactly one of phoneUnitId / variantId is required');
     if (l.phoneUnitId !== null && Math.abs(l.quantity) !== 1)
       issue(['quantity'], 'Phone units are sold one at a time');
-    if (l.lineTotal !== l.quantity * l.unitPrice - l.discountAmount)
-      issue(['lineTotal'], 'lineTotal must equal quantity * unitPrice - discountAmount');
+    if (l.phoneUnitId !== null && l.unitScale !== 1)
+      issue(['unitScale'], 'Phone units are always counted in pieces');
+    if (l.lineTotal !== lineGross(l.quantity, l.unitPrice, l.unitScale) - l.discountAmount)
+      issue(
+        ['lineTotal'],
+        'lineTotal must equal quantity * unitPrice / unitScale (rounded) - discountAmount',
+      );
   });
 export type SaleLine = z.infer<typeof SaleLineSchema>;
 
@@ -75,7 +85,8 @@ export const SaleBaseSchema = z.object({
   total: PaisaSchema,
   note: z.string().max(500).nullable(),
   createdAt: EpochMsSchema,
-  hashVersion: z.literal(1),
+  /** 1 = original format (no unitScale in the hash); 2 = lines carry unitScale in the hash. */
+  hashVersion: z.union([z.literal(1), z.literal(2)]),
   prevHash: Sha256HexSchema,
   hash: Sha256HexSchema,
 });
@@ -115,6 +126,8 @@ export const InvoiceSchema = SaleBaseSchema.extend({
   inv.lines.forEach((l, i) => {
     linesSum += l.lineTotal;
     if (l.saleId !== inv.id) issue(['lines', i, 'saleId'], 'Line belongs to another sale');
+    if (inv.hashVersion === 1 && l.unitScale !== 1)
+      issue(['lines', i, 'unitScale'], 'hashVersion 1 invoices cannot carry weighted lines');
     if (Math.sign(l.quantity) !== sign)
       issue(
         ['lines', i, 'quantity'],

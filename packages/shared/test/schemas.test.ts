@@ -392,9 +392,9 @@ describe('Invoice schemas', () => {
     expectRejected(InvoiceSchema, bad, 'total must equal subtotal - discountTotal');
   });
 
-  it('rejects an invoice with no lines, a hashVersion other than 1, and a bad hash', () => {
+  it('rejects an invoice with no lines, a hashVersion other than 1 or 2, and a bad hash', () => {
     expectRejected(InvoiceSchema, { ...sale, lines: [] });
-    expectRejected(InvoiceSchema, { ...sale, hashVersion: 2 });
+    expectRejected(InvoiceSchema, { ...sale, hashVersion: 3 });
     expectRejected(InvoiceSchema, { ...sale, hash: 'xyz' });
   });
 

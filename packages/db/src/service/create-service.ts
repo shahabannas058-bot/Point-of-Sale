@@ -1,10 +1,12 @@
 import type { PosService } from '@pos/shared';
 import { createAuthApi } from './auth';
+import { createBatchesApi } from './batches';
 import { createCatalogApi } from './catalog';
 import { createCheckoutPart } from './checkout';
 import { createCtx, type ServiceDeps } from './deps';
 import { createIntegrityApi } from './integrity';
 import { createKhataApi } from './khata';
+import { requireModuleApi } from './modules';
 import { createPurchasingApi } from './purchasing';
 import { createReportsApi } from './reports';
 import { createRepairsApi } from './repairs';
@@ -25,8 +27,9 @@ export function createPosService(deps: ServiceDeps): PosService {
     checkout: { ...createCheckoutPart(ctx), ...createReturnsPart(ctx) },
     khata: createKhataApi(ctx),
     reports: createReportsApi(ctx),
+    batches: requireModuleApi(ctx, 'batch_expiry', createBatchesApi(ctx)),
     integrity: createIntegrityApi(ctx),
-    repairs: createRepairsApi(ctx),
-    warranty: createWarrantyApi(ctx),
+    repairs: requireModuleApi(ctx, 'repair', createRepairsApi(ctx)),
+    warranty: requireModuleApi(ctx, 'warranty', createWarrantyApi(ctx)),
   };
 }

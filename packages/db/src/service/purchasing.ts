@@ -1,6 +1,10 @@
 import {
+  MAX_QUANTITY_ANY,
   PaymentMethodSchema,
   ServiceError,
+  isValidYmd,
+  lineGross,
+  maxQuantity,
   type LedgerEntry,
   type PartyBalance,
   type Paisa,
@@ -11,11 +15,13 @@ import {
 } from '@pos/shared';
 import { negPaisa, paisa } from '@pos/core';
 import { WriteBatch } from './batch';
+import { insertBatch, type BatchRec } from './batches';
 import { createProductResolver, normalizePhone, stagePhoneUnit } from './catalog';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optPhone, optText, reqText } from './errors';
 import { mapRow, type Raw } from './mappers';
 import { loadShop } from './meta';
+import { assertModule } from './modules';
 import {
   insertLedger,
   insertMovement,
@@ -83,19 +89,43 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
       const accessories = i.accessories ?? [];
       if (phones.length === 0 && accessories.length === 0)
         throw invalid('items', 'A purchase needs at least one phone or accessory line');
+      if (phones.length > 0) assertModule(shop.modules, 'imei');
       const referenceNo = optText(i.referenceNo, 'referenceNo', 60);
       const note = optText(i.note, 'note', 500);
       // validate everything up front and compute the total
       let total = 0;
       for (const p of phones) total += normalizePhone(p).costPrice;
-      const lines = accessories.map((a, idx) => {
+      const lines: {
+        variantId: string;
+        quantity: number;
+        unitCost: number;
+        batch: { batchNo: string | null; expiryDate: string } | null;
+      }[] = [];
+      for (const [idx, a] of accessories.entries()) {
         if (typeof a.variantId !== 'string')
           throw invalid(`accessories.${idx}.variantId`, 'variantId is required');
-        const quantity = intIn(a.quantity, `accessories.${idx}.quantity`, 1, 1_000_000);
+        const quantity = intIn(a.quantity, `accessories.${idx}.quantity`, 1, MAX_QUANTITY_ANY);
         const unitCost = money(a.unitCost, `accessories.${idx}.unitCost`);
-        total += quantity * unitCost;
-        return { variantId: a.variantId, quantity, unitCost };
-      });
+        const variant = await loadVariantRec(ctx.driver, a.variantId); // NOT_FOUND
+        if (quantity > maxQuantity(variant.unitScale))
+          throw invalid(`accessories.${idx}.quantity`, 'Quantity is larger than this item allows');
+        let batch: { batchNo: string | null; expiryDate: string } | null = null;
+        if (a.batch !== undefined && a.batch !== null) {
+          assertModule(shop.modules, 'batch_expiry');
+          if (!isValidYmd(a.batch.expiryDate))
+            throw invalid(
+              `accessories.${idx}.batch.expiryDate`,
+              'Expiry date must be a real date written as YYYY-MM-DD',
+            );
+          batch = {
+            batchNo: optText(a.batch.batchNo, `accessories.${idx}.batch.batchNo`, 60),
+            expiryDate: a.batch.expiryDate,
+          };
+        }
+        // unitCost is per priced unit (per kg for weighted items), quantity is in base units (grams)
+        total += lineGross(quantity, unitCost, variant.unitScale);
+        lines.push({ variantId: a.variantId, quantity, unitCost, batch });
+      }
       const totalPaisa: Paisa = paisa(total);
       let paid = 0;
       let paidMethod: Exclude<NonNullable<typeof i.paidNow>['method'], 'khata'> | null = null;
@@ -145,12 +175,28 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
         for (const l of lines) {
           const cur = variants.get(l.variantId) ?? (await loadVariantRec(ctx.driver, l.variantId));
           variants.set(l.variantId, { ...cur, costPrice: l.unitCost, updatedAt: at });
+          let batchId: string | null = null;
+          if (l.batch !== null) {
+            const rec: BatchRec = {
+              id: ctx.newId(),
+              variantId: l.variantId,
+              branchId: shop.branchId,
+              batchNo: l.batch.batchNo,
+              expiryDate: l.batch.expiryDate,
+              purchaseId: purchase.id,
+              createdBy: session.user.id,
+              createdAt: at,
+            };
+            insertBatch(b, rec);
+            batchId = rec.id;
+          }
           insertMovement(b, {
             id: ctx.newId(),
             branchId: shop.branchId,
             type: 'purchase',
             phoneUnitId: null,
             variantId: l.variantId,
+            batchId,
             quantity: l.quantity,
             unitCost: l.unitCost,
             refType: 'purchase',

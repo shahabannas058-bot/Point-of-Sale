@@ -1,4 +1,4 @@
-import type { Paisa, PaymentMethod } from '@pos/shared';
+import { lineGross, type Paisa, type PaymentMethod, type UnitScale } from '@pos/shared';
 import { DomainError } from './errors';
 
 /** half-up = ties away from zero (so -29992.5 -> -29993). half-even = banker's rounding. */
@@ -139,9 +139,13 @@ export function assertPaymentsMatchTotal(total: Paisa, payments: readonly Paymen
 }
 
 export interface PricedLine {
+  /** Base units (pieces, or grams / millilitres when unitScale is 1000). */
   quantity: number;
+  /** Per priced unit (per piece, or per kg / litre). */
   unitPrice: Paisa;
   discountAmount: Paisa;
+  /** Default 1 (pieces). */
+  unitScale?: UnitScale;
 }
 export interface SaleTotals {
   lineTotals: Paisa[];
@@ -159,10 +163,17 @@ function assertDiscountWithin(discount: Paisa, gross: Paisa, label: string): voi
     );
 }
 
+/** quantity * unitPrice / unitScale, rounded half away from zero; throws MONEY_INVALID outside the safe range. */
+export function grossOf(line: PricedLine): Paisa {
+  if (line.unitScale === undefined || line.unitScale === 1)
+    return mulPaisa(line.unitPrice, line.quantity);
+  return paisa(lineGross(line.quantity, line.unitPrice, line.unitScale));
+}
+
 export function lineTotal(line: PricedLine): Paisa {
   if (!Number.isSafeInteger(line.quantity) || line.quantity === 0)
     throw new DomainError('MONEY_INVALID', `Invalid quantity ${String(line.quantity)}`);
-  const gross = mulPaisa(line.unitPrice, line.quantity);
+  const gross = grossOf(line);
   assertDiscountWithin(line.discountAmount, gross, 'Line');
   return subPaisa(gross, line.discountAmount);
 }

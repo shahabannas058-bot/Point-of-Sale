@@ -1,8 +1,10 @@
 import type { AccessoryVariant, PhoneUnit, Product } from './catalog';
 import type { PaymentMethod, PhoneCondition, PtaStatus, Role, SaleKind } from './enums';
 import type { LedgerEntry } from './ledger';
+import type { BusinessType, ModuleId } from './modules';
 import type { Customer, Supplier, User } from './people';
 import type { Paisa } from './primitives';
+import type { UnitLabel, UnitScale } from './units';
 import type {
   RepairStatus,
   RepairTicket,
@@ -26,6 +28,7 @@ export const SERVICE_ERROR_CODES = [
   'APPROVAL_REQUIRED',
   'APPROVAL_INVALID',
   'LICENCE_BLOCKED',
+  'MODULE_DISABLED',
   'VALIDATION',
   'NOT_FOUND',
   'DUPLICATE',
@@ -142,7 +145,9 @@ export interface SetupInput {
   shopName: string;
   branchName: string;
   invoicePrefix: string /* ^[A-Z0-9]{1,4}$ */;
-  owner: { username: string; displayName: string; pin: string /* 4-6 digits */ };
+  owner: { username: string; displayName: string; pin: string /* exactly 4 digits */ };
+  /** Picks the starting module set (MODULE_PRESETS). Default 'custom' = every module. The licence token overrides it later. */
+  businessType?: BusinessType;
 }
 export interface ShopInfo {
   deviceId: string;
@@ -151,6 +156,9 @@ export interface ShopInfo {
   invoicePrefix: string;
   createdAt: number;
   isDemo: boolean;
+  businessType: BusinessType;
+  /** Optional feature packs this shop owns (`core` is always on). A call to another module fails with MODULE_DISABLED. */
+  modules: ModuleId[];
 }
 export interface ShopSettings {
   shopName: string;
@@ -226,10 +234,15 @@ export interface NewAccessoryInput {
   barcode?: string | null;
   model?: string | null;
   colour?: string | null;
+  /** Per priced unit: per piece, or per kg / litre when `unit` is 'kg' / 'L'. */
   costPrice: number;
   salePrice: number;
+  /** In base units (pieces, or grams / millilitres for 'kg' / 'L'). */
   reorderLevel?: number;
-  openingQty?: number /* adjustment movement 'Opening stock' */;
+  /** In base units. Becomes an adjustment movement 'Opening stock'. */
+  openingQty?: number;
+  /** Default 'pcs'. 'kg' and 'L' need the `weight_units` module; they cannot be changed once stock exists. */
+  unit?: UnitLabel;
 }
 export interface CatalogApi {
   /** Exact barcode/sku/imei/serial first (scanner: UI auto-adds if exactly 1 exact hit), then LIKE on brand/name/model/colour. */
@@ -278,8 +291,19 @@ export interface ReceivePurchaseInput {
   referenceNo?: string | null;
   note?: string | null;
   phones: NewPhoneUnitInput[]; // each creates unit + 'purchase' +1 movement (unit_cost = costPrice)
-  accessories: { variantId: string; quantity: number; unitCost: number }[]; // +qty movement; variant.cost_price := unitCost (latest cost)
+  accessories: {
+    variantId: string;
+    quantity: number;
+    unitCost: number;
+    /** Module batch_expiry. Creates a batch for this line; the +qty movement belongs to it. */
+    batch?: BatchInput | null;
+  }[]; // +qty movement; variant.cost_price := unitCost (latest cost)
   paidNow?: { method: Exclude<PaymentMethod, 'khata'>; amount: number } | null;
+}
+/** A delivery's batch (module batch_expiry). `expiryDate` is a Pakistan calendar date, YYYY-MM-DD. */
+export interface BatchInput {
+  batchNo?: string | null;
+  expiryDate: string;
 }
 export interface PurchaseResult {
   purchase: Purchase;
@@ -330,7 +354,10 @@ export interface CheckoutDraft {
 export interface PreviewLine {
   lineNo: number;
   description: string;
+  /** Base units (pieces, or grams / millilitres when unitScale is 1000). */
   quantity: number;
+  unitScale: UnitScale;
+  /** Per priced unit (per piece, or per kg / litre). */
   unitPrice: Paisa;
   discountAmount: Paisa;
   lineTotal: Paisa;
@@ -373,9 +400,11 @@ export interface ReturnableLine {
   lineId: string;
   lineNo: number;
   description: string;
+  /** Base units, like Invoice lines. */
   soldQty: number;
   returnedQty: number;
   remainingQty: number;
+  unitScale: UnitScale;
   unitPrice: Paisa;
 }
 export interface ReturnPreview {
@@ -475,6 +504,30 @@ export interface ReportsApi {
   summary(
     r: SummaryRange,
   ): Promise<PeriodSummary> /* view_reports; calls assertCanSell({action:'report'}) */;
+}
+
+// ---------- batches and expiry (module batch_expiry) ----------
+export interface BatchView {
+  id: string;
+  variantId: string;
+  /** The item's display name, e.g. "Olpers Milk 1L". */
+  label: string;
+  batchNo: string | null;
+  /** Pakistan calendar date, YYYY-MM-DD. */
+  expiryDate: string;
+  /** Base units still in this batch (pieces, or grams / millilitres when unitScale is 1000). */
+  onHand: number;
+  unitScale: UnitScale;
+  unitLabel: UnitLabel;
+  /** Whole days from today to the expiry date; negative = already expired, 0 = expires today. */
+  daysLeft: number;
+  createdAt: number;
+}
+export interface BatchesApi {
+  /** Batches that still have stock, earliest expiry first. Needs a session. */
+  list(f?: { withinDays?: number; variantId?: string }): Promise<BatchView[]>;
+  /** Moves a batch's whole stock out as an 'adjustment' with the reason. Needs adjust_stock. */
+  writeOff(i: { batchId: string; reason: string }): Promise<void>;
 }
 
 // ---------- integrity ----------
@@ -617,6 +670,7 @@ export interface PosService {
   readonly checkout: CheckoutApi;
   readonly khata: KhataApi;
   readonly reports: ReportsApi;
+  readonly batches: BatchesApi;
   readonly integrity: IntegrityApi;
   readonly repairs: RepairsApi;
   readonly warranty: WarrantyApi;

@@ -92,6 +92,8 @@ export function mapError(e: unknown): ServiceError {
     });
   if (msg.includes('FOREIGN KEY constraint failed'))
     return make('NOT_FOUND', 'A referenced record was not found');
+  if (msg.includes('unit_scale must match') || msg.includes('unit cannot change once stock exists'))
+    return make('DB_CONSTRAINT', 'The unit of this item cannot be used or changed this way');
   if (msg.includes('CHECK constraint failed') || msg.includes('NOT NULL constraint failed'))
     return make('DB_CONSTRAINT', 'The data was rejected by a database rule');
   return make('INTERNAL', 'Unexpected internal error');

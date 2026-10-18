@@ -3,7 +3,9 @@ import { DomainError } from './errors';
 import { sha256Hex } from './hash';
 
 export { GENESIS_HASH };
-export const HASH_VERSION = 1;
+/** Version stamped on NEW invoices. v1 (no unitScale in the hash) stays verifiable forever. */
+export const HASH_VERSION = 2;
+export const SUPPORTED_HASH_VERSIONS: readonly number[] = [1, 2];
 const DOMAIN = 'pos.invoice.v1';
 
 export type CanonicalValue =
@@ -51,6 +53,8 @@ export function invoiceHashPayload(inv: UnsealedInvoice): CanonicalValue {
       discountAmount: l.discountAmount,
       lineTotal: l.lineTotal,
       createdAt: l.createdAt,
+      // v1 invoices were hashed without it; adding it for v1 would break every stored hash
+      ...(inv.hashVersion >= 2 ? { unitScale: l.unitScale } : {}),
     }));
   const payments = [...inv.payments]
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -152,7 +156,7 @@ export function verifyChain(
       actual,
     });
     if (inv.deviceId !== deviceId) return fail('mixed_devices', String(deviceId), inv.deviceId);
-    if (inv.hashVersion !== HASH_VERSION)
+    if (!SUPPORTED_HASH_VERSIONS.includes(inv.hashVersion))
       return fail('unsupported_hash_version', String(HASH_VERSION), String(inv.hashVersion));
     if (inv.seq !== expectedSeq) return fail('seq_gap', String(expectedSeq), String(inv.seq));
     if (inv.prevHash !== prev) return fail('prev_hash_mismatch', prev, inv.prevHash);

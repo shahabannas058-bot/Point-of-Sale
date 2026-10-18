@@ -10,6 +10,8 @@ import {
   type Role,
   type StockMovementType,
   type StockRefType,
+  type UnitLabel,
+  type UnitScale,
   type VariantView,
 } from '@pos/shared';
 import { camelizeKeys } from '../rows';
@@ -266,6 +268,8 @@ export interface VariantRec {
   costPrice: number;
   salePrice: number;
   reorderLevel: number;
+  unitScale: UnitScale;
+  unitLabel: UnitLabel;
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -273,7 +277,7 @@ export interface VariantRec {
 export function insertVariant(b: WriteBatch, v: VariantRec): void {
   b.add(
     `INSERT INTO accessory_variants (id, product_id, sku, barcode, model, colour, cost_price, sale_price,
-       reorder_level, is_active, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+       reorder_level, unit_scale, unit_label, is_active, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       v.id,
       v.productId,
@@ -284,6 +288,8 @@ export function insertVariant(b: WriteBatch, v: VariantRec): void {
       v.costPrice,
       v.salePrice,
       v.reorderLevel,
+      v.unitScale,
+      v.unitLabel,
       v.isActive ? 1 : 0,
       v.createdAt,
       v.updatedAt,
@@ -411,6 +417,8 @@ export interface MovementRec {
   type: StockMovementType;
   phoneUnitId: string | null;
   variantId: string | null;
+  /** Module batch_expiry: the batch this movement belongs to; absent or null = stock without a batch. */
+  batchId?: string | null;
   quantity: number;
   unitCost: number | null;
   refType: StockRefType | null;
@@ -421,14 +429,15 @@ export interface MovementRec {
 }
 export function insertMovement(b: WriteBatch, m: MovementRec): void {
   b.add(
-    `INSERT INTO stock_movements (id, branch_id, type, phone_unit_id, variant_id, quantity, unit_cost,
-       ref_type, ref_id, reason, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO stock_movements (id, branch_id, type, phone_unit_id, variant_id, batch_id, quantity, unit_cost,
+       ref_type, ref_id, reason, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       m.id,
       m.branchId,
       m.type,
       m.phoneUnitId,
       m.variantId,
+      m.batchId ?? null,
       m.quantity,
       m.unitCost,
       m.refType,
@@ -531,7 +540,7 @@ export function insertInvoice(b: WriteBatch, s: Invoice): void {
   for (const l of s.lines)
     b.add(
       `INSERT INTO sale_lines (id, sale_id, line_no, product_id, phone_unit_id, variant_id, description, quantity,
-         unit_price, cost_price, discount_amount, line_total, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         unit_price, cost_price, discount_amount, line_total, unit_scale, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         l.id,
         l.saleId,
@@ -545,6 +554,7 @@ export function insertInvoice(b: WriteBatch, s: Invoice): void {
         l.costPrice,
         l.discountAmount,
         l.lineTotal,
+        l.unitScale,
         l.createdAt,
       ],
     );

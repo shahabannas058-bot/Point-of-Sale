@@ -19,34 +19,36 @@ afterEach(() => {
 });
 
 describe('migration runner', () => {
-  it('applies versions 1-5, records them, and is idempotent', async () => {
+  it('applies versions 1-7, records them, and is idempotent', async () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
-    expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5]);
+    expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
 
-    expect(await migrate(db, migrations)).toEqual([1, 2, 3, 4, 5]);
+    expect(await migrate(db, migrations)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     const rows = await db.query<{ version: number; name: string; checksum: string }>(
       'select version, name, checksum from schema_migrations order by version',
     );
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(7);
     expect(rows.map((r) => r.name)).toEqual([
       'masters',
       'stock',
       'sales_ledger',
       'outbox',
       'repairs_warranty',
+      'weighted_units',
+      'batch_expiry',
     ]);
     rows.forEach((r, i) => expect(r.checksum).toBe(checksum(migrations[i]!.sql)));
 
     expect(await migrate(db, migrations)).toEqual([]);
-    expect(await db.query('select 1 from schema_migrations')).toHaveLength(5);
+    expect(await db.query('select 1 from schema_migrations')).toHaveLength(7);
   });
 
   it('applies only the missing migrations when the app gets newer', async () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
     expect(await migrate(db, migrations.slice(0, 2))).toEqual([1, 2]);
-    expect(await migrate(db, migrations)).toEqual([3, 4, 5]);
+    expect(await migrate(db, migrations)).toEqual([3, 4, 5, 6, 7]);
   });
 
   it('refuses a migration whose SQL changed after it was applied', async () => {
@@ -64,7 +66,7 @@ describe('migration runner', () => {
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
     await db.query(
-      "insert into schema_migrations (version, name, checksum, applied_at) values (6, 'future', 'x', 0)",
+      "insert into schema_migrations (version, name, checksum, applied_at) values (8, 'future', 'x', 0)",
     );
     const rejection = migrate(db, migrations);
     await expect(rejection).rejects.toThrow(/newer than the app/);
@@ -76,18 +78,18 @@ describe('migration runner', () => {
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
     const broken: Migration = {
-      version: 6,
+      version: 8,
       name: 'broken',
       sql: 'CREATE TABLE should_not_survive (id INTEGER PRIMARY KEY);\nTHIS IS NOT VALID SQL;',
     };
     await expect(migrate(db, [...migrations, broken])).rejects.toThrow(
-      /Migration 6 \(broken\) failed/,
+      /Migration 8 \(broken\) failed/,
     );
     const tables = await db.query(
       "select name from sqlite_master where name = 'should_not_survive'",
     );
     expect(tables).toEqual([]);
-    expect(await db.query('select * from schema_migrations where version = 6')).toEqual([]);
+    expect(await db.query('select * from schema_migrations where version = 8')).toEqual([]);
     // and the runner is still usable afterwards
     expect(await migrate(db, migrations)).toEqual([]);
   });
@@ -96,10 +98,10 @@ describe('migration runner', () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
-    const broken: Migration = { version: 6, name: 'extra', sql: 'CREATE TABLE a (;' };
+    const broken: Migration = { version: 8, name: 'extra', sql: 'CREATE TABLE a (;' };
     await expect(migrate(db, [...migrations, broken])).rejects.toBeInstanceOf(MigrationError);
     const fixed: Migration = { ...broken, sql: 'CREATE TABLE a (id INTEGER PRIMARY KEY) STRICT;' };
-    expect(await migrate(db, [...migrations, fixed])).toEqual([6]);
+    expect(await migrate(db, [...migrations, fixed])).toEqual([8]);
   });
 });
 
@@ -208,6 +210,7 @@ describe('migrated schema', () => {
         'sale_lines',
         'sales',
         'schema_migrations',
+        'stock_batches',
         'stock_movements',
         'suppliers',
         'users',
@@ -235,6 +238,15 @@ describe('migrated schema', () => {
       'repair_tickets_identity_fixed',
       'repair_payments_no_update',
       'warranties_no_delete',
+      'warranties_unit_on_sale', // dropped and recreated by 0006: must still exist
+      'trg_sale_lines_no_update',
+      'trg_sale_lines_no_delete',
+      'trg_sale_lines_unit_scale',
+      'trg_variants_unit_insert',
+      'trg_variants_unit_update',
+      'trg_stock_batches_no_update',
+      'trg_stock_batches_no_delete',
+      'trg_stock_movements_batch_guard',
     ])
       expect(triggers).toContain(expected);
   });

@@ -1,4 +1,7 @@
 export * from './primitives';
+export * from './units';
+export * from './dates';
+export * from './modules';
 export * from './enums';
 export * from './people';
 export * from './catalog';

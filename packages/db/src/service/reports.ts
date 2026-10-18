@@ -15,6 +15,15 @@ import { VARIANT_VIEW_SQL } from './queries';
 
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 
+/**
+ * SQL for quantity * price / unit_scale, rounded half away from zero: the same rule as the sale_lines CHECK and
+ * lineGross() in @pos/shared. `price` is a column of the aliased `l` (sale_lines).
+ */
+const grossSql = (price: string): string =>
+  `CASE WHEN l.quantity * ${price} >= 0
+     THEN (l.quantity * ${price} + l.unit_scale / 2) / l.unit_scale
+     ELSE -((-(l.quantity * ${price}) + l.unit_scale / 2) / l.unit_scale) END`;
+
 export function createReportsApi(ctx: Ctx): ReportsApi {
   return guardApi<ReportsApi>({
     async summary(range): Promise<PeriodSummary> {
@@ -41,9 +50,9 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
       );
       const lines = await q(
         `SELECT
-           COALESCE(SUM(CASE WHEN s.kind = 'sale' THEN l.quantity * l.unit_price END), 0) AS gross,
+           COALESCE(SUM(CASE WHEN s.kind = 'sale' THEN ${grossSql('l.unit_price')} END), 0) AS gross,
            COALESCE(SUM(CASE WHEN s.kind = 'sale' THEN l.discount_amount END), 0) AS line_discounts,
-           COALESCE(SUM(l.quantity * l.cost_price), 0) AS cogs
+           COALESCE(SUM(${grossSql('l.cost_price')}), 0) AS cogs
          FROM sale_lines l JOIN sales s ON s.id = l.sale_id
          WHERE s.created_at >= ? AND s.created_at < ?`,
       );

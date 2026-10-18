@@ -93,6 +93,7 @@ export const OUTBOX_ENTITY_TYPES = [
   'supplier',
   'purchase',
   'stock_movement',
+  'stock_batch',
   'sale',
   'ledger_entry',
   'repair_ticket',

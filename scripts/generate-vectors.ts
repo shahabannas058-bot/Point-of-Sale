@@ -75,6 +75,8 @@ interface LineIn {
   variantId: string | null;
   description: string;
   quantity: number;
+  /** Omitted = 1 (pieces). Only written into the data of hashVersion 2 invoices. */
+  unitScale?: 1 | 1000;
   unitPrice: number;
   costPrice: number;
   discountAmount: number;
@@ -87,6 +89,9 @@ interface PayIn {
 interface Spec {
   name: string;
   kind: 'sale' | 'return' | 'void';
+  /** Default 1. Version 2 puts unitScale into every line's hashed data. */
+  hashVersion?: 1 | 2;
+  /** An invoice id, 'FIRST' (the first invoice) or 'NAME:<spec name>'. */
   originalSaleId?: string | null;
   customerId: string | null;
   note: string | null;
@@ -126,14 +131,33 @@ const phone = (
   discountAmount,
 });
 
+/** Loose goods: quantity in grams, price per kg (unitScale 1000). */
+const weighted = (
+  description: string,
+  grams: number,
+  pricePerKg: number,
+  discountAmount = 0,
+): LineIn => ({
+  phoneUnitId: null,
+  variantId: ids.variant,
+  description,
+  quantity: grams,
+  unitScale: 1000,
+  unitPrice: pricePerKg,
+  costPrice: Math.floor(pricePerKg * 0.8),
+  discountAmount,
+});
+
 let seq = 0;
 function buildUnsealed(s: Spec): UnsealedInvoice {
   seq += 1;
   const id = newId();
   const createdAt = BASE_MS + seq * 60_000;
+  const version = s.hashVersion ?? 1;
   const totals = saleTotals(
     s.lines.map((l) => ({
       quantity: l.quantity,
+      unitScale: l.unitScale ?? 1,
       unitPrice: paisa(l.unitPrice),
       discountAmount: paisa(l.discountAmount),
     })),
@@ -149,6 +173,7 @@ function buildUnsealed(s: Spec): UnsealedInvoice {
     lineNo: i + 1,
     productId: ids.product,
     ...l,
+    ...(version >= 2 ? { unitScale: l.unitScale ?? 1 } : {}),
     lineTotal: totals.lineTotals[i],
     createdAt,
   }));
@@ -168,7 +193,7 @@ function buildUnsealed(s: Spec): UnsealedInvoice {
     total: totals.total,
     note: s.note,
     createdAt,
-    hashVersion: 1,
+    hashVersion: version,
     lines: s.scramble ? [...lines].reverse() : lines,
     payments: s.scramble ? [...payments].reverse() : payments,
   } as unknown as UnsealedInvoice;
@@ -253,6 +278,53 @@ const specs: Spec[] = [
     lines: [accessory('Gold-plated charger', 2, 4_000_000_000_000_000)],
     payments: [{ method: 'cash', amount: 8_000_000_000_000_000, reference: null }],
   },
+  // ---- hashVersion 2 (ADR-0008): every line carries unitScale in the hashed data ----
+  {
+    name: 'v2-piece-scale-one',
+    kind: 'sale',
+    hashVersion: 2,
+    customerId: null,
+    note: null,
+    invoiceDiscount: 0,
+    lines: [accessory('Pen', 3, 2_500)],
+    payments: [{ method: 'cash', amount: 7_500, reference: null }],
+  },
+  {
+    // 1250 g x Rs 285.50/kg = 35,687.5 paisa -> rounds half away from zero to 35,688
+    name: 'v2-weighted-rounding-half-up',
+    kind: 'sale',
+    hashVersion: 2,
+    customerId: ids.customer,
+    note: 'kiryana: chini aur atta',
+    invoiceDiscount: 0,
+    lines: [weighted('Chini (sugar) loose', 1_250, 28_550), weighted('Atta loose', 333, 12_000)],
+    payments: [
+      { method: 'cash', amount: 30_000, reference: null },
+      { method: 'khata', amount: 9_684, reference: null },
+    ],
+  },
+  {
+    // the mirror image: -35,687.5 rounds half away from zero to -35,688
+    name: 'v2-weighted-return-rounding',
+    kind: 'return',
+    hashVersion: 2,
+    originalSaleId: 'NAME:v2-weighted-rounding-half-up',
+    customerId: ids.customer,
+    note: 'wapsi: chini',
+    invoiceDiscount: 0,
+    lines: [weighted('Chini (sugar) loose', -1_250, 28_550)],
+    payments: [{ method: 'khata', amount: -35_688, reference: null }],
+  },
+  {
+    name: 'v2-weighted-line-discount',
+    kind: 'sale',
+    hashVersion: 2,
+    customerId: null,
+    note: null,
+    invoiceDiscount: 0,
+    lines: [weighted('Basmati chawal loose', 2_500, 41_000, 1_025)],
+    payments: [{ method: 'cash', amount: 101_475, reference: null }],
+  },
 ];
 
 interface InvoiceVector {
@@ -265,11 +337,18 @@ interface InvoiceVector {
 
 const vectors: InvoiceVector[] = [];
 const chain: Invoice[] = [];
+const idByName = new Map<string, string>();
 let prev: string = GENESIS_HASH;
 for (const spec of specs) {
   const first = chain[0];
   if (spec.originalSaleId === 'FIRST' && first) spec.originalSaleId = first.id;
+  if (spec.originalSaleId?.startsWith('NAME:')) {
+    const target = idByName.get(spec.originalSaleId.slice(5));
+    if (target === undefined) throw new Error(`unknown original invoice in ${spec.name}`);
+    spec.originalSaleId = target;
+  }
   const unsealed = buildUnsealed(spec);
+  idByName.set(spec.name, unsealed.id);
   const sealed = InvoiceSchema.parse(sealInvoice(prev, unsealed)); // TS itself must accept it
   vectors.push({
     name: spec.name,

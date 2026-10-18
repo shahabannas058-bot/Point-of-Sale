@@ -358,13 +358,13 @@ describe('verifyChain: other failures', () => {
 
   it('rejects an unsupported hash version', () => {
     const chain = buildChain(2);
-    const v2 = [chain[0]!, { ...chain[1]!, hashVersion: 2 } as unknown as Invoice];
-    expect(verifyChain(v2)).toMatchObject({
+    const v3 = [chain[0]!, { ...chain[1]!, hashVersion: 3 } as unknown as Invoice];
+    expect(verifyChain(v3)).toMatchObject({
       ok: false,
       reason: 'unsupported_hash_version',
       index: 1,
-      expected: '1',
-      actual: '2',
+      expected: '2', // the version stamped on new invoices
+      actual: '3',
     });
   });
 });

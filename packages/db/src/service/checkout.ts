@@ -1,9 +1,13 @@
 import {
   GENESIS_HASH,
   InvoiceSchema,
+  MAX_QUANTITY_ANY,
   PaymentMethodSchema,
   ServiceError,
   UuidV7Schema,
+  hasModule,
+  maxQuantity,
+  pktDate,
   type ApprovalReason,
   type CartPreview,
   type CheckoutApi,
@@ -16,11 +20,14 @@ import {
   type PaymentMethod,
   type PreviewLine,
   type SaleKind,
+  type UnitScale,
   type UnsealedInvoice,
 } from '@pos/shared';
 import {
+  HASH_VERSION,
   assertPaymentsMatchTotal,
   formatInvoiceNo,
+  grossOf,
   paisa,
   saleTotals,
   sealInvoice,
@@ -28,6 +35,13 @@ import {
   type PricedLine,
 } from '@pos/core';
 import { WriteBatch } from './batch';
+import {
+  allocateReturn,
+  allocateSale,
+  expiredOnHand,
+  hasBatches,
+  type Allocation,
+} from './batches';
 import { lookupApproval } from './auth';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, mapError, money, optText } from './errors';
@@ -56,8 +70,10 @@ export interface LineSpec {
   phoneUnitId: string | null;
   variantId: string | null;
   description: string;
-  /** Signed: positive on a sale, negative on a return/void. */
+  /** Signed base units (pieces, or grams / millilitres): positive on a sale, negative on a return/void. */
   quantity: number;
+  /** 1 for pieces, 1000 for kg / litre. unitPrice and costPrice are per priced unit. */
+  unitScale: UnitScale;
   unitPrice: Paisa;
   costPrice: Paisa;
   /** Signed like quantity * unitPrice. */
@@ -84,6 +100,15 @@ export interface InvoiceSpec {
 
 const MAX_CHAIN_RETRIES = 2;
 
+/** quantity * unitPrice / unitScale before any discount, rounded half away from zero. */
+const specGross = (s: LineSpec): Paisa =>
+  grossOf({
+    quantity: s.quantity,
+    unitPrice: s.unitPrice,
+    discountAmount: s.discountAmount,
+    unitScale: s.unitScale,
+  });
+
 /**
  * Steps 5-8 of the commit algorithm. Must run inside ctx.lock. Reads the chain head, seals, calls the
  * licence hook, then writes invoice + stock movements + ledger + outbox in ONE driver.batch.
@@ -97,6 +122,7 @@ export async function writeInvoice(
   const totals = saleTotals(
     spec.lines.map((l): PricedLine => ({
       quantity: l.quantity,
+      unitScale: l.unitScale,
       unitPrice: l.unitPrice,
       discountAmount: l.discountAmount,
     })),
@@ -126,7 +152,7 @@ export async function writeInvoice(
         total: totals.total,
         note: spec.note,
         createdAt,
-        hashVersion: 1,
+        hashVersion: HASH_VERSION,
         lines: spec.lines.map((l, i) => ({
           id: ctx.newId(),
           saleId: spec.saleId,
@@ -136,6 +162,7 @@ export async function writeInvoice(
           variantId: l.variantId,
           description: l.description,
           quantity: l.quantity,
+          unitScale: l.unitScale,
           unitPrice: l.unitPrice,
           costPrice: l.costPrice,
           discountAmount: l.discountAmount,
@@ -157,21 +184,50 @@ export async function writeInvoice(
 
       const b = new WriteBatch(ctx.newId, createdAt);
       insertInvoice(b, invoice);
-      for (const l of invoice.lines)
-        insertMovement(b, {
-          id: ctx.newId(),
-          branchId: shop.branchId,
-          type: spec.kind === 'sale' ? 'sale' : 'return',
-          phoneUnitId: l.phoneUnitId,
-          variantId: l.variantId,
-          quantity: -l.quantity,
-          unitCost: l.costPrice,
-          refType: 'sale',
-          refId: invoice.id,
-          reason: null,
-          createdBy: cashierId,
-          createdAt,
-        });
+      // Module batch_expiry: a sale takes the batch that expires first, a return goes back to the batches it left.
+      // Without the module, or for an item that never had a batch, this is one movement per line as always.
+      const batched = hasModule(shop.modules, 'batch_expiry');
+      const today = pktDate(createdAt);
+      const taken = new Map<string, number>();
+      const restored = new Map<string | null, number>();
+      for (const l of invoice.lines) {
+        let parts: Allocation[] = [{ batchId: null, quantity: Math.abs(l.quantity) }];
+        if (batched && l.variantId !== null && (await hasBatches(ctx.driver, l.variantId))) {
+          if (spec.kind === 'sale')
+            parts = await allocateSale(
+              ctx.driver,
+              l.variantId,
+              shop.branchId,
+              l.quantity,
+              today,
+              taken,
+            );
+          else if (spec.originalSaleId !== null)
+            parts = await allocateReturn(
+              ctx.driver,
+              spec.originalSaleId,
+              l.variantId,
+              -l.quantity,
+              restored,
+            );
+        }
+        for (const p of parts)
+          insertMovement(b, {
+            id: ctx.newId(),
+            branchId: shop.branchId,
+            type: spec.kind === 'sale' ? 'sale' : 'return',
+            phoneUnitId: l.phoneUnitId,
+            variantId: l.variantId,
+            batchId: p.batchId,
+            quantity: l.quantity > 0 ? -p.quantity : p.quantity,
+            unitCost: l.costPrice,
+            refType: 'sale',
+            refId: invoice.id,
+            reason: null,
+            createdBy: cashierId,
+            createdAt,
+          });
+      }
       const khata = sumPaisa(
         invoice.payments.filter((p) => p.method === 'khata').map((p) => p.amount),
       );
@@ -282,7 +338,7 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
     const field = `lines.${idx}`;
     if ((l.phoneUnitId === undefined) === (l.variantId === undefined))
       throw invalid(field, 'Each line needs exactly one of phoneUnitId / variantId');
-    const quantity = intIn(l.quantity, `${field}.quantity`, 1, 1_000_000);
+    const quantity = intIn(l.quantity, `${field}.quantity`, 1, MAX_QUANTITY_ANY);
     const discount = discountMoney(l.discountAmount ?? 0, `${field}.discountAmount`);
 
     if (l.phoneUnitId !== undefined) {
@@ -309,6 +365,7 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
           variantId: null,
           description: `${phoneLabel(view.product, view.unit)} · ${id}`.slice(0, 200),
           quantity: 1,
+          unitScale: 1,
           unitPrice: view.unit.salePrice,
           costPrice: view.unit.costPrice,
           discountAmount: discount,
@@ -318,23 +375,40 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
       const view = await loadVariantView(ctx.driver, l.variantId ?? '', shop.branchId);
       if (view === null || !view.variant.isActive)
         throw new ServiceError('NOT_FOUND', 'Accessory not found', { lineNo });
+      if (quantity > maxQuantity(view.variant.unitScale))
+        throw invalid(`${field}.quantity`, 'Quantity is larger than this item allows');
       const cum = (cumulative.get(view.variant.id) ?? 0) + quantity;
       cumulative.set(view.variant.id, cum);
-      if (!shop.settings.allowNegativeStock && cum > view.onHand)
+      // Module batch_expiry: stock in batches past their expiry date cannot be sold
+      let expired = 0;
+      if (
+        hasModule(shop.modules, 'batch_expiry') &&
+        (await hasBatches(ctx.driver, view.variant.id))
+      )
+        expired = await expiredOnHand(
+          ctx.driver,
+          view.variant.id,
+          shop.branchId,
+          pktDate(ctx.clock()),
+        );
+      const sellable = view.onHand - expired;
+      if (!shop.settings.allowNegativeStock && cum > sellable)
         throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
-          onHand: view.onHand,
+          onHand: sellable,
           requested: requested.get(view.variant.id) ?? cum,
           lineNo,
+          ...(expired > 0 ? { expiredOnHand: expired } : {}),
         });
       items.push({
         lineNo,
-        onHand: view.onHand,
+        onHand: sellable,
         spec: {
           productId: view.variant.productId,
           phoneUnitId: null,
           variantId: view.variant.id,
           description: view.label.slice(0, 200),
           quantity,
+          unitScale: view.variant.unitScale,
           unitPrice: view.variant.salePrice,
           costPrice: view.variant.costPrice,
           discountAmount: discount,
@@ -345,13 +419,14 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
 
   const priced = items.map((it): PricedLine => ({
     quantity: it.spec.quantity,
+    unitScale: it.spec.unitScale,
     unitPrice: it.spec.unitPrice,
     discountAmount: it.spec.discountAmount,
   }));
   const totals = saleTotals(priced, invoiceDiscount);
   return {
     items,
-    gross: sumPaisa(items.map((it) => paisa(it.spec.quantity * it.spec.unitPrice))),
+    gross: sumPaisa(items.map((it) => specGross(it.spec))),
     lineDiscounts: sumPaisa(items.map((it) => it.spec.discountAmount)),
     subtotal: totals.subtotal,
     invoiceDiscount,
@@ -402,9 +477,10 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
         lineNo: it.lineNo,
         description: it.spec.description,
         quantity: it.spec.quantity,
+        unitScale: it.spec.unitScale,
         unitPrice: it.spec.unitPrice,
         discountAmount: it.spec.discountAmount,
-        lineTotal: paisa(it.spec.quantity * it.spec.unitPrice - it.spec.discountAmount),
+        lineTotal: paisa(specGross(it.spec) - it.spec.discountAmount),
         onHand: it.onHand,
       }));
       return {

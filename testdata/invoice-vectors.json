@@ -413,6 +413,234 @@
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000420000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c01f-7436-9697-48fef423f7aa\",\"invoiceNo\":\"A-000007\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":2400000000000000,\"createdAt\":1760000420000,\"description\":\"Gold-plated charger\",\"discountAmount\":0,\"id\":\"0199c82c-c020-7027-b648-bf0bd8f3ac62\",\"lineNo\":1,\"lineTotal\":8000000000000000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2,\"unitPrice\":4000000000000000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":8000000000000000,\"createdAt\":1760000420000,\"id\":\"0199c82c-c021-75c6-bd95-b94a499f13f6\",\"method\":\"cash\",\"reference\":null}],\"seq\":7,\"subtotal\":8000000000000000,\"total\":8000000000000000,\"v\":1}",
       "expected_hash": "e7b6fd45d5c511c6ac72a6db6d2e1b9a515b2c0629236d28677e3e89be5873b8"
+    },
+    {
+      "name": "v2-piece-scale-one",
+      "previous_hash": "e7b6fd45d5c511c6ac72a6db6d2e1b9a515b2c0629236d28677e3e89be5873b8",
+      "unsealed_data": {
+        "id": "0199c82c-c022-7045-a212-ac11fc79c16d",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 8,
+        "invoiceNo": "A-000008",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": null,
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 7500,
+        "discountTotal": 0,
+        "total": 7500,
+        "note": null,
+        "createdAt": 1760000480000,
+        "hashVersion": 2,
+        "lines": [
+          {
+            "id": "0199c82c-c023-72f4-b99b-98af8759d489",
+            "saleId": "0199c82c-c022-7045-a212-ac11fc79c16d",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Pen",
+            "quantity": 3,
+            "unitPrice": 2500,
+            "costPrice": 1500,
+            "discountAmount": 0,
+            "unitScale": 1,
+            "lineTotal": 7500,
+            "createdAt": 1760000480000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c024-7098-a7cf-f24283584cec",
+            "saleId": "0199c82c-c022-7045-a212-ac11fc79c16d",
+            "method": "cash",
+            "amount": 7500,
+            "reference": null,
+            "createdAt": 1760000480000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000480000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c022-7045-a212-ac11fc79c16d\",\"invoiceNo\":\"A-000008\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":1500,\"createdAt\":1760000480000,\"description\":\"Pen\",\"discountAmount\":0,\"id\":\"0199c82c-c023-72f4-b99b-98af8759d489\",\"lineNo\":1,\"lineTotal\":7500,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":3,\"unitPrice\":2500,\"unitScale\":1,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":7500,\"createdAt\":1760000480000,\"id\":\"0199c82c-c024-7098-a7cf-f24283584cec\",\"method\":\"cash\",\"reference\":null}],\"seq\":8,\"subtotal\":7500,\"total\":7500,\"v\":2}",
+      "expected_hash": "938776b77596a5153b73b880976039e4f32e8bd77aa7405fcbfebdf398821ff9"
+    },
+    {
+      "name": "v2-weighted-rounding-half-up",
+      "previous_hash": "938776b77596a5153b73b880976039e4f32e8bd77aa7405fcbfebdf398821ff9",
+      "unsealed_data": {
+        "id": "0199c82c-c025-7548-ae17-5dd42bc63203",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 9,
+        "invoiceNo": "A-000009",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": "0199c82c-c003-76c4-9f03-2d14f3ed2c2b",
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 39684,
+        "discountTotal": 0,
+        "total": 39684,
+        "note": "kiryana: chini aur atta",
+        "createdAt": 1760000540000,
+        "hashVersion": 2,
+        "lines": [
+          {
+            "id": "0199c82c-c026-7032-962b-a5c935b70126",
+            "saleId": "0199c82c-c025-7548-ae17-5dd42bc63203",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Chini (sugar) loose",
+            "quantity": 1250,
+            "unitScale": 1000,
+            "unitPrice": 28550,
+            "costPrice": 22840,
+            "discountAmount": 0,
+            "lineTotal": 35688,
+            "createdAt": 1760000540000
+          },
+          {
+            "id": "0199c82c-c027-7412-9cce-b1704497380d",
+            "saleId": "0199c82c-c025-7548-ae17-5dd42bc63203",
+            "lineNo": 2,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Atta loose",
+            "quantity": 333,
+            "unitScale": 1000,
+            "unitPrice": 12000,
+            "costPrice": 9600,
+            "discountAmount": 0,
+            "lineTotal": 3996,
+            "createdAt": 1760000540000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c028-722f-aa6e-23f0057945b5",
+            "saleId": "0199c82c-c025-7548-ae17-5dd42bc63203",
+            "method": "cash",
+            "amount": 30000,
+            "reference": null,
+            "createdAt": 1760000540000
+          },
+          {
+            "id": "0199c82c-c029-77a3-a22f-335fb8fe6b90",
+            "saleId": "0199c82c-c025-7548-ae17-5dd42bc63203",
+            "method": "khata",
+            "amount": 9684,
+            "reference": null,
+            "createdAt": 1760000540000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000540000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c025-7548-ae17-5dd42bc63203\",\"invoiceNo\":\"A-000009\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":22840,\"createdAt\":1760000540000,\"description\":\"Chini (sugar) loose\",\"discountAmount\":0,\"id\":\"0199c82c-c026-7032-962b-a5c935b70126\",\"lineNo\":1,\"lineTotal\":35688,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1250,\"unitPrice\":28550,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"},{\"costPrice\":9600,\"createdAt\":1760000540000,\"description\":\"Atta loose\",\"discountAmount\":0,\"id\":\"0199c82c-c027-7412-9cce-b1704497380d\",\"lineNo\":2,\"lineTotal\":3996,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":333,\"unitPrice\":12000,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":\"kiryana: chini aur atta\",\"originalSaleId\":null,\"payments\":[{\"amount\":30000,\"createdAt\":1760000540000,\"id\":\"0199c82c-c028-722f-aa6e-23f0057945b5\",\"method\":\"cash\",\"reference\":null},{\"amount\":9684,\"createdAt\":1760000540000,\"id\":\"0199c82c-c029-77a3-a22f-335fb8fe6b90\",\"method\":\"khata\",\"reference\":null}],\"seq\":9,\"subtotal\":39684,\"total\":39684,\"v\":2}",
+      "expected_hash": "d1f0491d9abecd228f7dcd1d0cd806bdb2405fbb6ab5bc738828b4429f090e87"
+    },
+    {
+      "name": "v2-weighted-return-rounding",
+      "previous_hash": "d1f0491d9abecd228f7dcd1d0cd806bdb2405fbb6ab5bc738828b4429f090e87",
+      "unsealed_data": {
+        "id": "0199c82c-c02a-7789-adb8-ba82d6b09bbf",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 10,
+        "invoiceNo": "A-000010",
+        "kind": "return",
+        "originalSaleId": "0199c82c-c025-7548-ae17-5dd42bc63203",
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": "0199c82c-c003-76c4-9f03-2d14f3ed2c2b",
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": -35688,
+        "discountTotal": 0,
+        "total": -35688,
+        "note": "wapsi: chini",
+        "createdAt": 1760000600000,
+        "hashVersion": 2,
+        "lines": [
+          {
+            "id": "0199c82c-c02b-743a-8133-67ea7d506736",
+            "saleId": "0199c82c-c02a-7789-adb8-ba82d6b09bbf",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Chini (sugar) loose",
+            "quantity": -1250,
+            "unitScale": 1000,
+            "unitPrice": 28550,
+            "costPrice": 22840,
+            "discountAmount": 0,
+            "lineTotal": -35688,
+            "createdAt": 1760000600000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c02c-7367-b078-c9a49713af85",
+            "saleId": "0199c82c-c02a-7789-adb8-ba82d6b09bbf",
+            "method": "khata",
+            "amount": -35688,
+            "reference": null,
+            "createdAt": 1760000600000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000600000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c02a-7789-adb8-ba82d6b09bbf\",\"invoiceNo\":\"A-000010\",\"kind\":\"return\",\"lines\":[{\"costPrice\":22840,\"createdAt\":1760000600000,\"description\":\"Chini (sugar) loose\",\"discountAmount\":0,\"id\":\"0199c82c-c02b-743a-8133-67ea7d506736\",\"lineNo\":1,\"lineTotal\":-35688,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":-1250,\"unitPrice\":28550,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":\"wapsi: chini\",\"originalSaleId\":\"0199c82c-c025-7548-ae17-5dd42bc63203\",\"payments\":[{\"amount\":-35688,\"createdAt\":1760000600000,\"id\":\"0199c82c-c02c-7367-b078-c9a49713af85\",\"method\":\"khata\",\"reference\":null}],\"seq\":10,\"subtotal\":-35688,\"total\":-35688,\"v\":2}",
+      "expected_hash": "b0f568bec9157d9dc3e30957c4f6dd4b849b602684000de48f0ef72b2bfc0dc7"
+    },
+    {
+      "name": "v2-weighted-line-discount",
+      "previous_hash": "b0f568bec9157d9dc3e30957c4f6dd4b849b602684000de48f0ef72b2bfc0dc7",
+      "unsealed_data": {
+        "id": "0199c82c-c02d-7007-9131-8204719c8c6a",
+        "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
+        "seq": 11,
+        "invoiceNo": "A-000011",
+        "kind": "sale",
+        "originalSaleId": null,
+        "branchId": "0199c82c-c001-7000-a949-a9d74deb140a",
+        "customerId": null,
+        "cashierId": "0199c82c-c002-75c5-aef7-d4467e2df999",
+        "subtotal": 101475,
+        "discountTotal": 0,
+        "total": 101475,
+        "note": null,
+        "createdAt": 1760000660000,
+        "hashVersion": 2,
+        "lines": [
+          {
+            "id": "0199c82c-c02e-726c-94f9-ae3d3d48f4a7",
+            "saleId": "0199c82c-c02d-7007-9131-8204719c8c6a",
+            "lineNo": 1,
+            "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
+            "phoneUnitId": null,
+            "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
+            "description": "Basmati chawal loose",
+            "quantity": 2500,
+            "unitScale": 1000,
+            "unitPrice": 41000,
+            "costPrice": 32800,
+            "discountAmount": 1025,
+            "lineTotal": 101475,
+            "createdAt": 1760000660000
+          }
+        ],
+        "payments": [
+          {
+            "id": "0199c82c-c02f-7167-ba27-a11c089ea293",
+            "saleId": "0199c82c-c02d-7007-9131-8204719c8c6a",
+            "method": "cash",
+            "amount": 101475,
+            "reference": null,
+            "createdAt": 1760000660000
+          }
+        ]
+      },
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000660000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c02d-7007-9131-8204719c8c6a\",\"invoiceNo\":\"A-000011\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":32800,\"createdAt\":1760000660000,\"description\":\"Basmati chawal loose\",\"discountAmount\":1025,\"id\":\"0199c82c-c02e-726c-94f9-ae3d3d48f4a7\",\"lineNo\":1,\"lineTotal\":101475,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2500,\"unitPrice\":41000,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":101475,\"createdAt\":1760000660000,\"id\":\"0199c82c-c02f-7167-ba27-a11c089ea293\",\"method\":\"cash\",\"reference\":null}],\"seq\":11,\"subtotal\":101475,\"total\":101475,\"v\":2}",
+      "expected_hash": "1a287055fc8d153694d7697e49955de32a4dcae7d780c53d8b1ad2582575714d"
     }
   ]
 }

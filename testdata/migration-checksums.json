@@ -25,6 +25,16 @@
       "version": 5,
       "name": "repairs_warranty",
       "checksum": "e46a6a4775a72a82b082668286ab1af16350affe472bee60639d124e77e271c8"
+    },
+    {
+      "version": 6,
+      "name": "weighted_units",
+      "checksum": "2e9fad1e1a28be64b0524fca6daccfef9bed530ec43a9fc74f6ca2eeb2fd7ba2"
+    },
+    {
+      "version": 7,
+      "name": "batch_expiry",
+      "checksum": "59b031d4af6b6330bdc48b043030c56479d83b98de9c23a0752c3ffa255fb676"
     }
   ]
 }

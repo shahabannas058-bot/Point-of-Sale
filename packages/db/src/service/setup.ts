@@ -1,4 +1,11 @@
-import { ServiceError, type SetupApi, type ShopInfo } from '@pos/shared';
+import {
+  BusinessTypeSchema,
+  MODULE_PRESETS,
+  ServiceError,
+  formatModuleList,
+  type SetupApi,
+  type ShopInfo,
+} from '@pos/shared';
 import { WriteBatch } from './batch';
 import type { Ctx } from './deps';
 import { guardApi, invalid, reqText } from './errors';
@@ -18,6 +25,8 @@ export async function readShopInfo(ctx: Ctx): Promise<ShopInfo> {
     invoicePrefix: shop.invoicePrefix,
     createdAt: shop.setupAt,
     isDemo: shop.isDemo,
+    businessType: shop.businessType,
+    modules: shop.modules,
   };
 }
 
@@ -39,6 +48,8 @@ export function createSetupApi(ctx: Ctx): SetupApi {
           'owner.username',
           'Username may contain only a-z, 0-9, dot, dash, underscore',
         );
+      const type = BusinessTypeSchema.safeParse(input.businessType ?? 'custom');
+      if (!type.success) throw invalid('businessType', 'Unknown business type');
       const displayName = reqText(input.owner.displayName, 'owner.displayName', 1, 100);
       validatePinFormat(input.owner.pin, 'owner.pin');
       const pinHash = await hashPin(input.owner.pin, ctx.pinIterations, ctx.randomBytes);
@@ -67,6 +78,8 @@ export function createSetupApi(ctx: Ctx): SetupApi {
           upsertMeta(META.cashierMaxDiscountBps, String(DEFAULT_CASHIER_MAX_DISCOUNT_BPS)),
           upsertMeta(META.allowNegativeStock, '0'),
           upsertMeta(META.setupAt, String(at)),
+          upsertMeta(META.businessType, type.data),
+          upsertMeta(META.modules, formatModuleList(MODULE_PRESETS[type.data])),
         ])
           b.add(s.sql, s.params);
         b.add('INSERT INTO branches (id, name, created_at) VALUES (?,?,?)', [

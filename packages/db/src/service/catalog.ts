@@ -1,7 +1,11 @@
 import {
+  MAX_QUANTITY_ANY,
   PhoneConditionSchema,
   PtaStatusSchema,
   ServiceError,
+  UnitLabelSchema,
+  maxQuantity,
+  unitScaleFor,
   type CatalogApi,
   type CatalogHit,
   type NewAccessoryInput,
@@ -16,6 +20,7 @@ import { guardApi, intIn, invalid, money, optIntIn, optText, reqText } from './e
 import type { Raw } from './mappers';
 import { toPhoneView, toVariantView } from './mappers';
 import { loadShop } from './meta';
+import { assertModule } from './modules';
 import {
   PHONE_VIEW_SQL,
   VARIANT_VIEW_SQL,
@@ -364,6 +369,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
     async createPhoneUnit(i) {
       const session = requirePermission(ctx, 'edit_catalog');
       const shop = await loadShop(ctx.driver);
+      assertModule(shop.modules, 'imei');
       normalizePhone(i); // fail fast before taking the lock
       const unitId = await ctx.lock(async () => {
         const at = ctx.clock();
@@ -395,10 +401,18 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       const colour = optText(i.colour, 'colour', 40);
       const costPrice = money(i.costPrice, 'costPrice');
       const salePrice = money(i.salePrice, 'salePrice');
+      const unit = UnitLabelSchema.safeParse(i.unit ?? 'pcs');
+      if (!unit.success) throw invalid('unit', 'Unknown unit');
+      if (unit.data !== 'pcs') assertModule(shop.modules, 'weight_units');
+      const unitScale = unitScaleFor(unit.data);
       const reorderLevel =
-        i.reorderLevel === undefined ? 0 : intIn(i.reorderLevel, 'reorderLevel', 0, 1_000_000);
+        i.reorderLevel === undefined
+          ? 0
+          : intIn(i.reorderLevel, 'reorderLevel', 0, maxQuantity(unitScale));
       const openingQty =
-        i.openingQty === undefined ? 0 : intIn(i.openingQty, 'openingQty', 0, 1_000_000);
+        i.openingQty === undefined
+          ? 0
+          : intIn(i.openingQty, 'openingQty', 0, maxQuantity(unitScale));
       const variantId = await ctx.lock(async () => {
         const at = ctx.clock();
         const b = new WriteBatch(ctx.newId, at);
@@ -413,6 +427,8 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
           costPrice,
           salePrice,
           reorderLevel,
+          unitScale,
+          unitLabel: unit.data,
           isActive: true,
           createdAt: at,
           updatedAt: at,
@@ -481,7 +497,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         if (p.costPrice !== undefined) next.costPrice = money(p.costPrice, 'costPrice');
         if (p.barcode !== undefined) next.barcode = optText(p.barcode, 'barcode', 64);
         if (p.reorderLevel !== undefined)
-          next.reorderLevel = intIn(p.reorderLevel, 'reorderLevel', 0, 1_000_000);
+          next.reorderLevel = intIn(p.reorderLevel, 'reorderLevel', 0, maxQuantity(cur.unitScale));
         if (p.model !== undefined) next.model = optText(p.model, 'model', 80);
         if (p.colour !== undefined) next.colour = optText(p.colour, 'colour', 40);
         const b = new WriteBatch(ctx.newId, at);
@@ -494,11 +510,13 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
     async adjustStock(i) {
       const session = requirePermission(ctx, 'adjust_stock');
       const shop = await loadShop(ctx.driver);
-      const delta = intIn(i.delta, 'delta', -1_000_000, 1_000_000);
+      const delta = intIn(i.delta, 'delta', -MAX_QUANTITY_ANY, MAX_QUANTITY_ANY);
       if (delta === 0) throw invalid('delta', 'Adjustment cannot be zero');
       const reason = reqText(i.reason, 'reason', 1, 300);
       await ctx.lock(async () => {
-        await loadVariantRec(ctx.driver, i.variantId); // NOT_FOUND
+        const variant = await loadVariantRec(ctx.driver, i.variantId); // NOT_FOUND
+        if (Math.abs(delta) > maxQuantity(variant.unitScale))
+          throw invalid('delta', 'Adjustment is larger than this item allows');
         if (delta < 0 && !shop.settings.allowNegativeStock) {
           const onHand = await variantOnHand(ctx.driver, i.variantId, shop.branchId);
           if (onHand + delta < 0)

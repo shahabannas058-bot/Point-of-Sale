@@ -218,7 +218,7 @@ describe('user management and PIN change', () => {
       username: 'Ali.Raza',
       displayName: 'Ali',
       role: 'cashier',
-      pin: '654321',
+      pin: '6543',
     });
     expect(u).toMatchObject({ username: 'ali.raza', role: 'cashier', isActive: true });
     expect((await t.svc.auth.listUsers()).map((x) => x.username)).toEqual([
@@ -228,7 +228,7 @@ describe('user management and PIN change', () => {
       'cash',
     ]);
     t.svc.auth.logout();
-    await t.svc.auth.login('ali.raza', '654321');
+    await t.svc.auth.login('ali.raza', '6543');
   });
 
   it('validates username, role and PIN; a duplicate username is DUPLICATE', async () => {
@@ -245,6 +245,8 @@ describe('user management and PIN change', () => {
     await expectCode(mk({ username: 'has space' }), 'VALIDATION');
     await expectCode(mk({ role: 'god' }), 'VALIDATION');
     await expectCode(mk({ pin: '12' }), 'VALIDATION');
+    await expectCode(mk({ pin: '123' }), 'VALIDATION');
+    await expectCode(mk({ pin: '12345' }), 'VALIDATION'); // a PIN is exactly 4 digits
     await expectCode(mk({ pin: '1234567' }), 'VALIDATION');
     await expectCode(mk({ pin: 'abcd' }), 'VALIDATION');
     const dup = await expectCode(mk({ username: 'cash' }), 'DUPLICATE');
