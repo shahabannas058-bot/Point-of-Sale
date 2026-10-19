@@ -36,6 +36,9 @@ public static class PosPaths
 
     public static string BackupDir => Path.Combine(DataDir, "backups");
 
+    /// <summary>Diagnostics (<see cref="FileLog"/>): one file per day, no shop data in it. Safe to delete.</summary>
+    public static string LogDir => Path.Combine(DataDir, "logs");
+
     /// <summary>WebView2 profile (cookies, cache, localStorage). Safe to delete; the shop data is not in here.</summary>
     public static string WebViewDir => Path.Combine(DataDir, "webview");
 }

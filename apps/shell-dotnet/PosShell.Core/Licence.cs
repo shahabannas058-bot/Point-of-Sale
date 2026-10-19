@@ -1,13 +1,23 @@
 namespace PosShell.Core;
 
 /// <summary>
-/// The ONLY place licensing plugs into a sale. Called inside the write lock, right before the batch.
+/// The ONLY place licensing plugs into the database. Both questions are asked inside the write lock, right before the
+/// statements run:
+///   AssertCanSell  - by <see cref="SalesService"/> (checkout.commit) once the invoice is sealed;
+///   AssertCanWrite - by the bridge for every raw write the page sends (db.batch). The TypeScript PosService writes
+///                    sales, stock and khata that way, so this is the choke point ADR-0010 names.
 /// Throw <see cref="ServiceException"/>("LICENCE_BLOCKED", ..., {state}) to block. Any other exception becomes INTERNAL
-/// with its message (same as the TS hook).
+/// with its message (same as the TS hook). Reads are never asked: in LOCKED the shop stays viewable (read-only).
 /// </summary>
 public interface ILicenceGuard
 {
     void AssertCanSell(string action, string branchId, long nowMs);
+
+    /// <summary>
+    /// Asked before a batch from the page is written. The real guard looks at which tables the statements touch
+    /// (sales / stock_movements / ledger_entries are refused when the licence is not valid).
+    /// </summary>
+    void AssertCanWrite(IReadOnlyList<SqlStatement> statements, long nowMs);
 }
 
 /// <summary>Supervisor approvals (a manager typed their PIN to allow a discount / credit-limit override).</summary>
@@ -23,6 +33,8 @@ public interface IApprovals
 public sealed class AllowAllLicenceGuard : ILicenceGuard
 {
     public void AssertCanSell(string action, string branchId, long nowMs) { }
+
+    public void AssertCanWrite(IReadOnlyList<SqlStatement> statements, long nowMs) { }
 }
 
 public sealed class NoApprovals : IApprovals

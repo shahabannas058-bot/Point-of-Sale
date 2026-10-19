@@ -31,10 +31,20 @@ internal sealed class RecordingLicence : ILicenceGuard
     public int Calls { get; private set; }
     public Action<string, string, long>? Behaviour { get; set; }
 
+    /// <summary>Every batch the bridge asked about (db.batch), as the guard saw it.</summary>
+    public List<IReadOnlyList<SqlStatement>> Writes { get; } = [];
+    public Action<IReadOnlyList<SqlStatement>, long>? WriteBehaviour { get; set; }
+
     public void AssertCanSell(string action, string branchId, long nowMs)
     {
         Calls++;
         Behaviour?.Invoke(action, branchId, nowMs);
+    }
+
+    public void AssertCanWrite(IReadOnlyList<SqlStatement> statements, long nowMs)
+    {
+        Writes.Add(statements);
+        WriteBehaviour?.Invoke(statements, nowMs);
     }
 }
 

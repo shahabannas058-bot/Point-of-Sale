@@ -89,7 +89,8 @@ public class InvoiceVectorTests
     [Fact]
     public void Vectors_form_one_chain_from_genesis()
     {
-        var names = Vectors.Names("invoice-vectors.json", "vectors").Select(d => (string)d[0]!).ToList();
+        var names = Vectors.Load("invoice-vectors.json").GetProperty("vectors").EnumerateArray()
+            .Select(v => v.GetProperty("name").GetString()!).ToList();
         Assert.True(names.Count >= 5);
         var prev = InvoiceHasher.Genesis;
         foreach (var name in names)

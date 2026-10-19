@@ -5,15 +5,24 @@ using PosShell.Core;
 namespace PosShell.Infrastructure;
 
 /// <summary>
-/// The native SQLite file. ONE connection, every call serialised by a re-entrant lock (the same model as the Node
+/// The native SQLite file. ONE writer connection, every call serialised by a re-entrant lock (the same model as the Node
 /// driver and the TS mutex), so a sale's "read head -> seal -> write" can never interleave with another writer.
+///
+/// A second connection on the same file is opened with Mode=ReadOnly + PRAGMA query_only and serves ONLY
+/// <see cref="QueryReadOnly"/> (the page's db.query): SQLite itself refuses every INSERT/UPDATE/DELETE/DDL on it, so
+/// the bridge needs no SQL parsing or allow-list to keep db.query read-only. WAL makes a commit on the writer visible to
+/// the reader's next statement; the -wal/-shm files are writable by this process, which is all a WAL reader needs.
 ///
 /// Durability settings for a shop with power cuts: WAL journal + synchronous=FULL (a committed sale survives power loss),
 /// foreign keys and recursive triggers ON (the immutability / chain triggers depend on them), busy_timeout 5 s.
 /// </summary>
 public sealed class SqliteDatabase : IPosDb, IDisposable
 {
+    /// <summary>SQLITE_READONLY: the statement tried to write through the read-only connection.</summary>
+    private const int SqliteReadOnly = 8;
+
     private readonly SqliteConnection _conn;
+    private readonly SqliteConnection _read;
     private readonly object _gate = new();
 
     public string FilePath { get; }
@@ -38,10 +47,35 @@ public sealed class SqliteDatabase : IPosDb, IDisposable
             _conn.Open();
             Exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; " +
                  "PRAGMA recursive_triggers = ON; PRAGMA busy_timeout = 5000;");
+            _read = OpenReadOnly(filePath); // after the writer: the file exists and is already in WAL mode
         }
         catch
         {
             _conn.Dispose(); // e.g. "file is not a database": do not keep the file locked
+            throw;
+        }
+    }
+
+    private static SqliteConnection OpenReadOnly(string filePath)
+    {
+        var conn = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = filePath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Cache = SqliteCacheMode.Private,
+            Pooling = false,
+        }.ToString());
+        try
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;"; // belt and braces on top of Mode=ReadOnly
+            cmd.ExecuteNonQuery();
+            return conn;
+        }
+        catch
+        {
+            conn.Dispose();
             throw;
         }
     }
@@ -60,13 +94,21 @@ public sealed class SqliteDatabase : IPosDb, IDisposable
         }
     }
 
-    public IReadOnlyList<Row> Query(string sql, params object?[] args)
+    public IReadOnlyList<Row> Query(string sql, params object?[] args) => Run(_conn, sql, args);
+
+    /// <summary>
+    /// <see cref="Query"/> over the read-only connection, for SQL that comes from the page (db.query). A statement that
+    /// tries to write fails inside SQLite (SQLITE_READONLY) and is reported as FORBIDDEN; nothing reaches the file.
+    /// </summary>
+    public IReadOnlyList<Row> QueryReadOnly(string sql, params object?[] args) => Run(_read, sql, args);
+
+    private IReadOnlyList<Row> Run(SqliteConnection conn, string sql, object?[] args)
     {
         lock (_gate)
         {
             try
             {
-                using var cmd = Build(sql, args);
+                using var cmd = Build(conn, sql, args);
                 using var reader = cmd.ExecuteReader();
                 var names = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
                 var rows = new List<Row>();
@@ -77,6 +119,11 @@ public sealed class SqliteDatabase : IPosDb, IDisposable
                     rows.Add(new Row(values));
                 }
                 return rows;
+            }
+            catch (SqliteException e) when (e.SqliteErrorCode == SqliteReadOnly)
+            {
+                throw new ServiceException("FORBIDDEN", "This query may only read",
+                    new Dictionary<string, object?> { ["reason"] = "read_only" }, e);
             }
             catch (SqliteException e)
             {
@@ -94,7 +141,7 @@ public sealed class SqliteDatabase : IPosDb, IDisposable
                 Exec("BEGIN IMMEDIATE");
                 foreach (var s in statements)
                 {
-                    using var cmd = Build(s.Sql, s.Params);
+                    using var cmd = Build(_conn, s.Sql, s.Params);
                     cmd.ExecuteNonQuery();
                 }
                 Exec("COMMIT");
@@ -140,7 +187,11 @@ public sealed class SqliteDatabase : IPosDb, IDisposable
 
     public void Dispose()
     {
-        lock (_gate) _conn.Dispose(); // the last connection closing also checkpoints the WAL
+        lock (_gate)
+        {
+            _read.Dispose(); // reader first: the LAST connection to close is the writer, which checkpoints and removes the WAL
+            _conn.Dispose();
+        }
     }
 
     private void TryRollback()
@@ -153,7 +204,7 @@ public sealed class SqliteDatabase : IPosDb, IDisposable
     /// Rewrites TS-style "?" placeholders to $p0, $p1... (skipping quoted text) and binds the values. The placeholder
     /// count must equal the value count: a mismatch is a programming error, never silently ignored.
     /// </summary>
-    private SqliteCommand Build(string sql, object?[] args)
+    private static SqliteCommand Build(SqliteConnection conn, string sql, object?[] args)
     {
         var sb = new StringBuilder(sql.Length + 16);
         var count = 0;
@@ -177,7 +228,7 @@ public sealed class SqliteDatabase : IPosDb, IDisposable
         if (count != args.Length)
             throw new ArgumentException($"SQL has {count} placeholders but {args.Length} values were supplied.");
 
-        var cmd = _conn.CreateCommand();
+        var cmd = conn.CreateCommand();
         cmd.CommandText = sb.ToString();
         for (var i = 0; i < args.Length; i++) cmd.Parameters.AddWithValue($"$p{i}", Normalize(args[i]));
         return cmd;
