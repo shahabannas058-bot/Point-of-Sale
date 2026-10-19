@@ -4,7 +4,7 @@ import type { en } from './en';
 type Dict = { [K in keyof typeof en]: string };
 
 /* Roman Urdu (Urdu written in Latin letters, left to right): the everyday counter language of the shop.
-   Common shop words stay as people say them (bill, stock, khata, IMEI, PIN). */
+   Common shop words stay as people say them (bill, stock, udhaar, IMEI, PIN). */
 export const ur: Dict = {
   'app.name': 'HS POS',
 
@@ -53,7 +53,7 @@ export const ur: Dict = {
   'login.enterPin': '{name} ka PIN likhein',
   'login.signIn': 'Login karein',
   'login.tagline':
-    'Mobile shop ke liye billing, stock aur khata. Internet ke baghair bhi chalta hai.',
+    'Mobile shop ke liye billing, stock aur udhaar. Internet ke baghair bhi chalta hai.',
   'login.pointOffline': 'Har sale offline chalti hai, load-shedding mein bhi',
   'login.pointImmutable': 'Bill edit ya delete nahi hote, sirf wapas hote hain',
   'login.pointBilingual': '58 / 80 mm printer par Roman Urdu aur English raseed',
@@ -135,7 +135,7 @@ export const ur: Dict = {
   'pay.tendered': 'Cash mila',
   'pay.change': 'Wapas dena hai',
   'pay.short': 'Cash raqam se kam hai',
-  'pay.khataNeedsCustomer': 'Khate ke liye gahak zaroori hai. Pehle gahak chunein (F4).',
+  'pay.khataNeedsCustomer': 'Udhaar ke liye gahak zaroori hai. Pehle gahak chunein (F4).',
 
   'approval.title': 'Manager ki ijazat',
   'approval.hint': 'Is ke liye manager ya malik ka PIN chahiye: {reason}',
@@ -342,7 +342,7 @@ export const ur: Dict = {
   'sales.confirmVoid': 'Bill void karein',
   'sales.voidDone': 'Void {no} save ho gaya',
 
-  'customers.subtitle': 'Khata (udhaar) accounts',
+  'customers.subtitle': 'Udhaar ke accounts',
   'customers.new': 'Naya gahak',
   'customers.created': 'Gahak shaamil ho gaya',
   'customers.name': 'Naam',
@@ -362,7 +362,7 @@ export const ur: Dict = {
   'customers.onlyOwing': 'Sirf udhaar wale gahak',
   'customers.searchPlaceholder': 'Naam ya phone se dhoondein',
   'customers.none': 'Koi gahak nahi mila',
-  'customers.noneHint': 'Khata shuru karne ke liye gahak shaamil karein.',
+  'customers.noneHint': 'Udhaar shuru karne ke liye gahak shaamil karein.',
 
   'khata.receivePayment': 'Payment wusool karein',
   'khata.receive': 'Wusool karein',
@@ -420,12 +420,12 @@ export const ur: Dict = {
   'reports.returns': 'Wapsiyan',
   'reports.salesCount': '{n} sales',
   'reports.returnsCount': '{n} wapsiyan',
-  'reports.khataGiven': 'Khate par diya',
+  'reports.khataGiven': 'Udhaar par diya',
   'reports.cashInDrawer': 'Galle mein cash',
   'reports.profit': 'Andaazan munafa',
   'reports.profitHint': 'Kharchon se pehle',
   'reports.paymentSplit': 'Gahakon ne kaise payment ki',
-  'reports.khataCollectedLabel': 'Khata wusooli',
+  'reports.khataCollectedLabel': 'Udhaar ki wusooli',
   'reports.summary': 'Khulasa',
   'reports.gross': 'Kul sales',
   'reports.discounts': 'Diya gaya discount',
@@ -488,7 +488,7 @@ export const ur: Dict = {
   'condition.used': 'Used',
   'condition.open_box': 'Open box',
   'method.cash': 'Cash',
-  'method.khata': 'Khata',
+  'method.khata': 'Udhaar',
   'method.jazzcash': 'JazzCash',
   'method.easypaisa': 'Easypaisa',
   'method.bank_transfer': 'Bank transfer',
@@ -505,7 +505,7 @@ export const ur: Dict = {
   'repair.secDevice': 'Mobile aur kharabi',
   'repair.secMoney': 'Charges',
   'repair.walkInName': 'Gahak ka naam',
-  'repair.pickCustomer': 'Khata gahak',
+  'repair.pickCustomer': 'Udhaar gahak',
   'repair.brand': 'Brand',
   'repair.model': 'Model',
   'repair.serial': 'Serial no.',
@@ -651,14 +651,14 @@ export const ur: Dict = {
     'Taaza stock kam hai: {onHand} bik sakte hain, {requested} chahiye (item {lineNo}). {expiredOnHand} ki expiry guzar chuki hai.',
   'err.UNIT_NOT_IN_STOCK': 'Yeh phone ab stock mein nahi.',
   'err.PAYMENT_MISMATCH': 'Payments ka jor total ke bilkul barabar hona chahiye.',
-  'err.KHATA_NEEDS_CUSTOMER': 'Khate ke liye gahak zaroori hai. Pehle gahak chunein.',
+  'err.KHATA_NEEDS_CUSTOMER': 'Udhaar ke liye gahak zaroori hai. Pehle gahak chunein.',
   'err.DISCOUNT_INVALID': 'Discount sahi nahi.',
   'err.MONEY_INVALID': 'Koi raqam sahi nahi.',
   'err.ALREADY_RETURNED': 'Yeh items pehle hi wapas ho chuke hain.',
   'err.RETURN_NOT_ALLOWED': 'Is bill ki wapsi nahi ho sakti.',
   'err.CHAIN_CONFLICT': 'Usi waqt aik aur sale save hui. Dobara koshish karein.',
   'err.IMMUTABLE_RECORD': 'Save shuda record badla nahi ja sakta.',
-  'err.LEDGER_CORRUPT': 'Khata hifazati check mein fail hua. Support se rabta karein.',
+  'err.LEDGER_CORRUPT': 'Ledger hifazati check mein fail hua. Support se rabta karein.',
   'err.DB_CONSTRAINT': 'Database ne yeh tabdeeli qabool nahi ki.',
   'err.INTERNAL': 'Achanak ghalti hui. Dobara koshish karein.',
   'err.BACKUP_NOT_DATABASE': 'Yeh file POS database backup nahi hai.',
