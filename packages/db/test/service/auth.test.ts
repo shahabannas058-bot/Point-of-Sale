@@ -1,14 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '@pos/shared';
-import {
-  IMEI_Y,
-  PINS,
-  expectCode,
-  first,
-  makeService,
-  type TestService,
-  type TestUser,
-} from './helpers';
+import { IMEI_Y, PINS, expectCode, makeService, type TestService, type TestUser } from './helpers';
 
 let t: TestService;
 beforeEach(async () => {
@@ -291,8 +283,9 @@ describe('user management and PIN change', () => {
       "select pin_hash from users where username in ('twin1','twin2')",
     );
     expect(rows).toHaveLength(2);
-    expect(first(rows).pin_hash).toMatch(/^pbkdf2\$sha256\$1000\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
+    // the format check alone proves the PIN is not stored: hex digests can contain "9999" by chance
+    for (const row of rows)
+      expect(row.pin_hash).toMatch(/^pbkdf2\$sha256\$1000\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
     expect(rows[0]?.pin_hash).not.toBe(rows[1]?.pin_hash);
-    expect(JSON.stringify(rows)).not.toContain('9999');
   });
 });

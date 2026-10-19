@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Languages, LoaderCircle, WifiOff, ShieldCheck, Sparkles } from 'lucide-react';
-import { BUSINESS_TYPES, isServiceError, type BusinessType, type Role } from '@pos/shared';
+import {
+  BUSINESS_TYPES,
+  hasModule,
+  isServiceError,
+  type BusinessType,
+  type Role,
+} from '@pos/shared';
 import logoUrl from '../assets/hs-pos-logo.png';
 import { LanguageSwitch } from '../components/LanguageSwitch';
 import { Button } from '../components/ui/Button';
@@ -10,6 +16,7 @@ import { Badge } from '../components/ui/Badge';
 import { PIN_LENGTH, PinPad } from '../components/ui/PinPad';
 import { ErrorBox } from '../components/ui/misc';
 import { useT, type TKey } from '../i18n';
+import { nicheKey } from '../i18n/niche';
 import { errorMessage } from '../i18n/errors';
 import { useRuntime } from '../service/context';
 import { useServiceQuery } from '../service/use-query';
@@ -26,7 +33,7 @@ function readLastUser(): string | null {
   }
 }
 
-function BrandPanel({ shopName }: { shopName: string }): ReactNode {
+function BrandPanel({ shopName, hasImei }: { shopName: string; hasImei: boolean }): ReactNode {
   const t = useT();
   const points: { icon: typeof WifiOff; key: TKey }[] = [
     { icon: WifiOff, key: 'login.pointOffline' },
@@ -40,7 +47,7 @@ function BrandPanel({ shopName }: { shopName: string }): ReactNode {
       </div>
       <div>
         <h1 className="display text-4xl font-bold leading-tight tracking-tight">{shopName}</h1>
-        <p className="mt-3 max-w-sm text-slate-300">{t('login.tagline')}</p>
+        <p className="mt-3 max-w-sm text-slate-300">{t(nicheKey(hasImei, 'login.tagline'))}</p>
         <ul className="mt-8 flex flex-col gap-3">
           {points.map((p) => (
             <li key={p.key} className="flex items-center gap-3 text-sm text-slate-200">
@@ -56,7 +63,9 @@ function BrandPanel({ shopName }: { shopName: string }): ReactNode {
         </ul>
       </div>
       <div className="font-mono text-xs text-slate-400 ltr" aria-hidden="true">
-        Rs 1,23,45,678 · IMEI 35 693803 ······ · A-000042
+        {hasImei
+          ? 'Rs 1,23,45,678 · IMEI 35 693803 ······ · A-000042'
+          : 'Rs 1,23,45,678 · 1.250 kg · K-000042'}
       </div>
     </aside>
   );
@@ -396,7 +405,10 @@ export function Login(): ReactNode {
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      <BrandPanel shopName={setupQ.data === false ? t('app.name') : shopName} />
+      <BrandPanel
+        shopName={setupQ.data === false ? t('app.name') : shopName}
+        hasImei={shopQ.data !== undefined && hasModule(shopQ.data.modules, 'imei')}
+      />
       <main className="relative grid place-items-center p-6">
         <div className="absolute end-4 top-4">
           <LanguageSwitch />

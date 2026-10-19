@@ -35,6 +35,8 @@ import { Dialog } from '../components/ui/Dialog';
 import { Field, Input } from '../components/ui/Field';
 import { Empty, Kbd, Money } from '../components/ui/misc';
 import { useT, type TKey } from '../i18n';
+import { nicheKey } from '../i18n/niche';
+import { useShopModules } from '../service/use-modules';
 import { errorMessage } from '../i18n/errors';
 import { cartLineItemRef } from '../lib/item-history';
 import { formatRs, paisaToInput, parseRupees, percentDiscount } from '../lib/money';
@@ -358,6 +360,7 @@ const REASON_FALLBACK: ApprovalReason = 'discount';
 
 export function Billing(): ReactNode {
   const t = useT();
+  const hasImei = useShopModules().has('imei');
   const service = useService();
   const cart = useCart();
   const bump = useDataVersion((s) => s.bump);
@@ -680,8 +683,8 @@ export function Billing(): ReactNode {
             inputMode="search"
             autoComplete="off"
             spellCheck={false}
-            placeholder={t('billing.searchPlaceholder')}
-            aria-label={t('billing.searchPlaceholder')}
+            placeholder={t(nicheKey(hasImei, 'billing.searchPlaceholder'))}
+            aria-label={t(nicheKey(hasImei, 'billing.searchPlaceholder'))}
             role="combobox"
             aria-expanded={dropOpen}
             aria-controls="search-results"
@@ -761,7 +764,7 @@ export function Billing(): ReactNode {
             <Empty
               icon={<ShoppingCart size={28} aria-hidden="true" />}
               title={t('billing.emptyTitle')}
-              hint={t('billing.emptyHint')}
+              hint={t(nicheKey(hasImei, 'billing.emptyHint'))}
               action={
                 <Button variant="secondary" size="sm" onClick={() => setHelpOpen(true)}>
                   <Keyboard size={14} aria-hidden="true" />

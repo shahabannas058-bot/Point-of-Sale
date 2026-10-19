@@ -25,6 +25,7 @@ import { paisaToInput, parseRupees } from '../lib/money';
 import { perUnit } from '../lib/qty';
 import { useService } from '../service/context';
 import { useShopModules } from '../service/use-modules';
+import { nicheKey } from '../i18n/niche';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { toast } from '../store/toast';
@@ -131,7 +132,7 @@ export function ReceiveStockDialog({
       const qty = parseQuantity(a.qty, variantById.get(a.variantId)?.variant.unitScale ?? 1);
       const cost = parseRupees(a.cost);
       if (!a.variantId || qty === null || qty <= 0 || cost === null)
-        return setError(t('recv.errAccessory'));
+        return setError(t(nicheKey(hasPhones, 'recv.errAccessory')));
       if (hasBatches && a.batchNo.trim() !== '' && a.expiry === '')
         return setError(t('recv.errExpiry'));
       accInputs.push({
@@ -143,7 +144,8 @@ export function ReceiveStockDialog({
           : {}),
       });
     }
-    if (phoneInputs.length + accInputs.length === 0) return setError(t('recv.errEmpty'));
+    if (phoneInputs.length + accInputs.length === 0)
+      return setError(t(nicheKey(hasPhones, 'recv.errEmpty')));
     const paidP = paid.trim() === '' ? 0 : parseRupees(paid);
     if (paidP === null || paidP > total) return setError(t('recv.errPaid'));
     setBusy(true);
@@ -435,7 +437,7 @@ export function ReceiveStockDialog({
           }}
         >
           <Plus size={16} aria-hidden="true" />
-          {t('recv.addAccessory')}
+          {t(nicheKey(hasPhones, 'recv.addAccessory'))}
         </Button>
       </div>
 

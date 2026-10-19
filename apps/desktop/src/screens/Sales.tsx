@@ -16,6 +16,8 @@ import { Dialog } from '../components/ui/Dialog';
 import { Field, Input } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
+import { nicheKey } from '../i18n/niche';
+import { useShopModules } from '../service/use-modules';
 import { errorMessage } from '../i18n/errors';
 import { useBusyAction } from '../lib/busy-action';
 import { formatDateTime, localDayRange } from '../lib/dates';
@@ -351,6 +353,7 @@ function VoidDialog({
 // ------------------------------------------------------------------ screen
 export function Sales(): ReactNode {
   const t = useT();
+  const hasImei = useShopModules().has('imei');
   const can = useCan();
   const [q, setQ] = useState('');
   const [from, setFrom] = useState('');
@@ -384,8 +387,8 @@ export function Sales(): ReactNode {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="ps-9"
-            placeholder={t('sales.searchPlaceholder')}
-            aria-label={t('sales.searchPlaceholder')}
+            placeholder={t(nicheKey(hasImei, 'sales.searchPlaceholder'))}
+            aria-label={t(nicheKey(hasImei, 'sales.searchPlaceholder'))}
           />
         </div>
         <Field label={t('sales.from')}>

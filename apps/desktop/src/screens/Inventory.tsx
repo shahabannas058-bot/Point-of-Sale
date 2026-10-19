@@ -43,6 +43,7 @@ import { useBusyAction } from '../lib/busy-action';
 import { adjustmentDelta, perUnit, qtyWithUnit, unitWord, variantQtyText } from '../lib/qty';
 import { useService } from '../service/context';
 import { useShopModules } from '../service/use-modules';
+import { nicheKey } from '../i18n/niche';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { useCan } from '../store/session';
@@ -602,8 +603,8 @@ export function Inventory(): ReactNode {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="ps-9"
-            placeholder={t('inv.searchPlaceholder')}
-            aria-label={t('inv.searchPlaceholder')}
+            placeholder={t(nicheKey(!noPhones, 'inv.searchPlaceholder'))}
+            aria-label={t(nicheKey(!noPhones, 'inv.searchPlaceholder'))}
           />
         </div>
         {tab === 'phones' ? (
@@ -757,8 +758,8 @@ export function Inventory(): ReactNode {
             <SkeletonRows />
           ) : (accessories.data ?? []).length === 0 ? (
             <Empty
-              title={tab === 'low' ? t('inv.noLow') : t('inv.noAccessories')}
-              hint={tab === 'low' ? t('inv.noLowHint') : t('inv.noPhonesHint')}
+              title={tab === 'low' ? t('inv.noLow') : t(nicheKey(!noPhones, 'inv.noAccessories'))}
+              hint={tab === 'low' ? t('inv.noLowHint') : t(nicheKey(!noPhones, 'inv.noPhonesHint'))}
             />
           ) : (
             <table className="tbl">
