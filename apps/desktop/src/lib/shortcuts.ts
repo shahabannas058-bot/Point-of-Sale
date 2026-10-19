@@ -15,7 +15,7 @@ export function specOf(e: KeyboardEvent): string {
 const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
 /**
- * Global key handler. While focus is in a form field only Escape, Ctrl+* and F-keys fire,
+ * Global key handler. While focus is in a form field only Escape, Ctrl+*, Alt+* and F-keys fire,
  * so typing "+" in a qty box never triggers the "+" shortcut. Keys listed in `allowWhileTyping` also fire.
  */
 export function useHotkeys(map: HotkeyMap, enabled = true): void {
@@ -29,9 +29,10 @@ export function useHotkeys(map: HotkeyMap, enabled = true): void {
       if (!fn) return;
       const el = e.target as HTMLElement | null;
       const typing = el !== null && (TYPING_TAGS.has(el.tagName) || el.isContentEditable);
-      const alwaysOk = /^F\d+$/.test(spec) || spec === 'Escape' || spec.startsWith('Ctrl+');
+      const chord = spec.startsWith('Ctrl+') || spec.startsWith('Alt+');
+      const alwaysOk = /^F\d+$/.test(spec) || spec === 'Escape' || chord;
       if (typing && !alwaysOk) return;
-      if (/^F\d+$/.test(spec) || spec.startsWith('Ctrl+')) e.preventDefault();
+      if (/^F\d+$/.test(spec) || chord) e.preventDefault();
       fn(e);
     };
     window.addEventListener('keydown', onKey);

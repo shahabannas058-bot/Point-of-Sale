@@ -23,6 +23,7 @@ import { useService } from '../service/context';
 import { useServiceQuery } from '../service/use-query';
 import { usePrefs } from '../store/prefs';
 import { useSession, useCan } from '../store/session';
+import { useHotkeys } from '../lib/shortcuts';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { MorphPill } from './ui/MorphPill';
@@ -81,6 +82,18 @@ export function AppShell(): ReactNode {
   const settingsQ = useServiceQuery((s) => s.settings.get(), []);
   const { pathname } = useLocation();
   const railRef = useRef<HTMLDivElement>(null);
+  const navItems = NAV.filter((n) => n.perm === null || can(n.perm));
+  // Alt+1…9 opens the n-th screen in the rail, from anywhere (even while typing in the scan box)
+  useHotkeys(
+    Object.fromEntries(
+      navItems.slice(0, 9).map((n, i) => [
+        `Alt+${i + 1}`,
+        () => {
+          if (!document.querySelector('dialog[open]')) void nav(n.to);
+        },
+      ]),
+    ),
+  );
 
   const logout = (): void => {
     service.auth.logout();
@@ -109,8 +122,14 @@ export function AppShell(): ReactNode {
         </div>
         <div ref={railRef} className="rail-nav">
           <MorphPill containerRef={railRef} selector="[aria-current='page']" watch={pathname} />
-          {NAV.filter((n) => n.perm === null || can(n.perm)).map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.to === '/'} className="rail-link" title={t(n.key)}>
+          {navItems.map((n, i) => (
+            <NavLink
+              key={n.to}
+              to={n.to}
+              end={n.to === '/'}
+              className="rail-link"
+              title={i < 9 ? `${t(n.key)} (Alt+${i + 1})` : t(n.key)}
+            >
               <n.icon size={20} aria-hidden="true" className="shrink-0" />
               <span className="rail-label">{t(n.key)}</span>
             </NavLink>

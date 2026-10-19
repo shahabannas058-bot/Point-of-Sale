@@ -59,6 +59,7 @@ import {
   type VariantView,
   PAYMENT_METHODS,
 } from '@pos/shared';
+import { createMockInsights } from './mock-insights';
 import { createMockRepairs, createMockWarranty, type MockDeps } from './mock-repairs';
 
 const cast = <T>(v: unknown): T => v as T;
@@ -1351,6 +1352,18 @@ function build(): { service: PosService; seed: () => Promise<void> } {
     // Phase 3: repair tickets + IMEI warranty (see mock-repairs.ts)
     repairs: createMockRepairs(phase3Deps()),
     warranty: createMockWarranty(phase3Deps()),
+    insights: createMockInsights({
+      now,
+      require,
+      can,
+      variants,
+      variantView,
+      units,
+      unitView,
+      invoices,
+      customerExists: (id) => customers.some((c) => c.id === id),
+      customerBalance,
+    }),
   };
 
   const seed = (): Promise<void> =>

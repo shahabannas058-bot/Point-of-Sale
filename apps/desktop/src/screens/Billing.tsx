@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 import {
   Keyboard,
   Minus,
@@ -22,6 +23,7 @@ import {
 } from '@pos/shared';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { CustomerPicker } from '../components/CustomerPicker';
+import { TillInfo } from '../components/TillInfo';
 import { ImeiPicker } from '../components/ImeiPicker';
 import { PaymentPanel } from '../components/PaymentPanel';
 import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
@@ -90,6 +92,7 @@ function DiscountCell({ line }: { line: CartLine }): ReactNode {
         value={shown}
         inputMode="decimal"
         aria-label={t('billing.lineDiscount')}
+        data-line-discount={line.key}
         invalid={bad}
         className="input-sm ltr w-24 text-end"
         placeholder="0"
@@ -200,6 +203,7 @@ export function Billing(): ReactNode {
   const t = useT();
   const service = useService();
   const cart = useCart();
+  const nav = useNavigate();
   const bump = useDataVersion((s) => s.bump);
   const version = useDataVersion((s) => s.version);
 
@@ -412,7 +416,22 @@ export function Billing(): ReactNode {
   useHotkeys({
     F1: () => setHelpOpen(true),
     F2: () => focusSearch(),
+    F3: () => {
+      // jump to the selected line's discount box (Enter saves it, F2 goes back to scanning)
+      if (!selectedLine || anyDialogOpen()) return;
+      const box = document.querySelector<HTMLInputElement>(
+        `[data-line-discount="${CSS.escape(selectedLine.key)}"]`,
+      );
+      box?.focus();
+      box?.select();
+    },
     F4: () => setCustomerOpen(true),
+    F6: () => {
+      if (cart.customer && !anyDialogOpen()) void nav(`/customers/${cart.customer.id}`);
+    },
+    F10: () => {
+      if (lines.length > 0 && !anyDialogOpen()) setClearOpen(true);
+    },
     F7: () => {
       if (lines.length > 0) {
         cart.hold(total);
@@ -462,10 +481,13 @@ export function Billing(): ReactNode {
   const shortcutRows: [string, TKey][] = [
     ['F1', 'sc.help'],
     ['F2', 'sc.search'],
+    ['F3', 'sc.lineDiscount'],
     ['F4', 'sc.customer'],
+    ['F6', 'sc.khata'],
     ['F7', 'sc.hold'],
     ['F8', 'sc.resume'],
     ['F9', 'sc.pay'],
+    ['F10', 'sc.newSale'],
     ['Ctrl+Enter', 'sc.commit'],
     ['Ctrl+D', 'sc.discount'],
     ['Ctrl+P', 'sc.print'],
@@ -473,6 +495,7 @@ export function Billing(): ReactNode {
     ['Del', 'sc.remove'],
     ['↑ ↓', 'sc.select'],
     ['+ / -', 'sc.qty'],
+    ['Alt+1…9', 'sc.nav'],
   ];
 
   const lineTotalOf = (i: number, l: CartLine): number =>
@@ -726,6 +749,7 @@ export function Billing(): ReactNode {
             <Kbd>F4</Kbd>
           )}
         </button>
+        <TillInfo line={selectedLine} customerId={cart.customer?.id ?? null} />
 
         <div className="slip p-5">
           <div className="flex flex-col gap-1.5">

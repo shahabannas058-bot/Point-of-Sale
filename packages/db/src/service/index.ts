@@ -6,6 +6,7 @@ import { createCtx, type ServiceOptions } from './context';
 import { khataApi, purchasingApi } from './parties';
 import { integrityApi, reportsApi } from './reports';
 import { repairsApi } from './repairs';
+import { insightsApi } from './insights';
 import { warrantyApi } from './warranty';
 
 export type { LicenceHook, ServiceOptions } from './context';
@@ -28,5 +29,6 @@ export function createPosService(options: ServiceOptions): PosService {
     integrity: integrityApi(ctx),
     repairs: repairsApi(ctx),
     warranty: warrantyApi(ctx),
+    insights: insightsApi(ctx),
   };
 }

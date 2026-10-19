@@ -29,9 +29,10 @@ import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { useCan } from '../store/session';
 import { toast } from '../store/toast';
+import { ReorderPanel } from '../components/ReorderPanel';
 import { ReceiveStockDialog } from './ReceiveStockDialog';
 
-type TabKey = 'phones' | 'accessories' | 'low';
+type TabKey = 'phones' | 'accessories' | 'low' | 'reorder';
 
 // ------------------------------------------------------------------ phone add/edit
 function PhoneDialog({
@@ -431,7 +432,7 @@ export function Inventory(): ReactNode {
   const accessories = useServiceQuery(
     (s) => s.catalog.listAccessories({ q: q || undefined, lowStockOnly: tab === 'low' }),
     [q, tab],
-    tab !== 'phones',
+    tab === 'accessories' || tab === 'low',
   );
 
   return (
@@ -471,22 +472,25 @@ export function Inventory(): ReactNode {
             { value: 'phones', label: t('inv.tabPhones') },
             { value: 'accessories', label: t('inv.tabAccessories') },
             { value: 'low', label: t('inv.tabLow') },
+            { value: 'reorder', label: t('inv.tabReorder') },
           ]}
         />
-        <div className="relative min-w-60 flex-1 sm:max-w-sm">
-          <Search
-            size={16}
-            className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted"
-            aria-hidden="true"
-          />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="ps-9"
-            placeholder={t('inv.searchPlaceholder')}
-            aria-label={t('inv.searchPlaceholder')}
-          />
-        </div>
+        {tab !== 'reorder' ? (
+          <div className="relative min-w-60 flex-1 sm:max-w-sm">
+            <Search
+              size={16}
+              className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted"
+              aria-hidden="true"
+            />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="ps-9"
+              placeholder={t('inv.searchPlaceholder')}
+              aria-label={t('inv.searchPlaceholder')}
+            />
+          </div>
+        ) : null}
         {tab === 'phones' ? (
           <>
             <Select
@@ -531,7 +535,9 @@ export function Inventory(): ReactNode {
         ) : null}
       </div>
 
-      {tab === 'phones' ? (
+      {tab === 'reorder' ? (
+        <ReorderPanel />
+      ) : tab === 'phones' ? (
         phones.error ? (
           <ErrorBox error={phones.error} onRetry={phones.reload} />
         ) : (

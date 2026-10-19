@@ -343,6 +343,8 @@ export interface PosService {
   // Phase 3: repair job tickets and IMEI warranty
   repairs: PosRepairsApi;
   warranty: PosWarrantyApi;
+  // Phase 3b: till info panel and reorder suggestions
+  insights: PosInsightsApi;
 }
 
 // ---------------- repairs + warranty (Phase 3) ----------------
@@ -451,4 +453,58 @@ export interface PosWarrantyApi {
   lookup(imeiOrSerial: string): Promise<WarrantyLookup>;
   /** Active warranties ending within the next `days` days, soonest first. */
   listExpiring(days: number): Promise<ExpiringWarranty[]>;
+}
+
+// ---------------- till insights + reorder (Phase 3b) ----------------
+
+export interface ItemInsightInput {
+  /** Exactly one of variantId / phoneUnitId. */
+  variantId?: Id;
+  phoneUnitId?: Id;
+  /** The bill's customer, for "last rate to this customer" and the khata balance. */
+  customerId?: Id | null;
+}
+
+export interface ItemInsight {
+  /** Accessories: units on hand. Phones: 1 when the unit is in stock, else 0. */
+  onHand: number;
+  /** Latest purchase / opening cost. Null without view_cost or when never bought. */
+  lastPurchase: { unitCost: Paisa; at: EpochMs } | null;
+  /** Latest sale of this item (the same model for phones) to customerId; null for walk-in. */
+  lastSoldToCustomer: { unitPrice: Paisa; at: EpochMs; invoiceNo: string } | null;
+  /** Khata balance of customerId (positive = customer owes); null for walk-in. */
+  customerBalance: Paisa | null;
+  /** Net units sold (sales minus returns) in the last 30 days. */
+  soldLast30Days: number;
+}
+
+export interface ReorderOptions {
+  /** Sales window used for the daily average (default 30, 1-365). */
+  days?: number;
+  /** Days of sales the order should cover on top of the reorder level (default 14, 1-180). */
+  coverDays?: number;
+}
+
+export interface ReorderSuggestion {
+  item: VariantView;
+  /** Net units sold in the window. */
+  sold: number;
+  /** sold / days, rounded to 2 decimals. */
+  dailyAvg: number;
+  /** Whole days until stock runs out at dailyAvg; null when nothing sold. */
+  daysLeft: number | null;
+  /** max(0, reorderLevel + ceil(dailyAvg * coverDays) - onHand). */
+  suggestedQty: number;
+  /** Cost used for the estimate (latest purchase, else the item cost). Null without view_cost. */
+  unitCost: Paisa | null;
+}
+
+export interface PosInsightsApi {
+  /** Till info panel for one cart item. Needs `sell`. */
+  item(input: ItemInsightInput): Promise<ItemInsight>;
+  /**
+   * Accessories at or below their reorder level, or that run out within 7 days at the current rate,
+   * most urgent first. Needs `view_catalog`.
+   */
+  reorder(options?: ReorderOptions): Promise<ReorderSuggestion[]>;
 }
