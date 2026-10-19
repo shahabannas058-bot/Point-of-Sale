@@ -29,6 +29,7 @@ import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { showsModelAndColour } from '../lib/item-fields';
 import { paisaToInput, parseRupees } from '../lib/money';
+import { useBusyAction } from '../lib/busy-action';
 import { adjustmentDelta, perUnit, qtyWithUnit, unitWord, variantQtyText } from '../lib/qty';
 import { useService } from '../service/context';
 import { useShopModules } from '../service/use-modules';
@@ -54,7 +55,6 @@ function PhoneDialog({
   const service = useService();
   const bump = useDataVersion((s) => s.bump);
   const [draft, setDraft] = useState<PhoneDraft>(emptyPhoneDraft);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (open) {
@@ -63,10 +63,9 @@ function PhoneDialog({
     }
   }, [open, unit]);
 
-  const save = async (): Promise<void> => {
+  const { busy, run: save } = useBusyAction(async (): Promise<void> => {
     const r = draftToInput(draft);
     if ('error' in r) return setError(t(r.error));
-    setBusy(true);
     setError(null);
     try {
       if (unit) {
@@ -87,10 +86,8 @@ function PhoneDialog({
       onClose();
     } catch (e) {
       setError(errorMessage(e, t));
-    } finally {
-      setBusy(false);
     }
-  };
+  });
 
   return (
     <Dialog
@@ -116,10 +113,12 @@ function PhoneDialog({
           void save();
         }}
       >
-        <PhoneFields draft={draft} onChange={setDraft} lockIdentity={unit !== null} />
-        <button type="submit" className="sr-only" tabIndex={-1}>
-          {t('common.save')}
-        </button>
+        <fieldset disabled={busy} className="min-w-0">
+          <PhoneFields draft={draft} onChange={setDraft} lockIdentity={unit !== null} />
+          <button type="submit" className="sr-only" tabIndex={-1}>
+            {t('common.save')}
+          </button>
+        </fieldset>
       </form>
       <div role="alert" className="mt-3 min-h-5 text-sm font-medium text-[var(--danger-ink)]">
         {error}
@@ -157,7 +156,6 @@ function AccessoryDialog({
     unit: 'pcs' as UnitLabel,
   };
   const [f, setF] = useState(empty);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -186,7 +184,7 @@ function AccessoryDialog({
   const unit: UnitLabel = item ? item.variant.unitLabel : f.unit;
   const scale = unitScaleFor(unit);
 
-  const save = async (): Promise<void> => {
+  const { busy, run: save } = useBusyAction(async (): Promise<void> => {
     const cost = parseRupees(f.cost);
     const price = parseRupees(f.price);
     const reorder = parseQuantity(f.reorder.trim() === '' ? '0' : f.reorder, scale);
@@ -195,7 +193,6 @@ function AccessoryDialog({
     if (cost === null || price === null) return setError(t('inv.errPrice'));
     if (reorder === null || opening === null)
       return setError(t(scale === 1 ? 'inv.errQty' : 'inv.errQtyUnit'));
-    setBusy(true);
     setError(null);
     try {
       if (item) {
@@ -230,10 +227,8 @@ function AccessoryDialog({
       onClose();
     } catch (e) {
       setError(errorMessage(e, t));
-    } finally {
-      setBusy(false);
     }
-  };
+  });
 
   return (
     <Dialog
@@ -254,86 +249,92 @@ function AccessoryDialog({
       }
     >
       <form
-        className="grid gap-3 sm:grid-cols-3"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <Field label={t('inv.brand')}>
-          <Input value={f.brand} onChange={set('brand')} disabled={item !== null} />
-        </Field>
-        <Field label={t('inv.productName')} className="sm:col-span-2">
-          <Input
-            value={f.name}
-            onChange={set('name')}
-            disabled={item !== null}
-            data-autofocus={item === null ? true : undefined}
-          />
-        </Field>
-        <Field label="SKU">
-          <Input value={f.sku} onChange={set('sku')} className="ltr" disabled={item !== null} />
-        </Field>
-        <Field label={t('inv.barcode')}>
-          <Input value={f.barcode} onChange={set('barcode')} className="ltr" inputMode="numeric" />
-        </Field>
-        {item === null && has('weight_units') ? (
-          <Field label={t('inv.soldBy')}>
-            <Select
-              value={f.unit}
-              onChange={(e) => setF((s) => ({ ...s, unit: e.target.value as UnitLabel }))}
-            >
-              <option value="pcs">{t('inv.unitPcs')}</option>
-              <option value="kg">{t('inv.unitKg')}</option>
-              <option value="L">{t('inv.unitL')}</option>
-            </Select>
+        <fieldset disabled={busy} className="grid min-w-0 gap-3 sm:grid-cols-3">
+          <Field label={t('inv.brand')}>
+            <Input value={f.brand} onChange={set('brand')} disabled={item !== null} />
           </Field>
-        ) : null}
-        <Field label={scale === 1 ? t('inv.reorder') : `${t('inv.reorder')} (${unit})`}>
-          <Input
-            value={f.reorder}
-            onChange={set('reorder')}
-            className="ltr"
-            inputMode={scale === 1 ? 'numeric' : 'decimal'}
-          />
-        </Field>
-        {fitsModels ? (
-          <>
-            <Field label={t('inv.forModel')}>
-              <Input value={f.model} onChange={set('model')} />
-            </Field>
-            <Field label={t('inv.colour')}>
-              <Input value={f.colour} onChange={set('colour')} />
-            </Field>
-          </>
-        ) : null}
-        {item === null ? (
-          <Field label={scale === 1 ? t('inv.openingQty') : `${t('inv.openingQty')} (${unit})`}>
+          <Field label={t('inv.productName')} className="sm:col-span-2">
             <Input
-              value={f.opening}
-              onChange={set('opening')}
+              value={f.name}
+              onChange={set('name')}
+              disabled={item !== null}
+              data-autofocus={item === null ? true : undefined}
+            />
+          </Field>
+          <Field label="SKU">
+            <Input value={f.sku} onChange={set('sku')} className="ltr" disabled={item !== null} />
+          </Field>
+          <Field label={t('inv.barcode')}>
+            <Input
+              value={f.barcode}
+              onChange={set('barcode')}
+              className="ltr"
+              inputMode="numeric"
+            />
+          </Field>
+          {item === null && has('weight_units') ? (
+            <Field label={t('inv.soldBy')}>
+              <Select
+                value={f.unit}
+                onChange={(e) => setF((s) => ({ ...s, unit: e.target.value as UnitLabel }))}
+              >
+                <option value="pcs">{t('inv.unitPcs')}</option>
+                <option value="kg">{t('inv.unitKg')}</option>
+                <option value="L">{t('inv.unitL')}</option>
+              </Select>
+            </Field>
+          ) : null}
+          <Field label={scale === 1 ? t('inv.reorder') : `${t('inv.reorder')} (${unit})`}>
+            <Input
+              value={f.reorder}
+              onChange={set('reorder')}
               className="ltr"
               inputMode={scale === 1 ? 'numeric' : 'decimal'}
             />
           </Field>
-        ) : (
-          <span />
-        )}
-        <Field
-          label={t('inv.cost')}
-          hint={scale === 1 ? undefined : t('inv.perUnitHint', { unit })}
-        >
-          <Input value={f.cost} onChange={set('cost')} className="ltr" inputMode="decimal" />
-        </Field>
-        <Field
-          label={t('inv.price')}
-          hint={scale === 1 ? undefined : t('inv.perUnitHint', { unit })}
-        >
-          <Input value={f.price} onChange={set('price')} className="ltr" inputMode="decimal" />
-        </Field>
-        <button type="submit" className="sr-only" tabIndex={-1}>
-          {t('common.save')}
-        </button>
+          {fitsModels ? (
+            <>
+              <Field label={t('inv.forModel')}>
+                <Input value={f.model} onChange={set('model')} />
+              </Field>
+              <Field label={t('inv.colour')}>
+                <Input value={f.colour} onChange={set('colour')} />
+              </Field>
+            </>
+          ) : null}
+          {item === null ? (
+            <Field label={scale === 1 ? t('inv.openingQty') : `${t('inv.openingQty')} (${unit})`}>
+              <Input
+                value={f.opening}
+                onChange={set('opening')}
+                className="ltr"
+                inputMode={scale === 1 ? 'numeric' : 'decimal'}
+              />
+            </Field>
+          ) : (
+            <span />
+          )}
+          <Field
+            label={t('inv.cost')}
+            hint={scale === 1 ? undefined : t('inv.perUnitHint', { unit })}
+          >
+            <Input value={f.cost} onChange={set('cost')} className="ltr" inputMode="decimal" />
+          </Field>
+          <Field
+            label={t('inv.price')}
+            hint={scale === 1 ? undefined : t('inv.perUnitHint', { unit })}
+          >
+            <Input value={f.price} onChange={set('price')} className="ltr" inputMode="decimal" />
+          </Field>
+          <button type="submit" className="sr-only" tabIndex={-1}>
+            {t('common.save')}
+          </button>
+        </fieldset>
       </form>
       <div role="alert" className="mt-3 min-h-5 text-sm font-medium text-[var(--danger-ink)]">
         {error}
@@ -356,7 +357,6 @@ function AdjustDialog({
   const [mode, setMode] = useState<'add' | 'remove'>('add');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (item) {
@@ -373,9 +373,8 @@ function AdjustDialog({
   const after = item !== null && d !== null ? item.onHand + d : null;
   const valid = d !== null;
 
-  const save = async (): Promise<void> => {
+  const { busy, run: save } = useBusyAction(async (): Promise<void> => {
     if (!item || !valid || d === null) return;
-    setBusy(true);
     setError(null);
     try {
       await service.catalog.adjustStock({
@@ -389,20 +388,21 @@ function AdjustDialog({
       onClose();
     } catch (e) {
       setError(errorMessage(e, t));
-    } finally {
-      setBusy(false);
     }
-  };
+  });
 
   return (
     <Dialog
       open={item !== null}
       onClose={onClose}
       width={440}
+      dismissable={!busy}
       title={t('inv.adjustStock')}
       footer={
         <>
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </Button>
           <Button variant="primary" disabled={!valid} loading={busy} onClick={() => void save()}>
             {t('common.save')}
           </Button>
@@ -410,72 +410,73 @@ function AdjustDialog({
       }
     >
       <form
-        className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <p className="text-sm">
-          <span className="font-semibold">{item?.label}</span>
-          <br />
-          {t('inv.adjustNow', {
-            n: item ? qtyWithUnit(item.onHand, scale, unit, piece) : 0,
-          })}
-        </p>
-        <Tabs<'add' | 'remove'>
-          label={t('inv.adjustStock')}
-          value={mode}
-          onChange={setMode}
-          items={[
-            { value: 'add', label: t('inv.adjustAdd') },
-            { value: 'remove', label: t('inv.adjustRemove') },
-          ]}
-        />
-        <Field
-          label={t('inv.adjustAmount')}
-          hint={t(scale === 1 ? 'inv.adjustHintPcs' : 'inv.adjustHintDecimal')}
-        >
-          <div className="relative">
-            <Input
-              value={amount}
-              onChange={(e) =>
-                setAmount(e.target.value.replace(scale === 1 ? /\D/g : /[^\d.]/g, ''))
-              }
-              inputMode={scale === 1 ? 'numeric' : 'decimal'}
-              placeholder="1"
-              className="ltr pe-20 text-lg"
-              data-autofocus
-            />
-            <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">
-              {unitWord(unit, piece)}
-            </span>
-          </div>
-        </Field>
-        {after !== null ? (
-          after < 0 ? (
-            <p className="text-sm font-semibold text-[var(--danger-ink)]">
-              {t('inv.adjustTooMuch')}
-            </p>
-          ) : (
-            <p className="text-sm font-semibold">
-              {t('inv.adjustNew', { n: qtyWithUnit(after, scale, unit, piece) })}
-            </p>
-          )
-        ) : null}
-        <Field label={t('inv.adjustReasonOptional')}>
-          <Input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={t('inv.adjustReasonPlaceholder')}
+        <fieldset disabled={busy} className="flex min-w-0 flex-col gap-3">
+          <p className="text-sm">
+            <span className="font-semibold">{item?.label}</span>
+            <br />
+            {t('inv.adjustNow', {
+              n: item ? qtyWithUnit(item.onHand, scale, unit, piece) : 0,
+            })}
+          </p>
+          <Tabs<'add' | 'remove'>
+            label={t('inv.adjustStock')}
+            value={mode}
+            onChange={setMode}
+            items={[
+              { value: 'add', label: t('inv.adjustAdd') },
+              { value: 'remove', label: t('inv.adjustRemove') },
+            ]}
           />
-        </Field>
-        <div role="alert" className="min-h-5 text-sm font-medium text-[var(--danger-ink)]">
-          {error}
-        </div>
-        <button type="submit" className="sr-only" tabIndex={-1}>
-          {t('common.save')}
-        </button>
+          <Field
+            label={t('inv.adjustAmount')}
+            hint={t(scale === 1 ? 'inv.adjustHintPcs' : 'inv.adjustHintDecimal')}
+          >
+            <div className="relative">
+              <Input
+                value={amount}
+                onChange={(e) =>
+                  setAmount(e.target.value.replace(scale === 1 ? /\D/g : /[^\d.]/g, ''))
+                }
+                inputMode={scale === 1 ? 'numeric' : 'decimal'}
+                placeholder="1"
+                className="ltr pe-20 text-lg"
+                data-autofocus
+              />
+              <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">
+                {unitWord(unit, piece)}
+              </span>
+            </div>
+          </Field>
+          {after !== null ? (
+            after < 0 ? (
+              <p className="text-sm font-semibold text-[var(--danger-ink)]">
+                {t('inv.adjustTooMuch')}
+              </p>
+            ) : (
+              <p className="text-sm font-semibold">
+                {t('inv.adjustNew', { n: qtyWithUnit(after, scale, unit, piece) })}
+              </p>
+            )
+          ) : null}
+          <Field label={t('inv.adjustReasonOptional')}>
+            <Input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={t('inv.adjustReasonPlaceholder')}
+            />
+          </Field>
+          <div role="alert" className="min-h-5 text-sm font-medium text-[var(--danger-ink)]">
+            {error}
+          </div>
+          <button type="submit" className="sr-only" tabIndex={-1}>
+            {t('common.save')}
+          </button>
+        </fieldset>
       </form>
     </Dialog>
   );
@@ -746,7 +747,9 @@ export function Inventory(): ReactNode {
               <tbody>
                 {(accessories.data ?? []).map((v) => (
                   <tr key={v.variant.id}>
-                    <td className="font-semibold">{v.product.name}</td>
+                    <td className="font-semibold">
+                      {v.product.brand} {v.product.name}
+                    </td>
                     {showModelColour ? <td>{v.variant.model ?? '—'}</td> : null}
                     {showModelColour ? <td>{v.variant.colour ?? '—'}</td> : null}
                     <td className="ltr font-mono text-xs">{v.variant.sku}</td>

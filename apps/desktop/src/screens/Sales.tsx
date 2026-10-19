@@ -17,8 +17,17 @@ import { Field, Input } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
+import { useBusyAction } from '../lib/busy-action';
 import { formatDateTime, localDayRange } from '../lib/dates';
 import { paisaToInput, parseRupees } from '../lib/money';
+import { labelFor, perUnit, qtyText } from '../lib/qty';
+import {
+  hasBadPick,
+  remainingText,
+  returnPick,
+  returnPickList,
+  type ReturnPick,
+} from '../lib/return-qty';
 import { useService } from '../service/context';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
@@ -36,12 +45,12 @@ function ReturnDialog({
   const t = useT();
   const service = useService();
   const bump = useDataVersion((s) => s.bump);
-  const [picks, setPicks] = useState<Record<string, number>>({});
+  // one box per line: the text as typed and what it means (base units, or why it cannot be returned)
+  const [picks, setPicks] = useState<Record<string, ReturnPick>>({});
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [refund, setRefund] = useState<{ method: PaymentMethod; amount: string }[]>([]);
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [approvalFor, setApprovalFor] = useState<ApprovalReason | null>(null);
 
@@ -56,13 +65,8 @@ function ReturnDialog({
     }
   }, [invoice]);
 
-  const pickList = useMemo(
-    () =>
-      Object.entries(picks)
-        .filter(([, q]) => q > 0)
-        .map(([lineId, quantity]) => ({ lineId, quantity })),
-    [picks],
-  );
+  const pickList = useMemo(() => returnPickList(picks), [picks]);
+  const badPick = hasBadPick(picks);
 
   useEffect(() => {
     if (!invoice) return;
@@ -90,13 +94,13 @@ function ReturnDialog({
   const target = Math.abs(preview?.total ?? 0);
   const ok =
     pickList.length > 0 &&
+    !badPick &&
     refund.every((r) => parseRupees(r.amount) !== null) &&
     refundTotal === target &&
     reason.trim() !== '';
 
-  const submit = async (token?: string): Promise<void> => {
+  const { busy, run: submit } = useBusyAction(async (token?: string): Promise<void> => {
     if (!invoice || !ok) return;
-    setBusy(true);
     setSubmitError(null);
     try {
       const refunds: PaymentInput[] = refund
@@ -115,10 +119,8 @@ function ReturnDialog({
     } catch (e) {
       if (isServiceError(e) && e.code === 'APPROVAL_REQUIRED') setApprovalFor('return');
       else setSubmitError(errorMessage(e, t));
-    } finally {
-      setBusy(false);
     }
-  };
+  });
 
   return (
     <>
@@ -157,33 +159,48 @@ function ReturnDialog({
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.lines.map((l) => (
-                    <tr key={l.lineId}>
-                      <td className="font-semibold">{l.description}</td>
-                      <td className="num">{l.soldQty}</td>
-                      <td className="num">{l.returnedQty}</td>
-                      <td className="num">
-                        <Money value={l.unitPrice} symbol={null} />
-                      </td>
-                      <td>
-                        <Input
-                          className="input-sm ltr w-24 text-end"
-                          inputMode="numeric"
-                          aria-label={`${t('sales.returnQty')} ${l.description}`}
-                          disabled={l.remainingQty <= 0}
-                          value={picks[l.lineId] ? String(picks[l.lineId]) : ''}
-                          placeholder={`0 / ${l.remainingQty}`}
-                          onChange={(e) => {
-                            const n = Math.min(
-                              l.remainingQty,
-                              Number(e.target.value.replace(/\D/g, '') || '0'),
-                            );
-                            setPicks((p) => ({ ...p, [l.lineId]: n }));
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {preview.lines.map((l) => {
+                    // an invoice line knows only its scale: weighed goods read in kg, like the receipt
+                    const unit = labelFor(l.unitScale);
+                    const pick = picks[l.lineId];
+                    const bad = pick?.status === 'invalid' || pick?.status === 'tooMuch';
+                    return (
+                      <tr key={l.lineId}>
+                        <td className="font-semibold">{l.description}</td>
+                        <td className="num">{qtyText(l.soldQty, l.unitScale, unit)}</td>
+                        <td className="num">{qtyText(l.returnedQty, l.unitScale, unit)}</td>
+                        <td className="num">
+                          <Money value={l.unitPrice} symbol={null} />
+                          {perUnit(l.unitScale, unit)}
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              className="input-sm ltr w-24 text-end"
+                              inputMode={l.unitScale === 1 ? 'numeric' : 'decimal'}
+                              aria-label={`${t('sales.returnQty')} ${l.description}`}
+                              title={
+                                pick?.status === 'invalid' ? t('billing.weightInvalid') : undefined
+                              }
+                              invalid={bad}
+                              disabled={l.remainingQty <= 0}
+                              value={pick?.text ?? ''}
+                              placeholder={`0 / ${remainingText(l)}`}
+                              onChange={(e) =>
+                                setPicks((p) => ({
+                                  ...p,
+                                  [l.lineId]: returnPick(e.target.value, l),
+                                }))
+                              }
+                            />
+                            {l.unitScale === 1 ? null : (
+                              <span className="ltr text-xs font-semibold text-muted">{unit}</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -259,7 +276,6 @@ function VoidDialog({
   const service = useService();
   const bump = useDataVersion((s) => s.bump);
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needApproval, setNeedApproval] = useState(false);
   useEffect(() => {
@@ -269,9 +285,8 @@ function VoidDialog({
     }
   }, [invoice]);
 
-  const submit = async (token?: string): Promise<void> => {
+  const { busy, run: submit } = useBusyAction(async (token?: string): Promise<void> => {
     if (!invoice || !reason.trim()) return;
-    setBusy(true);
     setError(null);
     try {
       const inv = await service.checkout.voidSale({
@@ -285,10 +300,8 @@ function VoidDialog({
     } catch (e) {
       if (isServiceError(e) && e.code === 'APPROVAL_REQUIRED') setNeedApproval(true);
       else setError(errorMessage(e, t));
-    } finally {
-      setBusy(false);
     }
-  };
+  });
 
   return (
     <>

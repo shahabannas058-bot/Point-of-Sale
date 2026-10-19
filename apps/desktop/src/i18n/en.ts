@@ -603,6 +603,8 @@ export const en = {
   'err.NOT_FOUND': 'That record was not found.',
   'err.DUPLICATE': 'This already exists ({field}).',
   'err.EMPTY_CART': 'The bill has no items.',
+  'err.SALE_ID_REUSED':
+    'This bill was already saved as invoice {invoiceNo} with different items. Check it under Sales, then press Clear bill and ring up only what is still unpaid.',
   'err.STOCK_INSUFFICIENT':
     'Not enough stock: {onHand} available, {requested} requested (item {lineNo}).',
   'err.STOCK_EXPIRED':

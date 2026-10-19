@@ -10,6 +10,7 @@ import { Field, Input, Select } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
+import { useBusyAction } from '../lib/busy-action';
 import { formatDateTime } from '../lib/dates';
 import { paisaToInput, parseRupees } from '../lib/money';
 import { printPage } from '../lib/print';
@@ -38,7 +39,6 @@ function ReceivePaymentDialog({
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<Exclude<PaymentMethod, 'khata'>>('cash');
   const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (open) {
@@ -51,9 +51,8 @@ function ReceivePaymentDialog({
   const value = parseRupees(amount);
   const invalid = value === null || value <= 0 || value > balance;
 
-  const save = async (): Promise<void> => {
+  const { busy, run: save } = useBusyAction(async (): Promise<void> => {
     if (invalid || value === null) return;
-    setBusy(true);
     setError(null);
     try {
       await service.khata.receivePayment({
@@ -67,10 +66,8 @@ function ReceivePaymentDialog({
       onClose();
     } catch (e) {
       setError(errorMessage(e, t));
-    } finally {
-      setBusy(false);
     }
-  };
+  });
 
   return (
     <Dialog
@@ -91,47 +88,51 @@ function ReceivePaymentDialog({
       }
     >
       <form
-        className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <p className="text-sm text-muted">
-          {t('customers.balance')}:{' '}
-          <Money value={balance} className="font-semibold text-[var(--danger-ink)]" />
-        </p>
-        <Field label={t('pay.amount')} error={amount && invalid ? t('khata.amountInvalid') : null}>
-          <Input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            inputMode="decimal"
-            className="ltr text-lg font-semibold"
-            data-autofocus
-            invalid={!!amount && invalid}
-          />
-        </Field>
-        <Field label={t('pay.method')}>
-          <Select
-            value={method}
-            onChange={(e) => setMethod(e.target.value as Exclude<PaymentMethod, 'khata'>)}
+        <fieldset disabled={busy} className="flex min-w-0 flex-col gap-3">
+          <p className="text-sm text-muted">
+            {t('customers.balance')}:{' '}
+            <Money value={balance} className="font-semibold text-[var(--danger-ink)]" />
+          </p>
+          <Field
+            label={t('pay.amount')}
+            error={amount && invalid ? t('khata.amountInvalid') : null}
           >
-            {PAYMENT_METHODS.filter((m) => m !== 'khata').map((m) => (
-              <option key={m} value={m}>
-                {t(dynKey('method', m))}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={t('inv.note')}>
-          <Input value={note} onChange={(e) => setNote(e.target.value)} />
-        </Field>
-        <div role="alert" className="min-h-5 text-sm font-medium text-[var(--danger-ink)]">
-          {error}
-        </div>
-        <button type="submit" className="sr-only" tabIndex={-1}>
-          {t('khata.receive')}
-        </button>
+            <Input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              inputMode="decimal"
+              className="ltr text-lg font-semibold"
+              data-autofocus
+              invalid={!!amount && invalid}
+            />
+          </Field>
+          <Field label={t('pay.method')}>
+            <Select
+              value={method}
+              onChange={(e) => setMethod(e.target.value as Exclude<PaymentMethod, 'khata'>)}
+            >
+              {PAYMENT_METHODS.filter((m) => m !== 'khata').map((m) => (
+                <option key={m} value={m}>
+                  {t(dynKey('method', m))}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t('inv.note')}>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+          <div role="alert" className="min-h-5 text-sm font-medium text-[var(--danger-ink)]">
+            {error}
+          </div>
+          <button type="submit" className="sr-only" tabIndex={-1}>
+            {t('khata.receive')}
+          </button>
+        </fieldset>
       </form>
     </Dialog>
   );

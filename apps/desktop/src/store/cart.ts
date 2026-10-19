@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { uuidv7 } from '@pos/core';
 import {
   lineGross,
   type CheckoutDraft,
@@ -49,6 +50,8 @@ export interface HeldBill {
   customer: CartCustomer | null;
   lines: CartLine[];
   invoiceDiscount: number;
+  /** the attempt id the bill had when it was held; bills saved by an older version lack it */
+  saleId?: string;
 }
 
 /** 'weighed' = a loose item that is already on the bill: its weight is edited, not added to. */
@@ -56,6 +59,12 @@ export type AddResult = 'added' | 'capped' | 'duplicate' | 'out' | 'weighed';
 
 interface CartState {
   lines: CartLine[];
+  /**
+   * Idempotency key for checkout.commit. One id per cart attempt: it stays while lines are edited,
+   * while the pay dialog opens and closes and across failed or timed-out commits (the service
+   * replays the same invoice). It rotates when the cart is cleared, held, resumed or emptied.
+   */
+  saleId: string;
   customer: CartCustomer | null;
   invoiceDiscount: number;
   approvalToken: string | null;
@@ -93,10 +102,13 @@ const empty = {
   selected: -1,
 };
 
+/** An empty cart with a fresh attempt id. */
+const fresh = (): typeof empty & { saleId: string } => ({ ...empty, saleId: uuidv7() });
+
 export const useCart = create<CartState>()(
   persist(
     (set, get) => ({
-      ...empty,
+      ...fresh(),
       held: [],
       addPhone: (v) => {
         if (!v.inStock) return 'out';
@@ -175,7 +187,13 @@ export const useCart = create<CartState>()(
       },
       remove: (key) => {
         const lines = get().lines.filter((l) => l.key !== key);
-        set({ lines, selected: Math.min(get().selected, lines.length - 1), approvalToken: null });
+        set({
+          lines,
+          selected: Math.min(get().selected, lines.length - 1),
+          approvalToken: null,
+          // an emptied cart ends the attempt: whatever is rung up next is a new sale
+          ...(lines.length === 0 ? { saleId: uuidv7() } : {}),
+        });
       },
       setLineDiscount: (key, paisa) =>
         set({
@@ -190,7 +208,7 @@ export const useCart = create<CartState>()(
       setApproval: (approvalToken) => set({ approvalToken }),
       setNote: (note) => set({ note }),
       select: (selected) => set({ selected }),
-      clear: () => set({ ...empty }),
+      clear: () => set(fresh()),
       hold: (total) => {
         const s = get();
         if (s.lines.length === 0) return;
@@ -201,8 +219,9 @@ export const useCart = create<CartState>()(
           customer: s.customer,
           lines: s.lines,
           invoiceDiscount: s.invoiceDiscount,
+          saleId: s.saleId,
         };
-        set({ ...empty, held: [bill, ...s.held].slice(0, 20) });
+        set({ ...fresh(), held: [bill, ...s.held].slice(0, 20) });
       },
       resume: (id) => {
         const s = get();
@@ -219,11 +238,14 @@ export const useCart = create<CartState>()(
                   customer: s.customer,
                   lines: s.lines,
                   invoiceDiscount: s.invoiceDiscount,
+                  saleId: s.saleId,
                 },
               ]
             : [];
         set({
           lines: bill.lines,
+          // the bill keeps the id it was held under, so a commit that timed out before the hold replays
+          saleId: bill.saleId ?? uuidv7(),
           customer: bill.customer,
           invoiceDiscount: bill.invoiceDiscount,
           approvalToken: null,

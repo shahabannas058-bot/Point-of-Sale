@@ -11,7 +11,6 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { uuidv7 } from '@pos/core';
 import {
   formatQuantity,
   isServiceError,
@@ -380,7 +379,6 @@ export function Billing(): ReactNode {
   } | null>(null);
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null);
-  const saleIdRef = useRef(uuidv7());
   const pendingPayments = useRef<PaymentInput[] | null>(null);
 
   const focusSearch = useCallback(() => searchRef.current?.focus(), []);
@@ -516,7 +514,6 @@ export function Billing(): ReactNode {
       setApproval({ reason, then: 'pay' });
       return;
     }
-    saleIdRef.current = uuidv7();
     setPayError(null);
     setPayOpen(true);
   };
@@ -528,12 +525,12 @@ export function Billing(): ReactNode {
       const inv = await service.checkout.commit({
         ...draft,
         payments,
-        saleId: saleIdRef.current,
+        // one id per cart attempt (store): a retry after a timeout replays the same invoice
+        saleId: useCart.getState().saleId,
         ...(token ? { approvalToken: token } : {}),
       });
       toast.success(t('billing.saleDone', { no: inv.invoiceNo }));
-      useCart.getState().clear();
-      saleIdRef.current = uuidv7();
+      useCart.getState().clear(); // also rotates saleId for the next sale
       setPayOpen(false);
       setLastInvoiceId(inv.id);
       setReceiptId(inv.id);
@@ -546,6 +543,7 @@ export function Billing(): ReactNode {
       } else {
         if (isServiceError(e) && e.code === 'APPROVAL_INVALID')
           useCart.getState().setApproval(null);
+        // SALE_ID_REUSED keeps the id on purpose: Pay stays refused until the cashier clears the bill
         setPayError(errorMessage(e, t));
       }
     } finally {
@@ -558,7 +556,6 @@ export function Billing(): ReactNode {
     setApproval(null);
     cart.setApproval(token);
     if (ctx?.then === 'pay') {
-      saleIdRef.current = uuidv7();
       setPayError(null);
       setPayOpen(true);
     } else if (ctx?.then === 'retry' && pendingPayments.current) {
@@ -567,64 +564,67 @@ export function Billing(): ReactNode {
   };
 
   // ---- hotkeys ----
-  const anyDialogOpen = (): boolean => document.querySelector('dialog[open]') !== null;
+  // every screen shortcut is blocked while a dialog is open (useHotkeys option below)
   const lines = cart.lines;
   const selectedLine = lines[cart.selected];
-  useHotkeys({
-    F1: () => setHelpOpen(true),
-    F2: () => focusSearch(),
-    F4: () => setCustomerOpen(true),
-    F7: () => {
-      if (lines.length > 0) {
-        cart.hold(total);
-        toast.info(t('billing.held'));
-        focusSearch();
-      }
+  useHotkeys(
+    {
+      F1: () => setHelpOpen(true),
+      F2: () => focusSearch(),
+      F4: () => setCustomerOpen(true),
+      F7: () => {
+        if (lines.length > 0) {
+          cart.hold(total);
+          toast.info(t('billing.held'));
+          focusSearch();
+        }
+      },
+      F8: () => setHeldOpen(true),
+      F9: () => startPay(),
+      'Ctrl+D': () => {
+        if (lines.length > 0) setDiscountOpen(true);
+      },
+      'Ctrl+P': () => {
+        if (lastInvoiceId)
+          void loadReceiptModel(service, lastInvoiceId)
+            .then(printReceipt)
+            .catch((e: unknown) => toast.error(errorMessage(e, t)));
+      },
+      Escape: () => {
+        if (dropOpen) setDropOpen(false);
+        else if (q) setQ('');
+        else if (lines.length > 0) setClearOpen(true);
+      },
+      Delete: () => {
+        if (selectedLine) cart.remove(selectedLine.key);
+      },
+      ArrowUp: (e) => {
+        if (dropOpen) return;
+        e.preventDefault();
+        cart.select(Math.max(0, cart.selected - 1));
+      },
+      ArrowDown: (e) => {
+        if (dropOpen) return;
+        e.preventDefault();
+        cart.select(Math.min(lines.length - 1, cart.selected + 1));
+      },
+      '+': () => {
+        if (selectedLine)
+          report(
+            cart.setQty(selectedLine.key, selectedLine.qty + qtyStep(lineScale(selectedLine))),
+            maxTextOf(selectedLine),
+          );
+      },
+      '-': () => {
+        if (selectedLine) {
+          const step = qtyStep(lineScale(selectedLine));
+          cart.setQty(selectedLine.key, Math.max(step, selectedLine.qty - step));
+        }
+      },
     },
-    F8: () => setHeldOpen(true),
-    F9: () => startPay(),
-    'Ctrl+D': () => {
-      if (lines.length > 0) setDiscountOpen(true);
-    },
-    'Ctrl+P': () => {
-      if (lastInvoiceId && !anyDialogOpen())
-        void loadReceiptModel(service, lastInvoiceId)
-          .then(printReceipt)
-          .catch((e: unknown) => toast.error(errorMessage(e, t)));
-    },
-    Escape: () => {
-      if (anyDialogOpen()) return;
-      if (dropOpen) setDropOpen(false);
-      else if (q) setQ('');
-      else if (lines.length > 0) setClearOpen(true);
-    },
-    Delete: () => {
-      if (selectedLine && !anyDialogOpen()) cart.remove(selectedLine.key);
-    },
-    ArrowUp: (e) => {
-      if (anyDialogOpen() || dropOpen) return;
-      e.preventDefault();
-      cart.select(Math.max(0, cart.selected - 1));
-    },
-    ArrowDown: (e) => {
-      if (anyDialogOpen() || dropOpen) return;
-      e.preventDefault();
-      cart.select(Math.min(lines.length - 1, cart.selected + 1));
-    },
-    '+': () => {
-      if (selectedLine && !anyDialogOpen())
-        report(
-          cart.setQty(selectedLine.key, selectedLine.qty + qtyStep(lineScale(selectedLine))),
-          maxTextOf(selectedLine),
-        );
-    },
-    '-': () => {
-      if (selectedLine && !anyDialogOpen()) {
-        const step = qtyStep(lineScale(selectedLine));
-        cart.setQty(selectedLine.key, Math.max(step, selectedLine.qty - step));
-      }
-    },
-  });
+    true,
+    { blockWhileDialogOpen: true },
+  );
 
   const shortcutRows: [string, TKey][] = [
     ['F1', 'sc.help'],

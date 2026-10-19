@@ -609,6 +609,8 @@ export const ur: Dict = {
   'err.NOT_FOUND': 'Yeh record nahi mila.',
   'err.DUPLICATE': 'Yeh pehle se maujood hai ({field}).',
   'err.EMPTY_CART': 'Bill mein koi item nahi.',
+  'err.SALE_ID_REUSED':
+    'Yeh bill pehle hi invoice {invoiceNo} ke taur par save ho chuka hai, lekin items alag thay. Sales mein check karein, phir Clear bill dabayein aur sirf baqi items ka naya bill banayein.',
   'err.STOCK_INSUFFICIENT': 'Stock kam hai: {onHand} maujood, {requested} chahiye (item {lineNo}).',
   'err.STOCK_EXPIRED':
     'Taaza stock kam hai: {onHand} bik sakte hain, {requested} chahiye (item {lineNo}). {expiredOnHand} ki expiry guzar chuki hai.',

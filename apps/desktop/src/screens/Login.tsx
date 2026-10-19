@@ -388,10 +388,11 @@ export function Login(): ReactNode {
   const t = useT();
   const session = useSession((s) => s.session);
   const setupQ = useServiceQuery((s) => s.setup.isSetUp(), []);
-  const settingsQ = useServiceQuery((s) => s.settings.get(), [], setupQ.data === true);
+  // getShop needs no session (settings.get does), so the brand panel can show the shop's name before login
+  const shopQ = useServiceQuery((s) => s.setup.getShop(), [], setupQ.data === true);
 
   if (session) return <Navigate to="/" replace />;
-  const shopName = settingsQ.data?.shopName ?? t('app.name');
+  const shopName = shopQ.data?.shopName ?? t('app.name');
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
