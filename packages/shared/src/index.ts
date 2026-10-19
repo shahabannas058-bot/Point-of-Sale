@@ -11,3 +11,4 @@ export * from './ledger';
 export * from './outbox';
 export * from './repairs';
 export * from './service';
+export * from './log';

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type DependencyList } from 'react';
-import type { PosService } from '@pos/shared';
+import { describeError, log, type PosService } from '@pos/shared';
 import { useDataVersion } from '../store/data-version';
 import { useService } from './context';
 
@@ -42,6 +42,7 @@ export function useServiceQuery<T>(
         if (id === run.current) setState({ data, error: undefined, loading: false });
       })
       .catch((error: unknown) => {
+        log.warn('query.failed', { stale: id !== run.current, error: describeError(error) });
         if (id === run.current) setState((s) => ({ data: s.data, error, loading: false }));
       });
   }, [service, version, tick, enabled, ...deps]);

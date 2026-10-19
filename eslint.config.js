@@ -30,5 +30,7 @@ export default tseslint.config(
     },
   },
   { files: ['**/test/**/*.ts'], rules: { '@typescript-eslint/no-non-null-assertion': 'off' } },
+  // The logger's console sink is the single place console may be used; everything else goes through `log`.
+  { files: ['packages/shared/src/log.ts'], rules: { 'no-console': 'off' } },
   prettier,
 );

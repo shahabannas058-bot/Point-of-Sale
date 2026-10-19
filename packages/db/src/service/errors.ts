@@ -3,11 +3,23 @@ import {
   CnicSchema,
   PhoneNumberSchema,
   ServiceError,
+  describeError,
+  log,
   type Paisa,
   type ServiceErrorCode,
 } from '@pos/shared';
 
 const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** Codes whose user-facing text hides what really happened; the original error goes to the log instead. */
+const LOGGED_CODES: ReadonlySet<ServiceErrorCode> = new Set(['INTERNAL', 'DB_CONSTRAINT']);
+
+/** Records the thrown value (message, stack, cause chain; details redacted) behind an opaque mapping. */
+function logMapped(code: ServiceErrorCode, mapped: ServiceError, e: unknown): ServiceError {
+  if (LOGGED_CODES.has(code))
+    log.error('service.mapError', { code, message: mapped.message, error: describeError(e) });
+  return mapped;
+}
 
 interface ZodIssueLike {
   path: readonly PropertyKey[]; // Zod 4 widened path to PropertyKey[]
@@ -42,7 +54,7 @@ export function mapError(e: unknown): ServiceError {
         return new ServiceError('VALIDATION', e.message);
       case 'CANONICAL_INVALID':
       case 'INVOICE_NO_INVALID':
-        return new ServiceError('INTERNAL', 'Unexpected internal error');
+        return logMapped('INTERNAL', new ServiceError('INTERNAL', 'Unexpected internal error'), e);
     }
   }
 
@@ -55,7 +67,7 @@ export function mapError(e: unknown): ServiceError {
   }
 
   // Everything below comes from the database driver. The raw text is kept ONLY in a non-enumerable
-  //  (for logging); callers get a generic message and minimal details.
+  // `cause` and, for the opaque codes, in the log; callers get a generic message and minimal details.
   const msg = errorMessage(e);
   const make = (
     c: ServiceErrorCode,
@@ -64,7 +76,7 @@ export function mapError(e: unknown): ServiceError {
   ): ServiceError => {
     const err = new ServiceError(c, message, details);
     Object.defineProperty(err, 'cause', { value: e, enumerable: false, configurable: true });
-    return err;
+    return logMapped(c, err, e);
   };
 
   if (msg.includes('phone unit on-hand must stay within 0..1'))

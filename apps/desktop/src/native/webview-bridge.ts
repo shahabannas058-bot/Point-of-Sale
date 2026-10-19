@@ -1,5 +1,6 @@
 import {
   ServiceError,
+  log,
   type CommitSaleInput,
   type Invoice,
   type ServiceErrorCode,
@@ -35,10 +36,14 @@ interface Reply {
 }
 
 interface Pending {
+  method: string;
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
 }
+
+/** How many timed-out request ids we remember, so a late reply can still be attributed to its method. */
+const TIMED_OUT_MEMORY = 100;
 
 const host = (): WebView2Host | undefined =>
   (window as unknown as { chrome?: { webview?: WebView2Host } }).chrome?.webview;
@@ -47,7 +52,17 @@ const host = (): WebView2Host | undefined =>
 export const isWebView2 = (): boolean => host() !== undefined;
 
 const pending = new Map<string, Pending>();
+/** id -> method of calls that already timed out; lets a late reply be logged instead of vanishing. */
+const timedOut = new Map<string, string>();
 let listening = false;
+
+function rememberTimedOut(id: string, method: string): void {
+  timedOut.set(id, method);
+  if (timedOut.size > TIMED_OUT_MEMORY) {
+    const oldest = timedOut.keys().next().value;
+    if (oldest !== undefined) timedOut.delete(oldest);
+  }
+}
 
 function listen(h: WebView2Host): void {
   if (listening) return;
@@ -56,12 +71,26 @@ function listen(h: WebView2Host): void {
     const reply = event.data as Reply | null;
     if (reply === null || typeof reply !== 'object' || typeof reply.id !== 'string') return;
     const entry = pending.get(reply.id);
-    if (!entry) return; // late reply after a timeout, or not ours
+    if (!entry) {
+      const method = timedOut.get(reply.id);
+      if (method === undefined) return; // not ours
+      timedOut.delete(reply.id);
+      log.warn('bridge.lateReply', { id: reply.id, method, ok: reply.ok, code: reply.error?.code });
+      return;
+    }
     pending.delete(reply.id);
     clearTimeout(entry.timer);
     if (reply.ok) entry.resolve(reply.data);
     else {
       const e = reply.error;
+      // expected business errors (stock, credentials...) are shown to the user; only host faults are logged
+      if (e === undefined || e === null || e.code === 'INTERNAL' || e.code === 'DB_CONSTRAINT')
+        log.warn('bridge.error', {
+          id: reply.id,
+          method: entry.method,
+          code: e?.code ?? 'INTERNAL',
+          message: e?.message ?? 'Unknown native error',
+        });
       entry.reject(
         new ServiceError(
           e?.code ?? 'INTERNAL',
@@ -82,9 +111,11 @@ export function call<T>(method: string, payload?: unknown, timeoutMs = 30_000): 
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
+      rememberTimedOut(id, method);
+      log.warn('bridge.timeout', { id, method, timeoutMs });
       reject(new ServiceError('INTERNAL', `Native call "${method}" timed out`, { method }));
     }, timeoutMs);
-    pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
+    pending.set(id, { method, resolve: resolve as (value: unknown) => void, reject, timer });
     h.postMessage({ id, method, payload });
   });
 }

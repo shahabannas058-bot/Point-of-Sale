@@ -5,11 +5,12 @@ import { StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Loader } from './components/Loader';
 import { App } from './App';
-import { bootstrap, type BootResult } from './bootstrap';
+import { bootstrap, installGlobalErrorLogging, type BootResult } from './bootstrap';
 import { translate } from './i18n';
 import { installGlassShine } from './lib/glass';
 import { applyPrefsToDocument, usePrefs } from './store/prefs';
 
+installGlobalErrorLogging(window);
 applyPrefsToDocument();
 installGlassShine();
 
