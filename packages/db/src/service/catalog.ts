@@ -19,6 +19,7 @@ import { WriteBatch } from './batch';
 import { takeOutParts } from './batches';
 import { requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optIntIn, optText, reqText } from './errors';
+import { queryItemHistory } from './item-history';
 import type { Raw } from './mappers';
 import { toPhoneView, toVariantView } from './mappers';
 import { loadShop } from './meta';
@@ -366,6 +367,12 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       }
       if (f.lowStockOnly === true) conds.push('on_hand <= av.reorder_level');
       return variants(await branch(), `WHERE ${conds.join(' AND ')}`, params);
+    },
+
+    async itemHistory(ref, q = {}) {
+      // Read-level, like the stock listings: every role has view_catalog; no module gate (core ledger).
+      requirePermission(ctx, 'view_catalog');
+      return queryItemHistory(ctx, ref, q);
     },
 
     async createPhoneUnit(i) {

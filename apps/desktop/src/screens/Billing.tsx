@@ -24,6 +24,7 @@ import {
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { CustomerPicker } from '../components/CustomerPicker';
 import { ImeiPicker } from '../components/ImeiPicker';
+import { ItemHistoryDialog } from '../components/ItemHistoryDialog';
 import { PaymentPanel } from '../components/PaymentPanel';
 import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
 import { ReceiptDialog } from '../components/ReceiptDialog';
@@ -34,6 +35,7 @@ import { Field, Input } from '../components/ui/Field';
 import { Empty, Kbd, Money } from '../components/ui/misc';
 import { useT, type TKey } from '../i18n';
 import { errorMessage } from '../i18n/errors';
+import { cartLineItemRef } from '../lib/item-history';
 import { formatRs, paisaToInput, parseRupees, percentDiscount } from '../lib/money';
 import { printReceipt } from '../lib/print';
 import { loadReceiptModel } from '../lib/receipt-model';
@@ -369,6 +371,7 @@ export function Billing(): ReactNode {
   const [discountOpen, setDiscountOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [historyLine, setHistoryLine] = useState<CartLine | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payBusy, setPayBusy] = useState(false);
@@ -590,6 +593,10 @@ export function Billing(): ReactNode {
             .then(printReceipt)
             .catch((e: unknown) => toast.error(errorMessage(e, t)));
       },
+      'Ctrl+H': () => {
+        if (selectedLine && cartLineItemRef(selectedLine)) setHistoryLine(selectedLine);
+        else toast.info(t('hist.noLineSelected'));
+      },
       Escape: () => {
         if (dropOpen) setDropOpen(false);
         else if (q) setQ('');
@@ -636,6 +643,7 @@ export function Billing(): ReactNode {
     ['Ctrl+Enter', 'sc.commit'],
     ['Ctrl+D', 'sc.discount'],
     ['Ctrl+P', 'sc.print'],
+    ['Ctrl+H', 'sc.history'],
     ['Esc', 'sc.escape'],
     ['Del', 'sc.remove'],
     ['↑ ↓', 'sc.select'],
@@ -1160,6 +1168,15 @@ export function Billing(): ReactNode {
       >
         <p>{t('billing.clearConfirm')}</p>
       </Dialog>
+
+      <ItemHistoryDialog
+        item={historyLine ? cartLineItemRef(historyLine) : null}
+        label={historyLine?.label ?? ''}
+        unitScale={historyLine ? lineScale(historyLine) : 1}
+        unitLabel={historyLine?.unitLabel ?? 'pcs'}
+        open={historyLine !== null}
+        onClose={() => setHistoryLine(null)}
+      />
     </div>
   );
 }

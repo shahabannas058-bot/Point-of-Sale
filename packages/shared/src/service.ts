@@ -247,6 +247,51 @@ export interface NewAccessoryInput {
   /** Default 'pcs'. 'kg' and 'L' need the `weight_units` module; they cannot be changed once stock exists. */
   unit?: UnitLabel;
 }
+
+/* ---------- item history (one item's full stock story, like Abuzar's Ctrl+H) ---------- */
+export type ItemRef = { variantId: string } | { phoneUnitId: string };
+export type ItemHistoryKind = 'sale' | 'return' | 'purchase' | 'adjustment' | 'repair' | 'transfer';
+/** What a stock movement belongs to, resolved for display. */
+export type ItemHistoryRef =
+  | { kind: 'sale'; saleId: string; invoiceNo: string; customerName: string | null }
+  | { kind: 'return'; saleId: string; invoiceNo: string; customerName: string | null }
+  | { kind: 'purchase'; purchaseId: string; supplierName: string; referenceNo: string | null }
+  | { kind: 'repair'; ticketId: string; ticketNo: string }
+  | { kind: 'adjustment' }
+  | { kind: 'transfer'; transferId: string };
+export interface ItemHistoryEntry {
+  id: string; // stock_movements.id
+  at: number; // created_at (epoch ms)
+  kind: ItemHistoryKind;
+  /** Signed, in base units (pieces, or grams / ml). */
+  quantity: number;
+  /** On-hand in base units right after this entry (oldest -> newest running sum). */
+  balanceAfter: number;
+  /** Per priced unit, when the movement recorded one (purchases, sales at cost). */
+  unitCost: Paisa | null;
+  ref: ItemHistoryRef;
+  reason: string | null;
+  batch: { id: string; batchNo: string | null; expiryDate: string } | null;
+  by: { id: string; displayName: string };
+}
+export interface ItemHistoryQuery {
+  /** Inclusive epoch-ms bounds; default = everything. */
+  from?: number;
+  to?: number;
+  /** Newest-first page size, default 200, max 1000. */
+  limit?: number;
+  /** Cursor from the previous page (`nextBefore`). */
+  before?: { at: number; id: string };
+}
+export interface ItemHistoryPage {
+  /** Newest first. */
+  entries: ItemHistoryEntry[];
+  /** Cursor for the next (older) page, null when done. */
+  nextBefore: { at: number; id: string } | null;
+  /** Totals over the whole query range (not just this page), base units. */
+  summary: { purchased: number; sold: number; returned: number; adjusted: number; onHand: number };
+}
+
 export interface CatalogApi {
   /** Exact barcode/sku/imei/serial first (scanner: UI auto-adds if exactly 1 exact hit), then LIKE on brand/name/model/colour. */
   search(query: string, opts?: { limit?: number; inStockOnly?: boolean }): Promise<CatalogHit[]>;
@@ -257,6 +302,8 @@ export interface CatalogApi {
     condition?: PhoneCondition;
   }): Promise<PhoneUnitView[]>;
   listAccessories(f?: { q?: string; lowStockOnly?: boolean }): Promise<VariantView[]>;
+  /** Every stock movement of one item with running balance, newest first; needs `view_catalog` (unitCost is null without `view_cost`). */
+  itemHistory(ref: ItemRef, q?: ItemHistoryQuery): Promise<ItemHistoryPage>;
   createPhoneUnit(
     i: NewPhoneUnitInput & { openingStock?: boolean /* default true: +1 adjustment */ },
   ): Promise<PhoneUnitView>; // DUPLICATE {field}

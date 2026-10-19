@@ -1,5 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { PackagePlus, Pencil, Plus, Search, SlidersHorizontal, Upload } from 'lucide-react';
+import {
+  History,
+  PackagePlus,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Upload,
+} from 'lucide-react';
 import {
   PHONE_CONDITIONS,
   PTA_STATUSES,
@@ -19,6 +27,7 @@ import {
   emptyPhoneDraft,
   type PhoneDraft,
 } from '../components/PhoneFields';
+import { ItemHistoryDialog, type ItemHistoryDialogProps } from '../components/ItemHistoryDialog';
 import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
 import { StockImportDialog } from '../components/StockImportDialog';
 import { Badge } from '../components/ui/Badge';
@@ -503,6 +512,10 @@ export function Inventory(): ReactNode {
   const [adjust, setAdjust] = useState<VariantView | null>(null);
   const [recvOpen, setRecvOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [history, setHistory] = useState<Pick<
+    ItemHistoryDialogProps,
+    'item' | 'label' | 'unitScale' | 'unitLabel'
+  > | null>(null);
 
   const canEdit = can('edit_catalog');
   const showCost = can('view_cost');
@@ -658,11 +671,9 @@ export function Inventory(): ReactNode {
                     {showCost ? <th className="num">{t('inv.cost')}</th> : null}
                     <th className="num">{t('inv.price')}</th>
                     <th>{t('inv.status')}</th>
-                    {canEdit ? (
-                      <th className="w-12">
-                        <span className="sr-only">{t('common.edit')}</span>
-                      </th>
-                    ) : null}
+                    <th className="w-24">
+                      <span className="sr-only">{t('common.actions')}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -700,19 +711,37 @@ export function Inventory(): ReactNode {
                           <Badge tone="muted">{t('inv.sold')}</Badge>
                         )}
                       </td>
-                      {canEdit ? (
-                        <td>
+                      <td>
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             icon
                             size="sm"
-                            aria-label={t('common.edit')}
-                            onClick={() => setPhoneEdit({ open: true, unit: v })}
+                            aria-label={t('hist.open')}
+                            onClick={() =>
+                              setHistory({
+                                item: { phoneUnitId: v.unit.id },
+                                label: v.label,
+                                unitScale: 1,
+                                unitLabel: 'pcs',
+                              })
+                            }
                           >
-                            <Pencil size={15} aria-hidden="true" />
+                            <History size={15} aria-hidden="true" />
                           </Button>
-                        </td>
-                      ) : null}
+                          {canEdit ? (
+                            <Button
+                              variant="ghost"
+                              icon
+                              size="sm"
+                              aria-label={t('common.edit')}
+                              onClick={() => setPhoneEdit({ open: true, unit: v })}
+                            >
+                              <Pencil size={15} aria-hidden="true" />
+                            </Button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -743,11 +772,9 @@ export function Inventory(): ReactNode {
                   <th className="num">{t('inv.stock')}</th>
                   {showCost ? <th className="num">{t('inv.cost')}</th> : null}
                   <th className="num">{t('inv.price')}</th>
-                  {canEdit ? (
-                    <th className="w-24">
-                      <span className="sr-only">{t('common.edit')}</span>
-                    </th>
-                  ) : null}
+                  <th className="w-32">
+                    <span className="sr-only">{t('common.actions')}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -777,20 +804,36 @@ export function Inventory(): ReactNode {
                         {perUnit(v.variant.unitScale, v.variant.unitLabel)}
                       </span>
                     </td>
-                    {canEdit ? (
-                      <td>
-                        <div className="flex justify-end gap-1">
-                          {can('adjust_stock') ? (
-                            <Button
-                              variant="ghost"
-                              icon
-                              size="sm"
-                              aria-label={t('inv.adjustStock')}
-                              onClick={() => setAdjust(v)}
-                            >
-                              <SlidersHorizontal size={15} aria-hidden="true" />
-                            </Button>
-                          ) : null}
+                    <td>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          icon
+                          size="sm"
+                          aria-label={t('hist.open')}
+                          onClick={() =>
+                            setHistory({
+                              item: { variantId: v.variant.id },
+                              label: v.label,
+                              unitScale: v.variant.unitScale,
+                              unitLabel: v.variant.unitLabel,
+                            })
+                          }
+                        >
+                          <History size={15} aria-hidden="true" />
+                        </Button>
+                        {canEdit && can('adjust_stock') ? (
+                          <Button
+                            variant="ghost"
+                            icon
+                            size="sm"
+                            aria-label={t('inv.adjustStock')}
+                            onClick={() => setAdjust(v)}
+                          >
+                            <SlidersHorizontal size={15} aria-hidden="true" />
+                          </Button>
+                        ) : null}
+                        {canEdit ? (
                           <Button
                             variant="ghost"
                             icon
@@ -800,9 +843,9 @@ export function Inventory(): ReactNode {
                           >
                             <Pencil size={15} aria-hidden="true" />
                           </Button>
-                        </div>
-                      </td>
-                    ) : null}
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -824,6 +867,14 @@ export function Inventory(): ReactNode {
       <AdjustDialog item={adjust} onClose={() => setAdjust(null)} />
       <ReceiveStockDialog open={recvOpen} onClose={() => setRecvOpen(false)} />
       <StockImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <ItemHistoryDialog
+        item={history?.item ?? null}
+        label={history?.label ?? ''}
+        unitScale={history?.unitScale ?? 1}
+        unitLabel={history?.unitLabel ?? 'pcs'}
+        open={history !== null}
+        onClose={() => setHistory(null)}
+      />
     </div>
   );
 }
