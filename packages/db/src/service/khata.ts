@@ -11,6 +11,7 @@ import {
 import { WriteBatch } from './batch';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optCnic, optPhone, optText, reqText } from './errors';
+import { customerStatement, pendingUdhaar } from './khata-statement';
 import { mapRow, type Raw } from './mappers';
 import {
   customerBalance,
@@ -201,5 +202,8 @@ export function createKhataApi(ctx: Ctx): KhataApi {
         customersOwing: rows[0]?.owing ?? 0,
       };
     },
+
+    statement: (customerId, range) => customerStatement(ctx, customerId, range),
+    pendingUdhaar: () => pendingUdhaar(ctx),
   });
 }

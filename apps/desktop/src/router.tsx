@@ -3,10 +3,12 @@ import { AppShell, RequireSession } from './components/AppShell';
 import { RequireModule } from './components/RequireModule';
 import { Billing } from './screens/Billing';
 import { CustomerDetail } from './screens/CustomerDetail';
+import { CustomerStatement } from './screens/CustomerStatement';
 import { Customers } from './screens/Customers';
 import { Expiry } from './screens/Expiry';
 import { Inventory } from './screens/Inventory';
 import { Login } from './screens/Login';
+import { PendingUdhaar } from './screens/PendingUdhaar';
 import { ReceiptPage } from './screens/ReceiptPage';
 import { RepairDetail } from './screens/RepairDetail';
 import { Repairs } from './screens/Repairs';
@@ -30,7 +32,9 @@ export const router = createHashRouter([
       { path: 'inventory', element: <Inventory /> },
       { path: 'sales', element: <Sales /> },
       { path: 'customers', element: <Customers /> },
+      { path: 'customers/pending', element: <PendingUdhaar /> },
       { path: 'customers/:id', element: <CustomerDetail /> },
+      { path: 'customers/:id/statement', element: <CustomerStatement /> },
       { path: 'suppliers', element: <Suppliers /> },
       { path: 'suppliers/:id', element: <SupplierDetail /> },
       {

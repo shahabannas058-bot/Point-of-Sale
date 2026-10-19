@@ -28,3 +28,37 @@ export function formatDate(ms: number): string {
 }
 
 export const formatDateTime = (ms: number): string => `${formatDate(ms)} ${formatTime(ms)}`;
+
+/** "2026-10" for the month `now` falls in. */
+export function monthYm(now: number = Date.now()): string {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+
+/** Local-month bounds [first day 00:00, first day of next month 00:00) for a YYYY-MM string. */
+export function localMonthRange(ym: string): SummaryRange {
+  const [y = 1970, m = 1] = ym.split('-').map(Number);
+  return {
+    fromMs: new Date(y, m - 1, 1, 0, 0, 0, 0).getTime(),
+    toMs: new Date(y, m, 1, 0, 0, 0, 0).getTime(),
+  };
+}
+
+/** "2026-10" + 1 -> "2026-11"; -1 -> "2026-09". Rolls over the year. */
+export function shiftMonth(ym: string, delta: number): string {
+  const [y = 1970, m = 1] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Oct 2026" for a YYYY-MM string (Latin script in both languages). */
+export function formatMonth(ym: string): string {
+  const [y = 1970, m = 1] = ym.split('-').map(Number);
+  return `${MONTHS[m - 1] ?? '?'} ${y}`;
+}
+
+/** Whole days from `sinceMs` to `now`, never negative. */
+export const daysSince = (sinceMs: number, now: number = Date.now()): number =>
+  Math.max(0, Math.floor((now - sinceMs) / 86_400_000));

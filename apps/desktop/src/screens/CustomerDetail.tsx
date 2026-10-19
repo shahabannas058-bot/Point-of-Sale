@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, HandCoins, Printer } from 'lucide-react';
+import { ArrowLeft, FileText, HandCoins, Printer } from 'lucide-react';
 import { PAYMENT_METHODS, type PaymentMethod } from '@pos/shared';
 import { ReceiptDialog } from '../components/ReceiptDialog';
 import { Badge } from '../components/ui/Badge';
@@ -11,7 +11,7 @@ import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { useBusyAction } from '../lib/busy-action';
-import { formatDateTime } from '../lib/dates';
+import { formatDateTime, monthYm } from '../lib/dates';
 import { paisaToInput, parseRupees } from '../lib/money';
 import { printPage } from '../lib/print';
 import { useService } from '../service/context';
@@ -172,6 +172,10 @@ export function CustomerDetail(): ReactNode {
         }
         actions={
           <>
+            <Link to={`/customers/${id}/statement?m=${monthYm()}`} className="btn no-print">
+              <FileText size={16} aria-hidden="true" />
+              {t('udhaar.statement')}
+            </Link>
             <Button onClick={printPage}>
               <Printer size={16} aria-hidden="true" />
               {t('khata.printStatement')}

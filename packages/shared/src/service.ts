@@ -527,6 +527,25 @@ export interface KhataApi {
     note?: string;
   }): Promise<Paisa>; // payment_received(-amount); VALIDATION if amount > balance
   totals(): Promise<{ receivable: Paisa; customersOwing: number }>;
+  /** One customer's udhaar statement for a period: opening balance, every entry in [from, to) ascending with running balance, closing balance. Any session. */
+  statement(customerId: string, range: SummaryRange): Promise<CustomerStatement>;
+  /** Every active customer who owes money, biggest balance first, with the dates of their last udhaar and last payment. Any session. */
+  pendingUdhaar(): Promise<PendingUdhaar[]>;
+}
+export interface CustomerStatement {
+  customer: Customer;
+  range: SummaryRange;
+  opening: Paisa; // balance before range.fromMs (positive = customer owed the shop)
+  udhaarGiven: Paisa; // sum of positive entries in range (sale_credit, opening_balance, +adjustment)
+  paid: Paisa; // magnitude of negative entries in range (payment_received, return_credit, -adjustment)
+  closing: Paisa; // opening + udhaarGiven - paid = balance at range.toMs
+  lines: LedgerLine[]; // ascending by created_at, runningBalance starts from `opening`
+}
+export interface PendingUdhaar {
+  party: Customer;
+  balance: Paisa; // > 0
+  lastCreditAt: number | null; // last entry that increased the balance
+  lastPaymentAt: number | null; // last payment_received
 }
 
 // ---------- reports ----------

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
-import { Search, UserPlus, Wallet } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
+import { Clock, Search, UserPlus, Wallet } from 'lucide-react';
 import { CustomerForm } from '../components/CustomerPicker';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -29,10 +29,16 @@ export function Customers(): ReactNode {
         title={t('nav.customers')}
         subtitle={t('customers.subtitle')}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <UserPlus size={16} aria-hidden="true" />
-            {t('customers.new')}
-          </Button>
+          <>
+            <Link to="/customers/pending" className="btn">
+              <Clock size={16} aria-hidden="true" />
+              {t('udhaar.pending')}
+            </Link>
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <UserPlus size={16} aria-hidden="true" />
+              {t('customers.new')}
+            </Button>
+          </>
         }
       />
 
