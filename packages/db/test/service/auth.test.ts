@@ -45,6 +45,16 @@ describe('login (spec 10)', () => {
     expect(JSON.stringify(users)).not.toMatch(/pbkdf2|pin_hash|pinHash/);
   });
 
+  it('the outbox never carries a PIN hash, on user insert or on PIN change', async () => {
+    await t.svc.auth.login('owner', PINS.owner);
+    await t.svc.auth.changePin(PINS.owner, '9876');
+    const rows = await t.driver.query<{ payload: string }>(
+      "SELECT payload FROM outbox WHERE entity_type = 'user'",
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.payload).not.toMatch(/pbkdf2|pin_hash|pinHash/);
+  });
+
   it('5 wrong PINs: the 5th is INVALID_CREDENTIALS, the 6th (even correct) is LOGIN_LOCKED, 30 s later it works', async () => {
     for (let i = 1; i <= 5; i += 1)
       await expectCode(t.svc.auth.login('owner', '0000'), 'INVALID_CREDENTIALS');

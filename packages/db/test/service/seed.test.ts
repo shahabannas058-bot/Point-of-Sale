@@ -111,6 +111,7 @@ describe('setup and settings', () => {
     };
     const info = await t.svc.setup.firstRun(input);
     expect(info).toMatchObject({ branchName: 'Main', invoicePrefix: 'B', isDemo: false });
+    expect(info.shopName).toBe('Shop');
     expect(info.createdAt).toBeGreaterThan(0);
     await expectCode(t.svc.setup.firstRun(input), 'ALREADY_SETUP');
     expect(await t.svc.setup.getShop()).toEqual(info);

@@ -22,6 +22,7 @@ export async function readShopInfo(ctx: Ctx): Promise<ShopInfo> {
     deviceId: shop.deviceId,
     branchId: shop.branchId,
     branchName: rows[0]?.name ?? '',
+    shopName: shop.settings.shopName,
     invoicePrefix: shop.invoicePrefix,
     createdAt: shop.setupAt,
     isDemo: shop.isDemo,

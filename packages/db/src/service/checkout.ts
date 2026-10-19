@@ -13,6 +13,7 @@ import {
   type CheckoutApi,
   type CheckoutDraft,
   type GuardAction,
+  type CommitSaleInput,
   type Invoice,
   type InvoiceSummary,
   type InvoiceView,
@@ -509,7 +510,10 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
       return ctx.lock(async () => {
         if (input.saleId !== undefined) {
           const existing = await loadInvoiceBy(ctx.driver, 'id', input.saleId); // 2. idempotency
-          if (existing !== null) return existing;
+          if (existing !== null) {
+            assertSameSale(existing, input);
+            return existing;
+          }
         }
         const cart = await priceCart(ctx, shop, input); // 1 (empty cart) + 3 stock
         // 4. payments, policy
@@ -615,5 +619,43 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
         returnedTotal: paisa(Number(r.returned_total)),
       }));
     },
+  });
+}
+
+/**
+ * A replayed saleId must describe the same sale. A retry after a timeout sends the identical draft and gets the
+ * stored invoice back; a changed cart under an old id would otherwise be "accepted" while the stored invoice is
+ * something else, so it is refused and the caller must start a new attempt.
+ */
+function assertSameSale(existing: Invoice, input: CommitSaleInput): void {
+  const tally = (
+    lines: readonly {
+      phoneUnitId?: string | null;
+      variantId?: string | null;
+      quantity: number;
+      discountAmount?: number;
+    }[],
+  ): string => {
+    const acc = new Map<string, { qty: number; disc: number }>();
+    for (const l of lines) {
+      const key = l.phoneUnitId ? `p:${l.phoneUnitId}` : `v:${l.variantId ?? ''}`;
+      const cur = acc.get(key) ?? { qty: 0, disc: 0 };
+      acc.set(key, {
+        qty: cur.qty + Math.abs(l.quantity),
+        disc: cur.disc + Math.abs(l.discountAmount ?? 0),
+      });
+    }
+    return JSON.stringify([...acc.entries()].sort(([a], [b]) => (a < b ? -1 : 1)));
+  };
+  const pay = (ps: readonly { method: string; amount: number }[]): string =>
+    JSON.stringify(ps.map((p) => `${p.method}:${Math.abs(p.amount)}`).sort());
+  const sameLines = tally(existing.lines) === tally(Array.isArray(input.lines) ? input.lines : []);
+  const samePay =
+    pay(existing.payments) === pay(Array.isArray(input.payments) ? input.payments : []);
+  const sameCustomer = (existing.customerId ?? null) === (input.customerId ?? null);
+  if (sameLines && samePay && sameCustomer) return;
+  throw new ServiceError('SALE_ID_REUSED', 'This saleId already belongs to a different invoice', {
+    invoiceId: existing.id,
+    invoiceNo: existing.invoiceNo,
   });
 }

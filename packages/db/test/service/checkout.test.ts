@@ -466,6 +466,38 @@ describe('idempotency (spec 11)', () => {
     expect(t.assertCanSell).toHaveBeenCalledTimes(1);
   });
 
+  it('reusing a saleId with a changed cart is refused with SALE_ID_REUSED and writes nothing', async () => {
+    await t.loginAs('owner');
+    const saleId = t.newId();
+    const first = await t.svc.checkout.commit({
+      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      payments: [{ method: 'cash', amount: 300_000 }],
+      saleId,
+    });
+    const before = await snapshotCounts(t.driver);
+    const err = await expectCode(
+      t.svc.checkout.commit({
+        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        payments: [{ method: 'cash', amount: 150_000 }],
+        saleId,
+      }),
+      'SALE_ID_REUSED',
+    );
+    expect(err.details.invoiceNo).toBe(first.invoiceNo);
+    // same lines and payments but a different customer is a different sale too
+    await expectCode(
+      t.svc.checkout.commit({
+        lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+        payments: [{ method: 'cash', amount: 300_000 }],
+        customerId: t.ids.bilalId,
+        saleId,
+      }),
+      'SALE_ID_REUSED',
+    );
+    expect(await snapshotCounts(t.driver)).toEqual(before);
+    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(8);
+  });
+
   it('a double click (two parallel commits with one saleId) creates one invoice', async () => {
     await t.loginAs('owner');
     const saleId = t.newId();

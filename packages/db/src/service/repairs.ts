@@ -4,6 +4,7 @@ import {
   REPAIR_STATUSES,
   REPAIR_TRANSITIONS,
   ServiceError,
+  pktDate,
   type PaymentInput,
   type PaymentMethod,
   type RepairPart,
@@ -16,6 +17,7 @@ import {
   type RepairTicketView,
 } from '@pos/shared';
 import { WriteBatch } from './batch';
+import { takeOutParts, unsellableExpired } from './batches';
 import { consumeApproval } from './auth';
 import { isValidImei } from './catalog';
 import { exceedsDiscountLimit, resolveApproval, withApprovalNote } from './checkout';
@@ -458,40 +460,53 @@ export function createRepairsApi(ctx: Ctx): RepairsApi {
         const ticket = await loadOpenTicket(ctx, i.ticketId);
         const part = await requireVariantView(ctx.driver, i.variantId, shop.branchId);
         if (!part.variant.isActive) throw notFound('Accessory', i.variantId);
-        if (!shop.settings.allowNegativeStock && part.onHand < quantity)
-          throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
-            onHand: part.onHand,
-            requested: quantity,
-          });
         const at = ctx.clock();
-        const movementId = ctx.newId();
+        const today = pktDate(at);
+        // Module batch_expiry: like a sale, a repair never fits an expired part, and the parts leave their
+        // batches first-expiry-first. Each batch gives its own movement, and repair_parts links one row to one
+        // movement, so a part fitted from two batches becomes two part rows that add up to the quantity asked.
+        const expired = await unsellableExpired(ctx.driver, shop, part.variant.id, today);
+        const sellable = part.onHand - expired;
+        if (!shop.settings.allowNegativeStock && sellable < quantity)
+          throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
+            onHand: sellable,
+            requested: quantity,
+            ...(expired > 0 ? { expiredOnHand: expired } : {}),
+          });
+        const parts = await takeOutParts(ctx.driver, shop, part.variant.id, quantity, today, {
+          includeExpired: false,
+        });
         const b = new WriteBatch(ctx.newId, at);
-        // stock_movements.ref_type has no 'repair' value; repair_parts.stock_movement_id is the link back.
-        insertMovement(b, {
-          id: movementId,
-          branchId: shop.branchId,
-          type: 'adjustment',
-          phoneUnitId: null,
-          variantId: part.variant.id,
-          quantity: -quantity,
-          unitCost: part.variant.costPrice,
-          refType: null,
-          refId: null,
-          reason: `Repair part ${ticket.ticketNo}`,
-          createdBy: session.user.id,
-          createdAt: at,
-        });
-        insertRec(b, 'repair_parts', 'repair_part', {
-          id: ctx.newId(),
-          ticketId: ticket.id,
-          variantId: part.variant.id,
-          quantity,
-          unitCost: part.variant.costPrice,
-          unitPrice: part.variant.salePrice,
-          stockMovementId: movementId,
-          createdBy: session.user.id,
-          createdAt: at,
-        });
+        for (const p of parts) {
+          const movementId = ctx.newId();
+          // stock_movements.ref_type has no 'repair' value; repair_parts.stock_movement_id is the link back.
+          insertMovement(b, {
+            id: movementId,
+            branchId: shop.branchId,
+            type: 'adjustment',
+            phoneUnitId: null,
+            variantId: part.variant.id,
+            batchId: p.batchId,
+            quantity: -p.quantity,
+            unitCost: part.variant.costPrice,
+            refType: null,
+            refId: null,
+            reason: `Repair part ${ticket.ticketNo}`,
+            createdBy: session.user.id,
+            createdAt: at,
+          });
+          insertRec(b, 'repair_parts', 'repair_part', {
+            id: ctx.newId(),
+            ticketId: ticket.id,
+            variantId: part.variant.id,
+            quantity: p.quantity,
+            unitCost: part.variant.costPrice,
+            unitPrice: part.variant.salePrice,
+            stockMovementId: movementId,
+            createdBy: session.user.id,
+            createdAt: at,
+          });
+        }
         await ctx.assertCanSell({ action: 'repair', branchId: shop.branchId, now: at });
         await b.commit(ctx.driver);
         return ticket.id;

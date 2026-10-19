@@ -385,7 +385,10 @@ export interface UserRec {
   createdAt: number;
   updatedAt: number;
 }
-/** The pinHash travels in the outbox payload so a second device can log the user in (see blueprint risk 3). */
+/**
+ * The outbox payload is the public User shape only: the PIN hash never crosses the contract (people.ts). Giving a
+ * second device the same login is a Phase 2b server concern (provision the user there), not something to sync.
+ */
 export function insertUser(b: WriteBatch, u: UserRec, pinHash: string): void {
   b.add(
     `INSERT INTO users (id, username, display_name, role, pin_hash, is_active, created_at, updated_at)
@@ -400,14 +403,14 @@ export function insertUser(b: WriteBatch, u: UserRec, pinHash: string): void {
       u.createdAt,
       u.updatedAt,
     ],
-  ).emit('user', u.id, 'insert', { ...u, pinHash });
+  ).emit('user', u.id, 'insert', u);
 }
 export function updateUserPin(b: WriteBatch, u: UserRec, pinHash: string, at: number): void {
   b.add('UPDATE users SET pin_hash = ?, updated_at = ? WHERE id = ?', [pinHash, at, u.id]).emit(
     'user',
     u.id,
     'update',
-    { ...u, updatedAt: at, pinHash },
+    { ...u, updatedAt: at },
   );
 }
 

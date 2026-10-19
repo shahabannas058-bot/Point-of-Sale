@@ -1,9 +1,11 @@
 import {
   ServiceError,
   daysBetween,
+  hasModule,
   pktDate,
   type BatchesApi,
   type BatchView,
+  type ModuleId,
   type UnitLabel,
   type UnitScale,
 } from '@pos/shared';
@@ -106,23 +108,36 @@ function addTo(out: Allocation[], batchId: string | null, quantity: number): voi
   else same.quantity += quantity;
 }
 
+export interface TakeOutOptions {
+  /**
+   * Whether batches past their expiry date may give stock. A sale or a repair part never takes expired goods; an
+   * adjustment may, because throwing expired stock away is exactly what an adjustment is for.
+   */
+  includeExpired: boolean;
+  /** What earlier lines of the same write already took from each batch. */
+  taken?: Map<string, number>;
+}
+
 /**
- * First expiry, first out. Takes `quantity` from the batches that have not expired, nearest expiry first; whatever they
- * cannot cover comes from stock without a batch. `taken` carries what earlier lines of the same sale already took.
+ * First expiry, first out. Takes `quantity` from the item's batches, nearest expiry first (skipping expired ones unless
+ * `includeExpired`); whatever they cannot cover comes from stock without a batch. Every stock-out of a batch-tracked
+ * item (sale, adjustment, repair part) must go through here, so that the sum of the batches' stock keeps matching
+ * the item's stock.
  */
-export async function allocateSale(
+export async function allocateTakeOut(
   driver: SqlDriver,
   variantId: string,
   branchId: string,
   quantity: number,
   today: string,
-  taken: Map<string, number>,
+  options: TakeOutOptions,
 ): Promise<Allocation[]> {
+  const taken = options.taken ?? new Map<string, number>();
   const out: Allocation[] = [];
   let remaining = quantity;
   for (const b of await batchStock(driver, variantId, branchId)) {
     if (remaining === 0) break;
-    if (b.expiryDate < today) continue;
+    if (!options.includeExpired && b.expiryDate < today) continue;
     const available = b.onHand - (taken.get(b.id) ?? 0);
     if (available <= 0) continue;
     const take = Math.min(available, remaining);
@@ -132,6 +147,56 @@ export async function allocateSale(
   }
   addTo(out, null, remaining);
   return out;
+}
+
+/**
+ * Sale allocation: never from an expired batch. `taken` carries what earlier lines of the same sale already took.
+ */
+export const allocateSale = (
+  driver: SqlDriver,
+  variantId: string,
+  branchId: string,
+  quantity: number,
+  today: string,
+  taken: Map<string, number>,
+): Promise<Allocation[]> =>
+  allocateTakeOut(driver, variantId, branchId, quantity, today, { includeExpired: false, taken });
+
+/** True when the shop owns `batch_expiry` and the item has ever been received with a batch. */
+export async function isBatchTracked(
+  driver: SqlDriver,
+  modules: readonly ModuleId[],
+  variantId: string,
+): Promise<boolean> {
+  return hasModule(modules, 'batch_expiry') && (await hasBatches(driver, variantId));
+}
+
+/**
+ * The parts a stock-out of `quantity` splits into. One part without a batch when the shop has no `batch_expiry`
+ * module or the item never had a batch, so such items keep producing exactly one movement as before.
+ */
+export async function takeOutParts(
+  driver: SqlDriver,
+  shop: { modules: readonly ModuleId[]; branchId: string },
+  variantId: string,
+  quantity: number,
+  today: string,
+  options: TakeOutOptions,
+): Promise<Allocation[]> {
+  if (!(await isBatchTracked(driver, shop.modules, variantId)))
+    return [{ batchId: null, quantity }];
+  return allocateTakeOut(driver, variantId, shop.branchId, quantity, today, options);
+}
+
+/** Units that cannot leave because they sit in expired batches; 0 when the item is not batch-tracked. */
+export async function unsellableExpired(
+  driver: SqlDriver,
+  shop: { modules: readonly ModuleId[]; branchId: string },
+  variantId: string,
+  today: string,
+): Promise<number> {
+  if (!(await isBatchTracked(driver, shop.modules, variantId))) return 0;
+  return expiredOnHand(driver, variantId, shop.branchId, today);
 }
 
 /**

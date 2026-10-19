@@ -42,6 +42,7 @@ export const SERVICE_ERROR_CODES = [
   'ALREADY_RETURNED',
   'RETURN_NOT_ALLOWED',
   'CHAIN_CONFLICT',
+  'SALE_ID_REUSED',
   'IMMUTABLE_RECORD',
   'LEDGER_CORRUPT',
   'DB_CONSTRAINT',
@@ -153,6 +154,8 @@ export interface ShopInfo {
   deviceId: string;
   branchId: string;
   branchName: string;
+  /** The shop's display name (settings.shopName); readable before login for the sign-in screen. */
+  shopName: string;
   invoicePrefix: string;
   createdAt: number;
   isDemo: boolean;

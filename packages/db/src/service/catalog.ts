@@ -5,6 +5,7 @@ import {
   ServiceError,
   UnitLabelSchema,
   maxQuantity,
+  pktDate,
   unitScaleFor,
   type CatalogApi,
   type CatalogHit,
@@ -15,6 +16,7 @@ import {
   type VariantView,
 } from '@pos/shared';
 import { WriteBatch } from './batch';
+import { takeOutParts } from './batches';
 import { requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optIntIn, optText, reqText } from './errors';
 import type { Raw } from './mappers';
@@ -526,21 +528,33 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
             });
         }
         const at = ctx.clock();
+        // Module batch_expiry: stock removed from a batch-tracked item leaves its batches first-expiry-first
+        // (expired ones included: that is how expired goods are thrown away), one movement per batch, so the
+        // batches' stock keeps adding up to the item's. Stock added here has no expiry date: it is stock without a
+        // batch, sold after the batches. Stock with a known expiry date is received through purchasing.receive.
+        const parts =
+          delta > 0
+            ? [{ batchId: null, quantity: delta }]
+            : await takeOutParts(ctx.driver, shop, i.variantId, -delta, pktDate(at), {
+                includeExpired: true,
+              });
         const b = new WriteBatch(ctx.newId, at);
-        insertMovement(b, {
-          id: ctx.newId(),
-          branchId: shop.branchId,
-          type: 'adjustment',
-          phoneUnitId: null,
-          variantId: i.variantId,
-          quantity: delta,
-          unitCost: null,
-          refType: null,
-          refId: null,
-          reason,
-          createdBy: session.user.id,
-          createdAt: at,
-        });
+        for (const p of parts)
+          insertMovement(b, {
+            id: ctx.newId(),
+            branchId: shop.branchId,
+            type: 'adjustment',
+            phoneUnitId: null,
+            variantId: i.variantId,
+            batchId: p.batchId,
+            quantity: delta > 0 ? p.quantity : -p.quantity,
+            unitCost: null,
+            refType: null,
+            refId: null,
+            reason,
+            createdBy: session.user.id,
+            createdAt: at,
+          });
         await ctx.assertCanSell({ action: 'stock_entry', branchId: shop.branchId, now: at });
         await b.commit(ctx.driver);
       });
