@@ -24,6 +24,11 @@ const grossSql = (price: string): string =>
      THEN (l.quantity * ${price} + l.unit_scale / 2) / l.unit_scale
      ELSE -((-(l.quantity * ${price}) + l.unit_scale / 2) / l.unit_scale) END`;
 
+/** The weight round-off part of a sale line's discount (SQL twin of roundOffOf in @pos/shared), 0 for pieces. */
+const ROUND_OFF_SQL = `CASE WHEN l.unit_scale > 1 AND l.discount_amount <> 0
+     AND abs(l.discount_amount) * l.unit_scale * 2 <= l.unit_price * 2 + l.unit_scale
+     THEN l.discount_amount ELSE 0 END`;
+
 export function createReportsApi(ctx: Ctx): ReportsApi {
   return guardApi<ReportsApi>({
     async summary(range): Promise<PeriodSummary> {
@@ -50,8 +55,8 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
       );
       const lines = await q(
         `SELECT
-           COALESCE(SUM(CASE WHEN s.kind = 'sale' THEN ${grossSql('l.unit_price')} END), 0) AS gross,
-           COALESCE(SUM(CASE WHEN s.kind = 'sale' THEN l.discount_amount END), 0) AS line_discounts,
+           COALESCE(SUM(CASE WHEN s.kind = 'sale' THEN ${grossSql('l.unit_price')} - ${ROUND_OFF_SQL} END), 0) AS gross,
+           COALESCE(SUM(CASE WHEN s.kind = 'sale' THEN l.discount_amount - ${ROUND_OFF_SQL} END), 0) AS line_discounts,
            COALESCE(SUM(${grossSql('l.cost_price')}), 0) AS cogs
          FROM sale_lines l JOIN sales s ON s.id = l.sale_id
          WHERE s.created_at >= ? AND s.created_at < ?`,

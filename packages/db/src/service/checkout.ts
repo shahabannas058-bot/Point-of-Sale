@@ -8,6 +8,7 @@ import {
   hasModule,
   maxQuantity,
   pktDate,
+  roundOffOf,
   type ApprovalReason,
   type CartPreview,
   type CheckoutApi,
@@ -425,10 +426,16 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
     discountAmount: it.spec.discountAmount,
   }));
   const totals = saleTotals(priced, invoiceDiscount);
+  // a weight round-off (see roundOffOf) is not a discount the shop gave: it comes out of the gross, not the discounts
+  const roundOffs = sumPaisa(
+    items.map((it) =>
+      paisa(roundOffOf(it.spec.discountAmount, it.spec.unitPrice, it.spec.unitScale)),
+    ),
+  );
   return {
     items,
-    gross: sumPaisa(items.map((it) => specGross(it.spec))),
-    lineDiscounts: sumPaisa(items.map((it) => it.spec.discountAmount)),
+    gross: paisa(sumPaisa(items.map((it) => specGross(it.spec))) - roundOffs),
+    lineDiscounts: paisa(sumPaisa(items.map((it) => it.spec.discountAmount)) - roundOffs),
     subtotal: totals.subtotal,
     invoiceDiscount,
     total: totals.total,

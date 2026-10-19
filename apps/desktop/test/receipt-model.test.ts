@@ -159,3 +159,47 @@ describe('buildReceiptModel with units', () => {
     expect(m.items[0]).toMatchObject({ unitLabel: 'pcs', sub: '356938035643809' });
   });
 });
+
+describe('buildReceiptModel: a weight round-off is not printed as a discount', () => {
+  it('"Rs 250 ke chawal" prints 1.316 kg x 190/kg = 250.00 with no discount anywhere', () => {
+    // 1316 g at Rs 190/kg is Rs 250.04; the 4 paisa came off so the line is exactly Rs 250
+    const m = buildReceiptModel(
+      view('sale', [
+        {
+          variantId: 'chawal',
+          description: 'Chawal Basmati',
+          quantity: 1316,
+          unitScale: 1000,
+          unitPrice: 19_000,
+          discountAmount: 4,
+          lineTotal: 25_000,
+        },
+      ]),
+      shop,
+      settings,
+    );
+    expect(m.items[0]).toMatchObject({ qty: 1316, unitPrice: 19_000, discount: 0, total: 25_000 });
+    expect(m.discountTotal).toBe(0);
+    expect(m.total).toBe(25_000);
+  });
+
+  it('a real discount on a weighed line is still printed', () => {
+    const m = buildReceiptModel(
+      view('sale', [
+        {
+          variantId: 'chawal',
+          description: 'Chawal Basmati',
+          quantity: 2000,
+          unitScale: 1000,
+          unitPrice: 19_000,
+          discountAmount: 1_000,
+          lineTotal: 37_000,
+        },
+      ]),
+      shop,
+      settings,
+    );
+    expect(m.items[0]).toMatchObject({ discount: 1_000, total: 37_000 });
+    expect(m.discountTotal).toBe(1_000);
+  });
+});

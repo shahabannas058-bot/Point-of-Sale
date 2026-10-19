@@ -8,6 +8,7 @@ import type {
   UnitLabel,
   UnitScale,
 } from '@pos/shared';
+import { roundOffOf } from '@pos/shared';
 import { labelFor } from './qty';
 
 export interface ReceiptItem {
@@ -58,7 +59,10 @@ export function buildReceiptModel(
   unitLabels: Readonly<Record<string, UnitLabel>> = {},
 ): ReceiptModel {
   const inv = view.invoice;
-  const lineDiscounts = inv.lines.reduce((a, l) => a + Math.abs(l.discountAmount), 0);
+  // a weight round-off is not a discount: the receipt shows the weight, the rate and the rupees the customer paid
+  const shownDiscount = (l: (typeof inv.lines)[number]): number =>
+    Math.abs(l.discountAmount) - roundOffOf(l.discountAmount, l.unitPrice, l.unitScale);
+  const lineDiscounts = inv.lines.reduce((a, l) => a + shownDiscount(l), 0);
   void shop;
   return {
     shopName: settings.shopName,
@@ -77,7 +81,7 @@ export function buildReceiptModel(
       unitScale: l.unitScale,
       unitLabel: l.variantId === null ? 'pcs' : (unitLabels[l.variantId] ?? labelFor(l.unitScale)),
       unitPrice: l.unitPrice,
-      discount: Math.abs(l.discountAmount),
+      discount: shownDiscount(l),
       total: Math.abs(l.lineTotal),
     })),
     subtotal: Math.abs(inv.subtotal),

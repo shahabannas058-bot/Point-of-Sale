@@ -15,6 +15,7 @@ import {
   formatQuantity,
   isServiceError,
   parseQuantity,
+  roundOffOf,
   type ApprovalReason,
   type CartPreview,
   type CatalogHit,
@@ -70,7 +71,9 @@ function DiscountCell({ line }: { line: CartLine }): ReactNode {
   const [draft, setDraft] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const gross = lineGrossOf(line);
-  const shown = draft ?? (line.discount > 0 ? paisaToInput(line.discount) : '');
+  // a weight round-off (the paisa the rupee box took off to make the line exactly what was typed) is not shown
+  const isRoundOff = roundOffOf(line.discount, line.unitPrice, lineScale(line)) === line.discount;
+  const shown = draft ?? (line.discount > 0 && !isRoundOff ? paisaToInput(line.discount) : '');
 
   const commit = (): void => {
     if (draft === null) return;
@@ -652,7 +655,12 @@ export function Billing(): ReactNode {
 
   const lineTotalOf = (i: number, l: CartLine): number =>
     preview?.lines[i]?.lineTotal ?? lineGrossOf(l) - l.discount;
-  const gross = preview?.grossTotal ?? lines.reduce((a, l) => a + lineGrossOf(l), 0);
+  const gross =
+    preview?.grossTotal ??
+    lines.reduce(
+      (a, l) => a + lineGrossOf(l) - roundOffOf(l.discount, l.unitPrice, lineScale(l)),
+      0,
+    );
 
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">

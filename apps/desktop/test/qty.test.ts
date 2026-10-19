@@ -14,7 +14,7 @@ import {
   qtyWithUnit,
   unitWord,
 } from '../src/lib/qty';
-import { lineGross } from '@pos/shared';
+import { lineGross, roundOffOf } from '@pos/shared';
 
 describe('qtyText: what the cashier reads next to an item', () => {
   it.each([
@@ -242,5 +242,19 @@ describe('variantQtyText: a stock number in the item own unit', () => {
   it('uses the variant unit', () => {
     expect(variantQtyText(1250, { unitScale: 1000, unitLabel: 'kg' })).toBe('1.25 kg');
     expect(variantQtyText(3, { unitScale: 1, unitLabel: 'pcs' })).toBe('3');
+  });
+});
+
+describe('weightForAmount round-offs are always classed as round-offs, never as discounts', () => {
+  it('for every price and amount tried, roundOffOf gives the whole discount back', () => {
+    for (const price of [1_900, 15_000, 19_000, 28_550, 33_300, 125_000, 200_000, 1_234_567]) {
+      for (let amount = 100; amount <= 200_000; amount += 1_373) {
+        const w = weightForAmount(amount, price, 1000);
+        if (w === null) continue;
+        expect(roundOffOf(w.discount, price, 1000), `price ${price} amount ${amount}`).toBe(
+          w.discount,
+        );
+      }
+    }
   });
 });

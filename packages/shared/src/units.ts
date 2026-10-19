@@ -35,6 +35,26 @@ export function lineGross(quantity: number, unitPrice: number, unitScale: UnitSc
   return out === 0 ? 0 : out;
 }
 
+/**
+ * The part of a line discount that is only a weight round-off, in paisa (magnitude).
+ * When the cashier types the rupees a customer pays for loose goods, the weight is rounded up to the next gram and
+ * the few paisa that gram adds are taken off so the line is exactly the typed amount. That is not a discount the
+ * shop gave: it is never printed, never counted in discount totals and never shown in the cart. A round-off is a
+ * discount on a weighed line that is worth no more than one base unit (gram / ml) at the line's price. Pieces have
+ * no round-off. Returns 0 for anything larger. Known limit: a deliberate discount that small on a weighed line
+ * (a few paisa) is also hidden; nobody gives one on purpose.
+ */
+export function roundOffOf(
+  discountAmount: number,
+  unitPrice: number,
+  unitScale: UnitScale,
+): number {
+  if (unitScale === 1 || discountAmount === 0) return 0;
+  const magnitude = Math.abs(discountAmount);
+  // magnitude <= unitPrice / unitScale + 0.5, in integers
+  return magnitude * unitScale * 2 <= unitPrice * 2 + unitScale ? magnitude : 0;
+}
+
 /** 1500 grams with scale 1000 -> "1.5". Pieces (scale 1) -> "3". Trailing zeros are trimmed. */
 export function formatQuantity(quantity: number, unitScale: UnitScale = 1): string {
   if (unitScale === 1) return String(quantity);

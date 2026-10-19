@@ -9,6 +9,7 @@ import {
   formatQuantity,
   hasModule,
   lineGross,
+  roundOffOf,
   parseModuleList,
   parseQuantity,
   unitScaleFor,
@@ -236,5 +237,30 @@ describe('schemas carry the unit', () => {
     expect(parsed).toMatchObject({ unitScale: 1, unitLabel: 'pcs' });
     expect(unitScaleFor('pcs')).toBe(1);
     expect(unitScaleFor('kg')).toBe(1000);
+  });
+});
+
+describe('roundOffOf: the paisa a weight round-off took off are not a discount', () => {
+  it('pieces never have a round-off', () => {
+    expect(roundOffOf(5, 15_000, 1)).toBe(0);
+    expect(roundOffOf(0, 15_000, 1000)).toBe(0);
+  });
+
+  it('a discount worth at most one gram at the line price is a round-off', () => {
+    // Rs 150/kg: one gram is 15 paisa
+    expect(roundOffOf(5, 15_000, 1000)).toBe(5);
+    expect(roundOffOf(15, 15_000, 1000)).toBe(15);
+    expect(roundOffOf(16, 15_000, 1000)).toBe(0);
+    // Rs 19/kg: one gram is 1.9 paisa, so 2 paisa still rounds (<= 1.9 + 0.5)
+    expect(roundOffOf(2, 1_900, 1000)).toBe(2);
+    expect(roundOffOf(3, 1_900, 1000)).toBe(0);
+  });
+
+  it('a real discount on a weighed line is kept whole', () => {
+    expect(roundOffOf(1_000, 15_000, 1000)).toBe(0);
+  });
+
+  it('works on the negative (return) side by magnitude', () => {
+    expect(roundOffOf(-5, 15_000, 1000)).toBe(5);
   });
 });
