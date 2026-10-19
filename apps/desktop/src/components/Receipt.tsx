@@ -18,6 +18,9 @@ function label(lang: ReceiptLang, key: TKey): ReactNode {
   return `${en} / ${ur}`;
 }
 
+/** Column headings are short, so "both" prints only the English word to keep the table narrow. */
+const col = (lang: ReceiptLang, key: TKey): string => translate(lang === 'ur' ? 'ur' : 'en', key);
+
 const money = (p: number): string => formatRs(p, { symbol: null, decimals: 'auto' });
 
 export function Receipt({
@@ -71,20 +74,30 @@ export function Receipt({
         </div>
       ) : null}
       <hr />
-      {model.items.map((it, i) => (
-        <Fragment key={i}>
-          <div className="r-b">{it.name}</div>
-          {it.sub ? <div>IMEI/SN: {it.sub}</div> : null}
-          <div className="r-row">
-            <span>
-              {qtyText(it.qty, it.unitScale, it.unitLabel)} × {money(it.unitPrice)}
-              {perUnit(it.unitScale, it.unitLabel)}
-              {it.discount > 0 ? ` (-${money(it.discount)})` : ''}
-            </span>
-            <span className="r-b">{money(it.total)}</span>
-          </div>
-        </Fragment>
-      ))}
+      <div className="r-table">
+        <div className="r-th">{col(lang, 'receipt.item')}</div>
+        <div className="r-th r-num">{col(lang, 'receipt.qty')}</div>
+        <div className="r-th r-num">{col(lang, 'receipt.weight')}</div>
+        <div className="r-th r-num">{col(lang, 'receipt.price')}</div>
+        {model.items.map((it, i) => (
+          <Fragment key={i}>
+            <div className="r-item">
+              <div className="r-b">{it.name}</div>
+              {it.sub ? <div className="r-rate">IMEI/SN: {it.sub}</div> : null}
+              <div className="r-rate">
+                @ {money(it.unitPrice)}
+                {perUnit(it.unitScale, it.unitLabel)}
+                {it.discount > 0 ? ` (-${money(it.discount)})` : ''}
+              </div>
+            </div>
+            <div className="r-num">{it.unitScale === 1 ? it.qty : '–'}</div>
+            <div className="r-num">
+              {it.unitScale === 1 ? '–' : qtyText(it.qty, it.unitScale, it.unitLabel)}
+            </div>
+            <div className="r-num r-b">{money(it.total)}</div>
+          </Fragment>
+        ))}
+      </div>
       <hr />
       <div className="r-row">
         <span>{label(lang, 'receipt.subtotal')}</span>

@@ -1019,6 +1019,30 @@
 .receipt .r-b {
   font-weight: 700;
 }
+/* item table: Item | Qty | Weight | Price; the item column wraps, the others never do */
+.receipt .r-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  column-gap: 5px;
+  row-gap: 3px;
+  align-items: start;
+}
+.receipt .r-th {
+  font-weight: 700;
+  border-bottom: 1px solid #000;
+  padding-bottom: 1px;
+}
+.receipt .r-num {
+  text-align: right;
+  white-space: nowrap;
+}
+.receipt .r-item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.receipt .r-rate {
+  font-size: 0.88em;
+}
 .receipt .r-total {
   font-size: 1.35em;
   font-weight: 800;
