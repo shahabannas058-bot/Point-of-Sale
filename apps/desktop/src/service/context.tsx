@@ -10,6 +10,11 @@ export interface AppRuntime {
    * Absent in the desktop shell, where the real database can never be wiped from the page.
    */
   resetDemo?: () => Promise<void>;
+  /**
+   * Replaces the whole database with a checked backup file; the caller reloads the page afterwards.
+   * Absent in the desktop shell, which owns pos.db and restores backups itself.
+   */
+  restore?: (bytes: Uint8Array) => Promise<void>;
   /** First-run only: fills an empty database with the demo shop ('kiryana' = grocery demo, else mobile shop). */
   loadDemo: (businessType?: BusinessType) => Promise<void>;
 }

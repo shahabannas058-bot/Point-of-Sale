@@ -1,9 +1,11 @@
 import { isServiceError } from '@pos/shared';
 import { dynKey, translate, type TFn } from './index';
+import { isBackupError } from '../db/backup-check';
 import { usePrefs } from '../store/prefs';
 
-/** ServiceError -> localized sentence. Unknown errors map to err.generic (details are never shown raw). */
+/** ServiceError (or BackupError) -> localized sentence. Unknown errors map to err.generic (details are never shown raw). */
 export function errorMessage(e: unknown, t: TFn): string {
+  if (isBackupError(e)) return t(dynKey('err', e.code));
   if (isServiceError(e)) {
     const d = e.details;
     // short because the rest of the batches are past their expiry date, not because the shelf is empty

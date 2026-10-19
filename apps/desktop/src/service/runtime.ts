@@ -20,6 +20,11 @@ export interface DbHost {
    * tables are append-only, and a shop's real data must never be one button away from deletion.
    */
   reset?: () => Promise<DbHandle>;
+  /**
+   * Replaces the stored database with a backup file after checking it; the page reloads afterwards. Left out where
+   * the host owns the file (the native shell restores a backup itself, with the app closed).
+   */
+  restore?: (bytes: Uint8Array) => Promise<void>;
 }
 
 export interface RuntimeOptions {
@@ -44,6 +49,7 @@ export async function createRuntime(host: DbHost, opts: RuntimeOptions): Promise
   }
 
   const reset = host.reset;
+  const restore = host.restore;
   return {
     get service() {
       return service;
@@ -55,6 +61,7 @@ export async function createRuntime(host: DbHost, opts: RuntimeOptions): Promise
       await seedDemoData(deps(handle), { businessType });
       service = createPosService(deps(handle));
     },
+    ...(restore === undefined ? {} : { restore }),
     ...(reset === undefined
       ? {}
       : {

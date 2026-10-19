@@ -128,4 +128,18 @@ describe('createRuntime', () => {
     await rt.resetDemo?.();
     expect(rt.exportBytes?.()).toEqual(new Uint8Array([1, 1]));
   });
+  it('restore exists only when the host can restore, and passes the bytes through', async () => {
+    const restored: Uint8Array[] = [];
+    const host = hostOf({ canReset: false, canExport: false });
+    host.restore = (bytes) => {
+      restored.push(bytes);
+      return Promise.resolve();
+    };
+    const rt = await createRuntime(host, EMPTY);
+    await rt.restore?.(new Uint8Array([7, 8, 9]));
+    expect(restored).toEqual([new Uint8Array([7, 8, 9])]);
+
+    const shell = await createRuntime(hostOf({ canReset: false, canExport: false }), EMPTY);
+    expect(shell.restore).toBeUndefined();
+  });
 });

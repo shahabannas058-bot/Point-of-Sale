@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Download, KeyRound, RotateCcw, ShieldCheck, UserPlus } from 'lucide-react';
 import { ROLES, type ChainReport, type Role, type ShopSettings } from '@pos/shared';
+import { RestoreBackup } from '../components/RestoreBackup';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -9,6 +10,7 @@ import { MorphPill } from '../components/ui/MorphPill';
 import { ErrorBox, PageHeader } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
+import { downloadFile } from '../lib/download';
 import { useRuntime } from '../service/context';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
@@ -473,13 +475,8 @@ export function Settings(): ReactNode {
   const exportDb = (): void => {
     const bytes = rt.exportBytes?.();
     if (!bytes) return;
-    const blob = new Blob([bytes as BlobPart], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pos-backup-${new Date().toISOString().slice(0, 10)}.sqlite`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const name = `pos-backup-${new Date().toISOString().slice(0, 10)}.sqlite`;
+    downloadFile(name, bytes, 'application/octet-stream');
   };
 
   const reset = async (): Promise<void> => {
@@ -593,6 +590,7 @@ export function Settings(): ReactNode {
           <p className="text-sm text-muted">
             {rt.exportBytes ? t('settings.cloudBackup') : t('settings.exportUnavailable')}
           </p>
+          {can('manage_settings') ? <RestoreBackup /> : null}
         </div>
       </Section>
 

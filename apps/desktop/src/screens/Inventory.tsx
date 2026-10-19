@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { PackagePlus, Pencil, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { PackagePlus, Pencil, Plus, Search, SlidersHorizontal, Upload } from 'lucide-react';
 import {
   PHONE_CONDITIONS,
   PTA_STATUSES,
@@ -20,6 +20,7 @@ import {
   type PhoneDraft,
 } from '../components/PhoneFields';
 import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
+import { StockImportDialog } from '../components/StockImportDialog';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -501,6 +502,7 @@ export function Inventory(): ReactNode {
   });
   const [adjust, setAdjust] = useState<VariantView | null>(null);
   const [recvOpen, setRecvOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const canEdit = can('edit_catalog');
   const showCost = can('view_cost');
@@ -552,6 +554,10 @@ export function Inventory(): ReactNode {
                 <Button onClick={() => setAccEdit({ open: true, item: null })}>
                   <Plus size={16} aria-hidden="true" />
                   {noPhones ? t('inv.addItem') : t('inv.addAccessory')}
+                </Button>
+                <Button onClick={() => setImportOpen(true)}>
+                  <Upload size={16} aria-hidden="true" />
+                  {t('import.title')}
                 </Button>
               </>
             ) : null}
@@ -817,6 +823,7 @@ export function Inventory(): ReactNode {
       />
       <AdjustDialog item={adjust} onClose={() => setAdjust(null)} />
       <ReceiveStockDialog open={recvOpen} onClose={() => setRecvOpen(false)} />
+      <StockImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 }

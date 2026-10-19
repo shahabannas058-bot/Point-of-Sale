@@ -1,7 +1,7 @@
 /* REAL SERVICE: the TypeScript PosService from @pos/db on a database host.
    Browser (development, tests): sql.js, persisted in IndexedDB.
    Desktop shell (ADR-0010): the native pos.db through the WebView2 bridge. */
-import { openBrowserDb, resetBrowserDb } from '../db/browser-db';
+import { openBrowserDb, resetBrowserDb, restoreBrowserDb } from '../db/browser-db';
 import type { SqlJsDriver } from '../db/sqljs-driver';
 import { createWebViewDriver } from '../db/webview-driver';
 import { isWebView2 } from '../native/webview-bridge';
@@ -21,12 +21,14 @@ function browserHost(): DbHost {
       await resetBrowserDb();
       return handle(await openBrowserDb({ fresh: true }));
     },
+    // the open driver is closed once the file has passed its checks, so it can never persist over the restored bytes
+    restore: (bytes) => restoreBrowserDb(bytes, { beforeWrite: () => current?.close() }),
   };
 }
 
 /**
  * C# has already created, checked and migrated pos.db (and takes the daily backup) before the page loads, so there is
- * no migrate() here, no raw export and no reset: the real database is never wiped from the page.
+ * no migrate() here, no raw export, no reset and no restore: the real database is never wiped from the page.
  */
 const shellHost: DbHost = {
   open: () => Promise.resolve({ driver: createWebViewDriver() }),

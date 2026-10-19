@@ -2,6 +2,7 @@ import initSqlJs from 'sql.js';
 import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url';
 import { del, get, set } from 'idb-keyval';
 import { migrate, migrationsFromFiles } from '@pos/db';
+import { validateBackup } from './backup-check';
 import { createSqlJsDriver, type SqlJsDriver } from './sqljs-driver';
 
 const DB_KEY = 'pos-db-v1';
@@ -30,6 +31,22 @@ export async function openBrowserDb(opts: { fresh?: boolean } = {}): Promise<Sql
   const driver = createSqlJsDriver(db, (bytes) => set(DB_KEY, bytes));
   await migrate(driver, migrationsFromFiles(migrationFiles));
   return driver;
+}
+
+/**
+ * Replaces the persisted database with a backup file. The bytes are checked first (SQLite header, integrity_check,
+ * migrations known to this app; see backup-check.ts) and nothing is written when a check fails. `beforeWrite` runs
+ * after the checks and before the bytes are stored: the caller closes its open driver there, so no late write of the
+ * old database can land on top of the restored one. The page must reload afterwards.
+ */
+export async function restoreBrowserDb(
+  bytes: Uint8Array,
+  opts: { beforeWrite?: () => void } = {},
+): Promise<void> {
+  const SQL = await loadSql();
+  validateBackup(SQL, bytes, migrationsFromFiles(migrationFiles));
+  opts.beforeWrite?.();
+  await set(DB_KEY, bytes);
 }
 
 /** Removes the persisted database. The caller must close any open driver first. */
