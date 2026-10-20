@@ -179,6 +179,7 @@ export const ur: Dict = {
   'receipt.item': 'Item',
   'receipt.qty': 'Qty',
   'receipt.weight': 'Wazan',
+  'receipt.rate': 'Rate',
   'receipt.price': 'Qeemat',
   'login.tagline.items':
     'Aap ke kiryana store ke liye billing, stock aur udhaar. Internet ke baghair chalta hai.',

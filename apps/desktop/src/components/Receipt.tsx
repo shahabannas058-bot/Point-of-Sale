@@ -78,21 +78,26 @@ export function Receipt({
         <div className="r-th">{col(lang, 'receipt.item')}</div>
         <div className="r-th r-num">{col(lang, 'receipt.qty')}</div>
         <div className="r-th r-num">{col(lang, 'receipt.weight')}</div>
+        <div className="r-th r-num">{col(lang, 'receipt.rate')}</div>
         <div className="r-th r-num">{col(lang, 'receipt.price')}</div>
         {model.items.map((it, i) => (
           <Fragment key={i}>
             <div className="r-item">
               <div className="r-b">{it.name}</div>
               {it.sub ? <div className="r-rate">IMEI/SN: {it.sub}</div> : null}
-              <div className="r-rate">
-                @ {money(it.unitPrice)}
-                {perUnit(it.unitScale, it.unitLabel)}
-                {it.discount > 0 ? ` (-${money(it.discount)})` : ''}
-              </div>
+              {it.discount > 0 ? (
+                <div className="r-rate">
+                  {col(lang, 'receipt.discount')} -{money(it.discount)}
+                </div>
+              ) : null}
             </div>
             <div className="r-num">{it.unitScale === 1 ? it.qty : '–'}</div>
             <div className="r-num">
               {it.unitScale === 1 ? '–' : qtyText(it.qty, it.unitScale, it.unitLabel)}
+            </div>
+            <div className="r-num">
+              {money(it.unitPrice)}
+              {perUnit(it.unitScale, it.unitLabel)}
             </div>
             <div className="r-num r-b">{money(it.total)}</div>
           </Fragment>

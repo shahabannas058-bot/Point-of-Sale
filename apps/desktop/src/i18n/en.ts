@@ -173,6 +173,7 @@ export const en = {
   'receipt.item': 'Item',
   'receipt.qty': 'Qty',
   'receipt.weight': 'Weight',
+  'receipt.rate': 'Rate',
   'receipt.price': 'Price',
   'login.tagline.items':
     'Billing, stock and udhaar for your kiryana store. Works without internet.',

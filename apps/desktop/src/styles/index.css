@@ -1019,11 +1019,11 @@
 .receipt .r-b {
   font-weight: 700;
 }
-/* item table: Item | Qty | Weight | Price; the item column wraps, the others never do */
+/* item table: Item | Qty | Weight | Rate | Price; the item column wraps, the others never do */
 .receipt .r-table {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  column-gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  column-gap: 4px;
   row-gap: 3px;
   align-items: start;
 }
