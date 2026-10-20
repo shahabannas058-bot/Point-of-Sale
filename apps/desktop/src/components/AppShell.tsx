@@ -4,6 +4,7 @@ import {
   Boxes,
   CalendarClock,
   ChartColumn,
+  LayoutDashboard,
   LogOut,
   Moon,
   Receipt,
@@ -39,6 +40,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { to: '/dashboard', key: 'nav.dashboard', icon: LayoutDashboard, perm: 'view_reports' },
   { to: '/', key: 'nav.billing', icon: ShoppingCart, perm: 'sell' },
   { to: '/inventory', key: 'nav.inventory', icon: Boxes, perm: 'view_catalog' },
   {

@@ -51,7 +51,20 @@ export function shiftMonth(ym: string, delta: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 /** "Oct 2026" for a YYYY-MM string (Latin script in both languages). */
 export function formatMonth(ym: string): string {

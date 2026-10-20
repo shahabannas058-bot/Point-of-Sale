@@ -7,27 +7,15 @@ import {
   type PeriodSummary,
   type ReportsApi,
 } from '@pos/shared';
-import { requirePermission, type Ctx } from './deps';
+import { canDo, requirePermission, type Ctx } from './deps';
 import { guardApi } from './errors';
 import { toVariantView, type Raw } from './mappers';
 import { loadShop } from './meta';
 import { VARIANT_VIEW_SQL } from './queries';
+import { assertBuckets, loadDashboard } from './dashboard';
+import { ROUND_OFF_SQL, grossSql } from './report-sql';
 
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
-
-/**
- * SQL for quantity * price / unit_scale, rounded half away from zero: the same rule as the sale_lines CHECK and
- * lineGross() in @pos/shared. `price` is a column of the aliased `l` (sale_lines).
- */
-const grossSql = (price: string): string =>
-  `CASE WHEN l.quantity * ${price} >= 0
-     THEN (l.quantity * ${price} + l.unit_scale / 2) / l.unit_scale
-     ELSE -((-(l.quantity * ${price}) + l.unit_scale / 2) / l.unit_scale) END`;
-
-/** The weight round-off part of a sale line's discount (SQL twin of roundOffOf in @pos/shared), 0 for pieces. */
-const ROUND_OFF_SQL = `CASE WHEN l.unit_scale > 1 AND l.discount_amount <> 0
-     AND abs(l.discount_amount) * l.unit_scale * 2 <= l.unit_price * 2 + l.unit_scale
-     THEN l.discount_amount ELSE 0 END`;
 
 export function createReportsApi(ctx: Ctx): ReportsApi {
   return guardApi<ReportsApi>({
@@ -118,6 +106,21 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
         expenses: paisa(expenses),
         netProfit: paisa(netRevenue - cogs - expenses),
         lowStock: low.map(toVariantView),
+      };
+    },
+
+    async dashboard(input) {
+      requirePermission(ctx, 'view_reports');
+      assertBuckets(input.buckets);
+      const shop = await loadShop(ctx.driver);
+      await ctx.assertCanSell({ action: 'report', branchId: shop.branchId, now: ctx.clock() });
+      const data = await loadDashboard(ctx.driver, shop.branchId, input);
+      if (canDo(ctx, 'view_cost')) return data;
+      // profit and stock value come from cost prices: hidden without view_cost
+      return {
+        ...data,
+        trend: data.trend.map((p) => ({ ...p, profit: paisa(0) })),
+        inventoryValue: paisa(0),
       };
     },
   });

@@ -3,6 +3,7 @@ import { AppShell, RequireSession } from './components/AppShell';
 import { RequireModule } from './components/RequireModule';
 import { Billing } from './screens/Billing';
 import { CashDrawer } from './screens/CashDrawer';
+import { Dashboard } from './screens/Dashboard';
 import { CustomerDetail } from './screens/CustomerDetail';
 import { CustomerStatement } from './screens/CustomerStatement';
 import { Customers } from './screens/Customers';
@@ -30,6 +31,7 @@ export const router = createHashRouter([
     ),
     children: [
       { index: true, element: <Billing /> },
+      { path: 'dashboard', element: <Dashboard /> },
       { path: 'inventory', element: <Inventory /> },
       { path: 'sales', element: <Sales /> },
       { path: 'cash', element: <CashDrawer /> },

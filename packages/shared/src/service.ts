@@ -573,10 +573,34 @@ export interface PeriodSummary {
   netProfit: Paisa; // estimatedProfit - expenses
   lowStock: VariantView[];
 }
+/** Ascending bucket boundaries: buckets[i]..buckets[i+1] is one chart point (the UI computes local days / months). */
+export interface DashboardInput {
+  buckets: number[];
+}
+export interface TrendPoint {
+  fromMs: number;
+  toMs: number;
+  revenue: Paisa; // sum(total) over all kinds: returns and voids net out
+  profit: Paisa; // revenue - cost snapshot of the lines, before expenses
+  salesCount: number; // kind 'sale' only
+}
+export interface CategorySales {
+  category: string; // '' when the product has none
+  revenue: Paisa; // sum(line_total) over all kinds, before invoice discounts
+}
+export interface DashboardData {
+  trend: TrendPoint[];
+  /** Stock on hand at cost right now (negative stock counts as zero). */
+  inventoryValue: Paisa;
+  /** Best five categories by revenue over the whole bucket span, revenue > 0 only. */
+  topCategories: CategorySales[];
+}
 export interface ReportsApi {
   summary(
     r: SummaryRange,
   ): Promise<PeriodSummary> /* view_reports; calls assertCanSell({action:'report'}) */;
+  /** Chart data for the dashboard. view_reports; calls assertCanSell({action:'report'}). */
+  dashboard(i: DashboardInput): Promise<DashboardData>;
 }
 
 // ---------- cash drawer (galla): expenses and day close ----------
