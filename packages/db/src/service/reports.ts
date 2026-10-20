@@ -13,6 +13,7 @@ import { toVariantView, type Raw } from './mappers';
 import { loadShop } from './meta';
 import { VARIANT_VIEW_SQL } from './queries';
 import { assertBuckets, loadDashboard } from './dashboard';
+import { queryStockLog } from './stock-log';
 import { ROUND_OFF_SQL, grossSql } from './report-sql';
 
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
@@ -122,6 +123,13 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
         trend: data.trend.map((p) => ({ ...p, profit: paisa(0) })),
         inventoryValue: paisa(0),
       };
+    },
+
+    async adjustments(q) {
+      requirePermission(ctx, 'view_reports');
+      const shop = await loadShop(ctx.driver);
+      await ctx.assertCanSell({ action: 'report', branchId: shop.branchId, now: ctx.clock() });
+      return queryStockLog(ctx, shop.branchId, q);
     },
   });
 }

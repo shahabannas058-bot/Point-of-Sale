@@ -21,6 +21,7 @@ import {
   type CatalogHit,
   type PaymentInput,
   type PhoneUnitView,
+  type VariantView,
 } from '@pos/shared';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { CustomerPicker } from '../components/CustomerPicker';
@@ -28,6 +29,7 @@ import { ImeiPicker } from '../components/ImeiPicker';
 import { ItemHistoryDialog } from '../components/ItemHistoryDialog';
 import { PaymentPanel } from '../components/PaymentPanel';
 import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
+import { QUICK_HOTKEYS, QuickItemsBar, QuickItemsDialog } from '../components/QuickItems';
 import { ReceiptDialog } from '../components/ReceiptDialog';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -53,6 +55,7 @@ import {
   type CartLine,
 } from '../store/cart';
 import { useDataVersion } from '../store/data-version';
+import { useCan } from '../store/session';
 import { toast } from '../store/toast';
 import { formatTime } from '../lib/dates';
 import {
@@ -372,6 +375,9 @@ export function Billing(): ReactNode {
   const [dropOpen, setDropOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [imeiUnits, setImeiUnits] = useState<PhoneUnitView[] | null>(null);
+  const can = useCan();
+  const [quick, setQuick] = useState<VariantView[]>([]);
+  const [quickOpen, setQuickOpen] = useState(false);
 
   const [customerOpen, setCustomerOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
@@ -455,6 +461,32 @@ export function Billing(): ReactNode {
       focusSearch();
     },
     [report, focusSearch],
+  );
+
+  // pinned quick items, refreshed after every sale or stock change so the on-hand badges stay true
+  useEffect(() => {
+    let live = true;
+    service.catalog
+      .quickItems()
+      .then((r) => live && setQuick(r))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [service, version]);
+  const addQuick = useCallback(
+    (v: VariantView): void => addHit({ kind: 'variant', matchedBy: 'sku', item: v }),
+    [addHit],
+  );
+  const quickKeys = Object.fromEntries(
+    quick.slice(0, QUICK_HOTKEYS).map((v, i) => [
+      `Alt+${i + 1}`,
+      (e: KeyboardEvent) => {
+        e.preventDefault();
+        if (v.onHand > 0) addQuick(v);
+        else toast.error(t('billing.outOfStock'));
+      },
+    ]),
   );
 
   // type-ahead results
@@ -578,6 +610,7 @@ export function Billing(): ReactNode {
   const selectedLine = lines[cart.selected];
   useHotkeys(
     {
+      ...quickKeys,
       F1: () => setHelpOpen(true),
       F2: () => focusSearch(),
       F4: () => setCustomerOpen(true),
@@ -650,6 +683,7 @@ export function Billing(): ReactNode {
     ['Ctrl+D', 'sc.discount'],
     ['Ctrl+P', 'sc.print'],
     ['Ctrl+H', 'sc.history'],
+    ['Alt+1…9', 'sc.quick'],
     ['Esc', 'sc.escape'],
     ['Del', 'sc.remove'],
     ['↑ ↓', 'sc.select'],
@@ -758,6 +792,12 @@ export function Billing(): ReactNode {
             </ul>
           ) : null}
         </div>
+
+        <QuickItemsBar
+          items={quick}
+          onPick={addQuick}
+          onEdit={can('manage_settings') ? () => setQuickOpen(true) : undefined}
+        />
 
         <div className="tbl-wrap">
           {lines.length === 0 ? (
@@ -1029,6 +1069,15 @@ export function Billing(): ReactNode {
       </aside>
 
       {/* ------------------------------------------------ dialogs */}
+      <QuickItemsDialog
+        open={quickOpen}
+        onClose={() => {
+          setQuickOpen(false);
+          focusSearch();
+        }}
+        items={quick}
+        onSaved={setQuick}
+      />
       <ImeiPicker
         units={imeiUnits}
         onClose={() => {

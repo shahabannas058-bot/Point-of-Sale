@@ -16,6 +16,7 @@ import { RepairDetail } from './screens/RepairDetail';
 import { Repairs } from './screens/Repairs';
 import { Reports } from './screens/Reports';
 import { Sales } from './screens/Sales';
+import { StockLog } from './screens/StockLog';
 import { Settings } from './screens/Settings';
 import { SupplierDetail } from './screens/SupplierDetail';
 import { Suppliers } from './screens/Suppliers';
@@ -33,6 +34,7 @@ export const router = createHashRouter([
       { index: true, element: <Billing /> },
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'inventory', element: <Inventory /> },
+      { path: 'inventory/adjustments', element: <StockLog /> },
       { path: 'sales', element: <Sales /> },
       { path: 'cash', element: <CashDrawer /> },
       { path: 'customers', element: <Customers /> },

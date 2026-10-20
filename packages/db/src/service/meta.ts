@@ -27,6 +27,8 @@ export const META = {
   businessType: 'business_type',
   /** Comma-separated ModuleId list. Later written by the licence token (ADR-0003). */
   modules: 'modules',
+  /** Comma-separated variant ids pinned as Billing's one-tap quick items, in order. */
+  quickItems: 'quick_items',
 } as const;
 
 export const DEFAULT_CASHIER_MAX_DISCOUNT_BPS = 500;

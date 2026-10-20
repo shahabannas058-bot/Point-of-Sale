@@ -294,6 +294,48 @@ export interface ItemHistoryPage {
   summary: { purchased: number; sold: number; returned: number; adjusted: number; onHand: number };
 }
 
+/* ---------- stock adjustment log (every hand-made stock change in the shop, for the owner) ---------- */
+export interface StockLogQuery {
+  /** Inclusive epoch-ms bounds; default = everything. */
+  from?: number;
+  to?: number;
+  /** Matches the item name, the reason or who did it. */
+  q?: string;
+  /** Newest-first page size, default 200, max 1000. */
+  limit?: number;
+  /** Cursor from the previous page (`nextBefore`). */
+  before?: { at: number; id: string };
+}
+export interface StockLogEntry {
+  id: string; // stock_movements.id
+  at: number;
+  item: ItemRef;
+  label: string;
+  /** 1 for pieces and phone units, 1000 for kg / litre: quantities are in base units. */
+  unitScale: UnitScale;
+  unitLabel: UnitLabel;
+  /** Signed, in base units. */
+  quantity: number;
+  /** The item's on-hand right before and right after this change, base units. */
+  balanceBefore: number;
+  balanceAfter: number;
+  reason: string | null;
+  /** Set when the stock went into a repair as a spare part. */
+  repair: { ticketId: string; ticketNo: string } | null;
+  batch: { id: string; batchNo: string | null; expiryDate: string } | null;
+  by: { id: string; displayName: string };
+}
+export interface StockLogPage {
+  /** Newest first. */
+  entries: StockLogEntry[];
+  nextBefore: { at: number; id: string } | null;
+  /** Over the whole query (not just this page): how many changes, and how many added or removed stock. */
+  summary: { count: number; increases: number; decreases: number };
+}
+
+/** The most items Billing can pin as one-tap quick items. */
+export const MAX_QUICK_ITEMS = 24;
+
 export interface CatalogApi {
   /** Exact barcode/sku/imei/serial first (scanner: UI auto-adds if exactly 1 exact hit), then LIKE on brand/name/model/colour. */
   search(query: string, opts?: { limit?: number; inStockOnly?: boolean }): Promise<CatalogHit[]>;
@@ -335,6 +377,10 @@ export interface CatalogApi {
     >,
   ): Promise<VariantView>;
   adjustStock(i: { variantId: string; delta: number; reason: string }): Promise<VariantView>; // adjust_stock; reason mandatory (DB CHECK)
+  /** Billing's pinned one-tap items in pin order; any signed-in user. Items since deactivated or deleted are left out. */
+  quickItems(): Promise<VariantView[]>;
+  /** Replaces the pinned list (distinct variant ids, at most MAX_QUICK_ITEMS); manage_settings. */
+  setQuickItems(variantIds: string[]): Promise<VariantView[]>;
 }
 
 // ---------- purchasing ----------
@@ -601,6 +647,8 @@ export interface ReportsApi {
   ): Promise<PeriodSummary> /* view_reports; calls assertCanSell({action:'report'}) */;
   /** Chart data for the dashboard. view_reports; calls assertCanSell({action:'report'}). */
   dashboard(i: DashboardInput): Promise<DashboardData>;
+  /** Every stock adjustment in the shop (opening stock, corrections, write-offs, repair parts), newest first. view_reports; calls assertCanSell({action:'report'}). */
+  adjustments(q?: StockLogQuery): Promise<StockLogPage>;
 }
 
 // ---------- cash drawer (galla): expenses and day close ----------

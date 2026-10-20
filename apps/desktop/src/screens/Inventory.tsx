@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import {
   History,
   PackagePlus,
@@ -574,6 +575,12 @@ export function Inventory(): ReactNode {
                   {t('import.title')}
                 </Button>
               </>
+            ) : null}
+            {can('view_reports') ? (
+              <Link to="/inventory/adjustments" className="btn btn-secondary">
+                <History size={16} aria-hidden="true" />
+                {t('adjlog.open')}
+              </Link>
             ) : null}
           </>
         }

@@ -40,9 +40,9 @@ const SKIP: HotkeyDecision = { fire: false, preventDefault: false };
 export const isAnyDialogOpen = (): boolean => document.querySelector('dialog[open]') !== null;
 
 /**
- * Pure matcher. While focus is in a form field only Escape, Ctrl+* and F-keys fire, so typing
+ * Pure matcher. While focus is in a form field only Escape, Ctrl+* / Alt+* and F-keys fire, so typing
  * "+" in a qty box never triggers the "+" shortcut. With `blockWhileDialogOpen` nothing fires
- * while a dialog is open. F-keys and Ctrl combos that fire also swallow the browser default.
+ * while a dialog is open. F-keys, Ctrl and Alt combos that fire also swallow the browser default.
  */
 export function resolveHotkey(
   spec: string,
@@ -50,7 +50,7 @@ export function resolveHotkey(
   opts: HotkeyOptions = {},
 ): HotkeyDecision {
   if (opts.blockWhileDialogOpen && ctx.dialogOpen) return SKIP;
-  const chord = F_KEY.test(spec) || spec.startsWith('Ctrl+');
+  const chord = F_KEY.test(spec) || spec.startsWith('Ctrl+') || spec.startsWith('Alt+');
   const alwaysOk = chord || spec === 'Escape';
   if (ctx.typing && !alwaysOk) return SKIP;
   return { fire: true, preventDefault: chord };

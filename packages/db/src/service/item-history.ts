@@ -69,7 +69,7 @@ interface Bounds {
 
 // ---------- input validation ----------
 
-function uuid(v: unknown, field: string): string {
+export function uuid(v: unknown, field: string): string {
   if (typeof v !== 'string' || !UUID_RE.test(v)) throw invalid(field, `${field} must be a UUID`);
   return v;
 }
@@ -87,7 +87,7 @@ export function resolveItemRef(ref: unknown): ResolvedRef {
     : { column: 'phone_unit_id', id: uuid(r.phoneUnitId, 'phoneUnitId') };
 }
 
-function bounds(q: ItemHistoryQuery): Bounds {
+export function bounds(q: ItemHistoryQuery): Bounds {
   const from = q.from === undefined ? null : intIn(q.from, 'from', 0, MAX_EPOCH_MS);
   const to = q.to === undefined ? null : intIn(q.to, 'to', 0, MAX_EPOCH_MS);
   if (from !== null && to !== null && from > to) throw invalid('from', 'from must not be after to');
@@ -95,14 +95,14 @@ function bounds(q: ItemHistoryQuery): Bounds {
 }
 
 /** A non-integer is rejected; an integer outside 1..1000 is clamped. */
-function pageLimit(v: unknown): number {
+export function pageLimit(v: unknown): number {
   if (v === undefined) return ITEM_HISTORY_DEFAULT_LIMIT;
   if (typeof v !== 'number' || !Number.isSafeInteger(v))
     throw invalid('limit', 'limit must be an integer');
   return Math.min(Math.max(v, 1), ITEM_HISTORY_MAX_LIMIT);
 }
 
-function cursor(v: ItemHistoryQuery['before']): { at: number; id: string } | null {
+export function cursor(v: ItemHistoryQuery['before']): { at: number; id: string } | null {
   if (v === undefined || v === null) return null;
   if (typeof v !== 'object') throw invalid('before', 'before must be a cursor');
   return {

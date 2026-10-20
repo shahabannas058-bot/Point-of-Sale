@@ -20,6 +20,7 @@ import { takeOutParts } from './batches';
 import { requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optIntIn, optText, reqText } from './errors';
 import { queryItemHistory } from './item-history';
+import { loadQuickItems, saveQuickItems } from './quick-items';
 import type { Raw } from './mappers';
 import { toPhoneView, toVariantView } from './mappers';
 import { loadShop } from './meta';
@@ -566,6 +567,18 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         await b.commit(ctx.driver);
       });
       return requireVariantView(ctx.driver, i.variantId, shop.branchId);
+    },
+
+    async quickItems() {
+      requireSession(ctx);
+      return loadQuickItems(ctx, await branch());
+    },
+
+    async setQuickItems(variantIds) {
+      requirePermission(ctx, 'manage_settings');
+      const branchId = await branch();
+      await saveQuickItems(ctx, variantIds);
+      return loadQuickItems(ctx, branchId);
     },
   });
 }

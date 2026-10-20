@@ -19,6 +19,10 @@ describe('resolveHotkey', () => {
     expect(resolveHotkey('Escape', typing)).toEqual({ fire: true, preventDefault: false });
   });
 
+  it('lets Alt combos fire while typing, so Alt+1 adds a quick item from the search box', () => {
+    expect(resolveHotkey('Alt+1', typing)).toEqual({ fire: true, preventDefault: true });
+  });
+
   it('blocks every screen shortcut while a dialog is open', () => {
     for (const spec of ['F4', 'F7', 'F8', 'F9', 'Ctrl+D', 'Ctrl+P', 'Delete', '+', 'Escape']) {
       expect(resolveHotkey(spec, inDialog, screen), spec).toEqual({
