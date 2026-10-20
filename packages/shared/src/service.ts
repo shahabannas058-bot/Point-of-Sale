@@ -1,3 +1,4 @@
+import type { CashEntry, CashEntryType, DrawerBreakdown, ExpenseCategory } from './cash';
 import type { AccessoryVariant, PhoneUnit, Product } from './catalog';
 import type { PaymentMethod, PhoneCondition, PtaStatus, Role, SaleKind } from './enums';
 import type { LedgerEntry } from './ledger';
@@ -110,7 +111,8 @@ export type GuardAction =
   | 'ledger_entry'
   | 'catalog_edit'
   | 'repair'
-  | 'warranty';
+  | 'warranty'
+  | 'cash';
 export interface SellGuardContext {
   action: GuardAction;
   branchId: string;
@@ -566,13 +568,59 @@ export interface PeriodSummary {
   khataCollected: Paisa; // payment_received ledger entries in range (magnitude)
   cashInDrawer: Paisa; // byMethod.cash + cash khata receipts
   estimatedCogs: Paisa; // sum(qty*cost_price snapshot) signed over all kinds
-  estimatedProfit: Paisa; // netRevenue - estimatedCogs (no expenses yet)
+  estimatedProfit: Paisa; // netRevenue - estimatedCogs (before expenses)
+  expenses: Paisa; // cash book expense entries in range, net of reversals
+  netProfit: Paisa; // estimatedProfit - expenses
   lowStock: VariantView[];
 }
 export interface ReportsApi {
   summary(
     r: SummaryRange,
   ): Promise<PeriodSummary> /* view_reports; calls assertCanSell({action:'report'}) */;
+}
+
+// ---------- cash drawer (galla): expenses and day close ----------
+export interface CashEntryView extends CashEntry {
+  createdByName: string;
+  /** A later entry cancels this one. */
+  reversed: boolean;
+}
+/** The open period: everything since the last close (or since the start, before the first close). */
+export interface DrawerSnapshot extends DrawerBreakdown {
+  periodStart: number; // the last close's closedAt, 0 before the first close
+  asOf: number;
+  /** Cash book entries of this period, oldest first. */
+  entries: CashEntryView[];
+  lastClose: DayClose | null;
+}
+export interface DayClose extends DrawerBreakdown {
+  id: string;
+  branchId: string;
+  periodStart: number;
+  closedAt: number;
+  counted: Paisa; // cash actually in the drawer
+  carriedForward: Paisa; // left in the drawer for the next period (the rest went home / to the bank)
+  difference: Paisa; // counted - expected: positive = extra, negative = short
+  note: string | null;
+  closedBy: string;
+  closedByName: string;
+}
+export interface CashApi {
+  /** Expected cash right now and how it adds up. Needs sell. */
+  drawer(): Promise<DrawerSnapshot>;
+  /** Records an expense (category required) or other cash in / out. Needs sell. */
+  addEntry(i: {
+    type: CashEntryType;
+    category?: ExpenseCategory | null;
+    amount: number /* positive paisa */;
+    note?: string | null;
+  }): Promise<CashEntry>;
+  /** Cancels an entry of the open period with its negative twin. Needs return_void. */
+  reverseEntry(i: { entryId: string; reason?: string | null }): Promise<CashEntry>;
+  /** Counts the drawer and starts a new period. 0 <= carriedForward <= counted. Needs sell. */
+  closeDay(i: { counted: number; carriedForward: number; note?: string | null }): Promise<DayClose>;
+  /** Past closes, newest first (default 30). Needs view_reports. */
+  listCloses(o?: { limit?: number }): Promise<DayClose[]>;
 }
 
 // ---------- batches and expiry (module batch_expiry) ----------
@@ -739,6 +787,7 @@ export interface PosService {
   readonly checkout: CheckoutApi;
   readonly khata: KhataApi;
   readonly reports: ReportsApi;
+  readonly cash: CashApi;
   readonly batches: BatchesApi;
   readonly integrity: IntegrityApi;
   readonly repairs: RepairsApi;

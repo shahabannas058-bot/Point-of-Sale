@@ -1,6 +1,7 @@
 import type { PosService } from '@pos/shared';
 import { createAuthApi } from './auth';
 import { createBatchesApi } from './batches';
+import { createCashApi } from './cash-book';
 import { createCatalogApi } from './catalog';
 import { createCheckoutPart } from './checkout';
 import { createCtx, type ServiceDeps } from './deps';
@@ -15,7 +16,7 @@ import { createSettingsApi } from './settings';
 import { createSetupApi } from './setup';
 import { createWarrantyApi } from './warranty';
 
-/** Composes the eleven APIs of the contract over one driver. Each service instance has its own session/lock. */
+/** Composes the twelve APIs of the contract over one driver. Each service instance has its own session/lock. */
 export function createPosService(deps: ServiceDeps): PosService {
   const ctx = createCtx(deps);
   return {
@@ -27,6 +28,7 @@ export function createPosService(deps: ServiceDeps): PosService {
     checkout: { ...createCheckoutPart(ctx), ...createReturnsPart(ctx) },
     khata: createKhataApi(ctx),
     reports: createReportsApi(ctx),
+    cash: createCashApi(ctx),
     batches: requireModuleApi(ctx, 'batch_expiry', createBatchesApi(ctx)),
     integrity: createIntegrityApi(ctx),
     repairs: requireModuleApi(ctx, 'repair', createRepairsApi(ctx)),

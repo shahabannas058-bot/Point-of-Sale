@@ -2,6 +2,7 @@ import { Navigate, createHashRouter } from 'react-router';
 import { AppShell, RequireSession } from './components/AppShell';
 import { RequireModule } from './components/RequireModule';
 import { Billing } from './screens/Billing';
+import { CashDrawer } from './screens/CashDrawer';
 import { CustomerDetail } from './screens/CustomerDetail';
 import { CustomerStatement } from './screens/CustomerStatement';
 import { Customers } from './screens/Customers';
@@ -31,6 +32,7 @@ export const router = createHashRouter([
       { index: true, element: <Billing /> },
       { path: 'inventory', element: <Inventory /> },
       { path: 'sales', element: <Sales /> },
+      { path: 'cash', element: <CashDrawer /> },
       { path: 'customers', element: <Customers /> },
       { path: 'customers/pending', element: <PendingUdhaar /> },
       { path: 'customers/:id', element: <CustomerDetail /> },

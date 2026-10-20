@@ -101,6 +101,8 @@ export const OUTBOX_ENTITY_TYPES = [
   'repair_part',
   'repair_payment',
   'warranty',
+  'cash_entry',
+  'day_close',
 ] as const;
 export const OutboxEntityTypeSchema = z.enum(OUTBOX_ENTITY_TYPES);
 export type OutboxEntityType = z.infer<typeof OutboxEntityTypeSchema>;

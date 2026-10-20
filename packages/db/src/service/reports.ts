@@ -75,6 +75,18 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
          WHERE customer_id IS NOT NULL AND type = 'payment_received' AND created_at >= ? AND created_at < ?`,
       );
 
+      const expenses = num(
+        (
+          await q(
+            // a reversal counts on the day of the entry it cancels
+            `SELECT COALESCE(SUM(e.amount), 0) AS expenses
+             FROM cash_entries e LEFT JOIN cash_entries o ON o.id = e.reverses_id
+             WHERE e.type = 'expense' AND COALESCE(o.created_at, e.created_at) >= ?
+               AND COALESCE(o.created_at, e.created_at) < ?`,
+          )
+        ).expenses,
+      );
+
       const byMethod = Object.fromEntries(PAYMENT_METHODS.map((m) => [m, paisa(0)])) as Record<
         PaymentMethod,
         Paisa
@@ -103,6 +115,8 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
         cashInDrawer: paisa(byMethod.cash + num(khata.cash_collected)),
         estimatedCogs: paisa(cogs),
         estimatedProfit: paisa(netRevenue - cogs),
+        expenses: paisa(expenses),
+        netProfit: paisa(netRevenue - cogs - expenses),
         lowStock: low.map(toVariantView),
       };
     },

@@ -31,7 +31,7 @@ Tick boxes as work completes. Architecture rules and licensing design are in `CL
 ### Standard
 - [ ] Multiple users with roles (owner / manager / cashier); cashier cannot discount or void without PIN
 - [ ] Supplier purchases, supplier payable ledger, purchase returns
-- [ ] Expense tracking, cash-in-hand / day close
+- [x] Expense tracking, cash-in-hand / day close — _migration 0008, Cash drawer screen (galla): expenses, cash in / out, reversals, day close with count and difference; reports show profit after expenses_
 - [x] **Warranty tracking by IMEI** (shop vs company warranty, expiry lookup)
 - [ ] **Trade-in / purchase of used phones** (CNIC + IMEI capture, goes back to stock)
 - [x] **Repair job tickets** (received → in repair → ready → delivered), advance payment, spare-part stock consumption

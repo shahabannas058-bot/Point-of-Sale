@@ -32,12 +32,13 @@ public class MigrationTests
                 var tables = Names(db, "table");
                 string[] expected =
                 [
-                    "accessory_variants", "app_meta", "branches", "customers", "ledger_entries", "outbox", "payments",
+                    "accessory_variants", "app_meta", "branches", "cash_entries", "customers", "day_closes",
+                    "ledger_entries", "outbox", "payments",
                     "phone_units", "products", "purchases", "repair_parts", "repair_payments", "repair_status_history",
                     "repair_tickets", "sale_lines", "sales", "schema_migrations", "stock_batches", "stock_movements",
                     "suppliers", "users", "warranties",
                 ];
-                Assert.Equal(expected, tables); // 21 business tables + schema_migrations
+                Assert.Equal(expected, tables); // 23 business tables + schema_migrations
                 Assert.Contains("v_variant_on_hand", Names(db, "view"));
                 Assert.True(Names(db, "trigger").Count >= 10, "immutability / chain triggers must exist");
             }
@@ -52,9 +53,9 @@ public class MigrationTests
         try
         {
             using var db = new SqliteDatabase(file);
-            Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7 }, Migrator.Apply(db));
+            Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8 }, Migrator.Apply(db));
             Assert.Empty(Migrator.Apply(db));
-            Assert.Equal(7, db.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
+            Assert.Equal(8, db.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
         }
         finally { Cleanup(file); }
     }
@@ -183,7 +184,7 @@ public class MigrationTests
 
             using var restored = new SqliteDatabase(Path.Combine(dir, "pos-2026-10-13.db")); // a backup is a usable database
             Assert.Equal("ok", restored.QuickCheck());
-            Assert.Equal(7, restored.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
+            Assert.Equal(8, restored.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
     }

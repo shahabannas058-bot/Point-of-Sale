@@ -39,7 +39,7 @@ describe('migration 0006 on a database that already has invoices', () => {
     );
     expect(linesBefore).toHaveLength(6);
 
-    expect(await migrate(db, migrations)).toEqual([6, 7]); // 0007 (batches) must not disturb the 0006 result
+    expect(await migrate(db, migrations)).toEqual([6, 7, 8]); // 0007 (batches) and 0008 (cash book) must not disturb the 0006 result
 
     const linesAfter = await db.query<Record<string, unknown>>(
       'select * from sale_lines order by id',

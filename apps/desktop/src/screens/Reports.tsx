@@ -7,6 +7,7 @@ import { Input } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
 import { localDayRange, todayYmd } from '../lib/dates';
+import { formatRs } from '../lib/money';
 import { variantQtyText } from '../lib/qty';
 import { printPage } from '../lib/print';
 import { useServiceQuery } from '../service/use-query';
@@ -95,10 +96,10 @@ export function Reports(): ReactNode {
             <Kpi label={t('reports.cashInDrawer')} value={s.cashInDrawer} tone="success" />
             {can('view_cost') ? (
               <Kpi
-                label={t('reports.profit')}
-                value={s.estimatedProfit}
-                tone={s.estimatedProfit >= 0 ? 'success' : 'danger'}
-                hint={t('reports.profitHint')}
+                label={t('reports.netProfit')}
+                value={s.netProfit}
+                tone={s.netProfit >= 0 ? 'success' : 'danger'}
+                hint={t('reports.expensesHint', { amount: formatRs(s.expenses) })}
               />
             ) : null}
           </div>
@@ -170,6 +171,28 @@ export function Reports(): ReactNode {
                         <Money value={s.estimatedCogs} symbol={null} />
                       </td>
                     </tr>
+                  ) : null}
+                  {can('view_cost') ? (
+                    <>
+                      <tr>
+                        <td className="font-medium">{t('reports.profit')}</td>
+                        <td className="num">
+                          <Money value={s.estimatedProfit} symbol={null} />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="font-medium">{t('reports.expenses')}</td>
+                        <td className="num">
+                          <Money value={s.expenses} symbol={null} />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="font-bold">{t('reports.netProfit')}</td>
+                        <td className="num">
+                          <Money value={s.netProfit} symbol={null} className="font-bold" />
+                        </td>
+                      </tr>
+                    </>
                   ) : null}
                 </tbody>
               </table>

@@ -13,6 +13,7 @@ import {
   Sun,
   Truck,
   Users,
+  Wallet,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -48,6 +49,7 @@ const NAV: NavItem[] = [
     module: 'batch_expiry',
   },
   { to: '/sales', key: 'nav.sales', icon: Receipt, perm: 'sell' },
+  { to: '/cash', key: 'nav.cash', icon: Wallet, perm: 'sell' },
   { to: '/repairs', key: 'nav.repairs', icon: Wrench, perm: 'sell', module: 'repair' },
   { to: '/warranty', key: 'nav.warranty', icon: ShieldCheck, perm: 'sell', module: 'warranty' },
   { to: '/customers', key: 'nav.customers', icon: Users, perm: 'receive_khata' },

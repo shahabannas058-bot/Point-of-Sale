@@ -35,6 +35,11 @@
       "version": 7,
       "name": "batch_expiry",
       "checksum": "59b031d4af6b6330bdc48b043030c56479d83b98de9c23a0752c3ffa255fb676"
+    },
+    {
+      "version": 8,
+      "name": "cash_book",
+      "checksum": "372cf05a553f44fc1d3ebb4ff107c191c35836e823cfc65c10b54e1d75f09fb6"
     }
   ]
 }

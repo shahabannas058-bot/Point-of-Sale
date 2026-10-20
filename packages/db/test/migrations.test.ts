@@ -19,16 +19,16 @@ afterEach(() => {
 });
 
 describe('migration runner', () => {
-  it('applies versions 1-7, records them, and is idempotent', async () => {
+  it('applies versions 1-8, records them, and is idempotent', async () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
-    expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 
-    expect(await migrate(db, migrations)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(await migrate(db, migrations)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     const rows = await db.query<{ version: number; name: string; checksum: string }>(
       'select version, name, checksum from schema_migrations order by version',
     );
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(8);
     expect(rows.map((r) => r.name)).toEqual([
       'masters',
       'stock',
@@ -37,18 +37,19 @@ describe('migration runner', () => {
       'repairs_warranty',
       'weighted_units',
       'batch_expiry',
+      'cash_book',
     ]);
     rows.forEach((r, i) => expect(r.checksum).toBe(checksum(migrations[i]!.sql)));
 
     expect(await migrate(db, migrations)).toEqual([]);
-    expect(await db.query('select 1 from schema_migrations')).toHaveLength(7);
+    expect(await db.query('select 1 from schema_migrations')).toHaveLength(8);
   });
 
   it('applies only the missing migrations when the app gets newer', async () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
     expect(await migrate(db, migrations.slice(0, 2))).toEqual([1, 2]);
-    expect(await migrate(db, migrations)).toEqual([3, 4, 5, 6, 7]);
+    expect(await migrate(db, migrations)).toEqual([3, 4, 5, 6, 7, 8]);
   });
 
   it('refuses a migration whose SQL changed after it was applied', async () => {
@@ -66,7 +67,7 @@ describe('migration runner', () => {
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
     await db.query(
-      "insert into schema_migrations (version, name, checksum, applied_at) values (8, 'future', 'x', 0)",
+      "insert into schema_migrations (version, name, checksum, applied_at) values (9, 'future', 'x', 0)",
     );
     const rejection = migrate(db, migrations);
     await expect(rejection).rejects.toThrow(/newer than the app/);
@@ -78,18 +79,18 @@ describe('migration runner', () => {
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
     const broken: Migration = {
-      version: 8,
+      version: 9,
       name: 'broken',
       sql: 'CREATE TABLE should_not_survive (id INTEGER PRIMARY KEY);\nTHIS IS NOT VALID SQL;',
     };
     await expect(migrate(db, [...migrations, broken])).rejects.toThrow(
-      /Migration 8 \(broken\) failed/,
+      /Migration 9 \(broken\) failed/,
     );
     const tables = await db.query(
       "select name from sqlite_master where name = 'should_not_survive'",
     );
     expect(tables).toEqual([]);
-    expect(await db.query('select * from schema_migrations where version = 8')).toEqual([]);
+    expect(await db.query('select * from schema_migrations where version = 9')).toEqual([]);
     // and the runner is still usable afterwards
     expect(await migrate(db, migrations)).toEqual([]);
   });
@@ -98,10 +99,10 @@ describe('migration runner', () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
-    const broken: Migration = { version: 8, name: 'extra', sql: 'CREATE TABLE a (;' };
+    const broken: Migration = { version: 9, name: 'extra', sql: 'CREATE TABLE a (;' };
     await expect(migrate(db, [...migrations, broken])).rejects.toBeInstanceOf(MigrationError);
     const fixed: Migration = { ...broken, sql: 'CREATE TABLE a (id INTEGER PRIMARY KEY) STRICT;' };
-    expect(await migrate(db, [...migrations, fixed])).toEqual([8]);
+    expect(await migrate(db, [...migrations, fixed])).toEqual([9]);
   });
 });
 
@@ -196,7 +197,9 @@ describe('migrated schema', () => {
         'accessory_variants',
         'app_meta',
         'branches',
+        'cash_entries',
         'customers',
+        'day_closes',
         'ledger_entries',
         'outbox',
         'payments',
@@ -247,6 +250,10 @@ describe('migrated schema', () => {
       'trg_stock_batches_no_update',
       'trg_stock_batches_no_delete',
       'trg_stock_movements_batch_guard',
+      'trg_cash_entries_reversal_guard',
+      'trg_cash_entries_no_update',
+      'trg_day_closes_chain_guard',
+      'trg_day_closes_no_delete',
     ])
       expect(triggers).toContain(expected);
   });
