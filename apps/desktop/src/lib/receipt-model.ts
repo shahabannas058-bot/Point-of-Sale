@@ -21,7 +21,9 @@ export interface ReceiptItem {
   unitLabel: UnitLabel;
   /** per piece, or per kg / litre */
   unitPrice: number;
+  /** what the shop took off this line (a weight round-off is not a discount and is not here) */
   discount: number;
+  /** qty x rate before `discount`, so Qty x Rate = Price on the slip and the Price column adds up to the subtotal */
   total: number;
 }
 
@@ -36,8 +38,9 @@ export interface ReceiptModel {
   cashier: string;
   customer: string | null;
   items: ReceiptItem[];
+  /** sum of the item totals, before any discount */
   subtotal: number;
-  /** line discounts + invoice discount, always positive */
+  /** line discounts + invoice discount, always positive; subtotal - discountTotal = total */
   discountTotal: number;
   total: number;
   payments: { method: PaymentMethod; amount: number }[];
@@ -82,9 +85,9 @@ export function buildReceiptModel(
       unitLabel: l.variantId === null ? 'pcs' : (unitLabels[l.variantId] ?? labelFor(l.unitScale)),
       unitPrice: l.unitPrice,
       discount: shownDiscount(l),
-      total: Math.abs(l.lineTotal),
+      total: Math.abs(l.lineTotal) + shownDiscount(l),
     })),
-    subtotal: Math.abs(inv.subtotal),
+    subtotal: Math.abs(inv.subtotal) + lineDiscounts,
     discountTotal: lineDiscounts + Math.abs(inv.discountTotal),
     total: Math.abs(inv.total),
     payments: inv.payments.map((p) => ({ method: p.method, amount: Math.abs(p.amount) })),

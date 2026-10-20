@@ -179,6 +179,7 @@ describe('buildReceiptModel: a weight round-off is not printed as a discount', (
       settings,
     );
     expect(m.items[0]).toMatchObject({ qty: 1316, unitPrice: 19_000, discount: 0, total: 25_000 });
+    expect(m.subtotal).toBe(25_000);
     expect(m.discountTotal).toBe(0);
     expect(m.total).toBe(25_000);
   });
@@ -199,7 +200,10 @@ describe('buildReceiptModel: a weight round-off is not printed as a discount', (
       shop,
       settings,
     );
-    expect(m.items[0]).toMatchObject({ discount: 1_000, total: 37_000 });
+    // Price column is qty x rate; the discount comes off in the totals block, so subtotal - discount = total
+    expect(m.items[0]).toMatchObject({ discount: 1_000, total: 38_000 });
+    expect(m.subtotal).toBe(38_000);
     expect(m.discountTotal).toBe(1_000);
+    expect(m.total).toBe(37_000);
   });
 });
