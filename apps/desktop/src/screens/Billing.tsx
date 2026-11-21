@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  Camera,
   Keyboard,
   Minus,
   CirclePause,
@@ -25,6 +26,7 @@ import {
 } from '@pos/shared';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { CustomerPicker } from '../components/CustomerPicker';
+import { CameraScanner, type ScanFeedback } from '../components/CameraScanner';
 import { ImeiPicker } from '../components/ImeiPicker';
 import { ItemHistoryDialog } from '../components/ItemHistoryDialog';
 import { PaymentPanel } from '../components/PaymentPanel';
@@ -378,6 +380,7 @@ export function Billing(): ReactNode {
   const can = useCan();
   const [quick, setQuick] = useState<VariantView[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const [customerOpen, setCustomerOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
@@ -546,6 +549,20 @@ export function Billing(): ReactNode {
     }
   };
 
+  // a camera read only adds an exact barcode / SKU / IMEI hit; anything else is reported inside the scanner
+  const onCameraScan = async (code: string): Promise<ScanFeedback> => {
+    try {
+      const res = await service.catalog.search(code, { inStockOnly: true, limit: 12 });
+      const exact = res.filter((h) => h.matchedBy !== 'name');
+      const hit = exact.length === 1 ? exact[0] : undefined;
+      if (!hit) return { ok: false, text: t('billing.notFound', { q: code }) };
+      addHit(hit);
+      return { ok: true, text: t('scan.added', { name: hit.item.label }) };
+    } catch (e) {
+      return { ok: false, text: errorMessage(e, t) };
+    }
+  };
+
   // ---- checkout ----
   const total = preview?.total ?? 0;
   const startPay = (): void => {
@@ -613,6 +630,7 @@ export function Billing(): ReactNode {
       ...quickKeys,
       F1: () => setHelpOpen(true),
       F2: () => focusSearch(),
+      F3: () => setCameraOpen(true),
       F4: () => setCustomerOpen(true),
       F7: () => {
         if (lines.length > 0) {
@@ -675,6 +693,7 @@ export function Billing(): ReactNode {
   const shortcutRows: [string, TKey][] = [
     ['F1', 'sc.help'],
     ['F2', 'sc.search'],
+    ['F3', 'sc.camera'],
     ['F4', 'sc.customer'],
     ['F7', 'sc.hold'],
     ['F8', 'sc.resume'],
@@ -711,7 +730,7 @@ export function Billing(): ReactNode {
           />
           <input
             ref={searchRef}
-            className="input h-14 ps-12 pe-24 text-lg"
+            className="input h-14 ps-12 pe-32 text-lg"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             inputMode="search"
@@ -736,8 +755,19 @@ export function Billing(): ReactNode {
               }
             }}
           />
-          <span className="absolute end-4 top-1/2 -translate-y-1/2" aria-hidden="true">
-            <Kbd>F2</Kbd>
+          <span className="absolute end-2 top-1/2 flex -translate-y-1/2 items-center gap-2">
+            <Button
+              icon
+              variant="ghost"
+              aria-label={t('scan.camera')}
+              title={`${t('scan.camera')} (F3)`}
+              onClick={() => setCameraOpen(true)}
+            >
+              <Camera size={20} aria-hidden="true" />
+            </Button>
+            <span className="pe-2" aria-hidden="true">
+              <Kbd>F2</Kbd>
+            </span>
           </span>
           {dropOpen && hits.length > 0 ? (
             <ul
@@ -1069,6 +1099,15 @@ export function Billing(): ReactNode {
       </aside>
 
       {/* ------------------------------------------------ dialogs */}
+      <CameraScanner
+        open={cameraOpen}
+        onClose={() => {
+          setCameraOpen(false);
+          focusSearch();
+        }}
+        onDetect={onCameraScan}
+        continuous
+      />
       <QuickItemsDialog
         open={quickOpen}
         onClose={() => {

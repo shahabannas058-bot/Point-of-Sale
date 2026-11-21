@@ -864,6 +864,26 @@ export const en = {
   'quick.full': 'You can pin up to {max} items',
   'quick.noMatch': 'No item matches',
   'sc.quick': 'Add quick item 1 to 9',
+  'scan.camera': 'Scan with camera',
+  'scan.title': 'Camera scan',
+  'scan.hint':
+    'Put the barcode in the box. Start about 25 cm away and bring it slowly closer until it beeps. Upright, sideways or tilted barcodes all work; keep it still and avoid shine.',
+  'scan.asking':
+    "Allow the camera: click Allow in the browser's popup, or the camera icon in the address bar.",
+  'scan.dark':
+    'The camera gives no picture. Is the lens cover or privacy shutter closed, or is another app (Zoom, Meet) using the camera?',
+  'scan.starting': 'Starting camera…',
+  'scan.device': 'Camera',
+  'scan.defaultDevice': 'Default camera',
+  'scan.denied':
+    'Camera permission was denied. Click the lock icon in the address bar, set Camera to Allow, then try again.',
+  'scan.missing': 'No camera was found on this computer.',
+  'scan.busy': 'The camera is in use by another app. Close it and try again.',
+  'scan.unsupported': 'This window cannot use the camera.',
+  'scan.failed': 'The camera or the barcode reader could not start.',
+  'scan.added': '{name} added to the bill',
+  'scan.filled': 'Barcode {code} filled in',
+  'sc.camera': 'Scan with camera',
   'adjlog.open': 'Adjustment history',
   'adjlog.title': 'Stock adjustment history',
   'adjlog.subtitle':
