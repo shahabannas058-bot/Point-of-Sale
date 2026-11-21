@@ -900,4 +900,27 @@ export const en = {
   'adjlog.empty': 'No stock adjustments in this period',
   'adjlog.emptyHint':
     'Corrections made from Inventory will appear here with who made them and why.',
+  // till info + reorder suggestions
+  'sc.khata': "Open the customer's khata",
+  'sc.newSale': 'New sale (clear bill)',
+  'till.title': 'Item info',
+  'till.stock': 'In stock',
+  'till.lastCost': 'Last purchase cost',
+  'till.lastRate': 'Last rate to this customer',
+  'till.neverSold': 'Not sold to them before',
+  'till.sold30': 'Sold in last 30 days',
+  'till.unavailable': 'Item info is not available',
+  'inv.tabReorder': 'Reorder',
+  'reorder.window': 'Sales over',
+  'reorder.rule': 'Buy enough for the reorder level + {n} days of sales',
+  'reorder.estimate': 'Estimated cost',
+  'reorder.print': 'Print order list',
+  'reorder.none': 'Nothing needs reordering',
+  'reorder.noneHint':
+    'Items appear here at their reorder level or when they will run out within 7 days.',
+  'reorder.sold': 'Sold ({n} days)',
+  'reorder.perDay': 'Per day',
+  'reorder.daysLeft': 'Lasts',
+  'reorder.suggested': 'Order qty',
+  'reorder.cost': 'Cost',
 } as const;

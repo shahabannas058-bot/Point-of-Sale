@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 import {
   Camera,
   Keyboard,
@@ -33,6 +34,7 @@ import { PaymentPanel } from '../components/PaymentPanel';
 import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
 import { QUICK_HOTKEYS, QuickItemsBar, QuickItemsDialog } from '../components/QuickItems';
 import { ReceiptDialog } from '../components/ReceiptDialog';
+import { TillInfo } from '../components/TillInfo';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -368,6 +370,7 @@ export function Billing(): ReactNode {
   const hasImei = useShopModules().has('imei');
   const service = useService();
   const cart = useCart();
+  const nav = useNavigate();
   const bump = useDataVersion((s) => s.bump);
   const version = useDataVersion((s) => s.version);
 
@@ -632,6 +635,12 @@ export function Billing(): ReactNode {
       F2: () => focusSearch(),
       F3: () => setCameraOpen(true),
       F4: () => setCustomerOpen(true),
+      F6: () => {
+        if (cart.customer) void nav(`/customers/${cart.customer.id}`);
+      },
+      F10: () => {
+        if (lines.length > 0) setClearOpen(true);
+      },
       F7: () => {
         if (lines.length > 0) {
           cart.hold(total);
@@ -695,9 +704,11 @@ export function Billing(): ReactNode {
     ['F2', 'sc.search'],
     ['F3', 'sc.camera'],
     ['F4', 'sc.customer'],
+    ['F6', 'sc.khata'],
     ['F7', 'sc.hold'],
     ['F8', 'sc.resume'],
     ['F9', 'sc.pay'],
+    ['F10', 'sc.newSale'],
     ['Ctrl+Enter', 'sc.commit'],
     ['Ctrl+D', 'sc.discount'],
     ['Ctrl+P', 'sc.print'],
@@ -996,6 +1007,7 @@ export function Billing(): ReactNode {
             <Kbd>F4</Kbd>
           )}
         </button>
+        <TillInfo line={selectedLine} customerId={cart.customer?.id ?? null} />
 
         <div className="slip p-5">
           <div className="flex flex-col gap-1.5">

@@ -51,9 +51,10 @@ import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { useCan } from '../store/session';
 import { toast } from '../store/toast';
+import { ReorderPanel } from '../components/ReorderPanel';
 import { ReceiveStockDialog } from './ReceiveStockDialog';
 
-type TabKey = 'phones' | 'accessories' | 'low';
+type TabKey = 'phones' | 'accessories' | 'low' | 'reorder';
 
 // ------------------------------------------------------------------ phone add/edit
 function PhoneDialog({
@@ -565,7 +566,7 @@ export function Inventory(): ReactNode {
   const accessories = useServiceQuery(
     (s) => s.catalog.listAccessories({ q: q || undefined, lowStockOnly: tab === 'low' }),
     [q, tab],
-    tab !== 'phones',
+    tab === 'accessories' || tab === 'low',
   );
 
   return (
@@ -620,9 +621,12 @@ export function Inventory(): ReactNode {
               label: noPhones ? t('inv.tabItems') : t('inv.tabAccessories'),
             },
             { value: 'low' as const, label: t('inv.tabLow') },
+            { value: 'reorder' as const, label: t('inv.tabReorder') },
           ]}
         />
-        <div className="relative min-w-60 flex-1 sm:max-w-sm">
+        <div
+          className={`relative min-w-60 flex-1 sm:max-w-sm ${tab === 'reorder' ? 'hidden' : ''}`}
+        >
           <Search
             size={16}
             className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted"
@@ -680,7 +684,9 @@ export function Inventory(): ReactNode {
         ) : null}
       </div>
 
-      {tab === 'phones' ? (
+      {tab === 'reorder' ? (
+        <ReorderPanel />
+      ) : tab === 'phones' ? (
         phones.error ? (
           <ErrorBox error={phones.error} onRetry={phones.reload} />
         ) : (

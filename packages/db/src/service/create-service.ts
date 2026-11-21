@@ -5,6 +5,7 @@ import { createCashApi } from './cash-book';
 import { createCatalogApi } from './catalog';
 import { createCheckoutPart } from './checkout';
 import { createCtx, type ServiceDeps } from './deps';
+import { createInsightsApi } from './insights';
 import { createIntegrityApi } from './integrity';
 import { createKhataApi } from './khata';
 import { requireModuleApi } from './modules';
@@ -16,7 +17,7 @@ import { createSettingsApi } from './settings';
 import { createSetupApi } from './setup';
 import { createWarrantyApi } from './warranty';
 
-/** Composes the twelve APIs of the contract over one driver. Each service instance has its own session/lock. */
+/** Composes the APIs of the contract over one driver. Each service instance has its own session/lock. */
 export function createPosService(deps: ServiceDeps): PosService {
   const ctx = createCtx(deps);
   return {
@@ -33,5 +34,6 @@ export function createPosService(deps: ServiceDeps): PosService {
     integrity: createIntegrityApi(ctx),
     repairs: requireModuleApi(ctx, 'repair', createRepairsApi(ctx)),
     warranty: requireModuleApi(ctx, 'warranty', createWarrantyApi(ctx)),
+    insights: createInsightsApi(ctx),
   };
 }

@@ -864,4 +864,51 @@ export interface PosService {
   readonly integrity: IntegrityApi;
   readonly repairs: RepairsApi;
   readonly warranty: WarrantyApi;
+  readonly insights: InsightsApi;
+}
+
+// ---------- till insights + reorder suggestions ----------
+export interface ItemInsightInput {
+  /** Exactly one of variantId / phoneUnitId. */
+  variantId?: string;
+  phoneUnitId?: string;
+  /** The bill's customer, for "last rate to this customer" and the khata balance. */
+  customerId?: string | null;
+}
+export interface ItemInsight {
+  /** Accessories: on hand in base units. Phones: 1 when the unit is in stock, else 0. */
+  onHand: number;
+  /** Latest purchase / opening cost per priced unit. Null without view_cost or when never bought. */
+  lastPurchase: { unitCost: Paisa; at: number } | null;
+  /** Latest sale of this item (the same model for phones) to customerId, per priced unit after line discount. */
+  lastSoldToCustomer: { unitPrice: Paisa; at: number; invoiceNo: string } | null;
+  /** Khata balance of customerId (positive = customer owes); null for walk-in. */
+  customerBalance: Paisa | null;
+  /** Net base units sold (sales minus returns) in the last 30 days. */
+  soldLast30Days: number;
+}
+export interface ReorderOptions {
+  /** Sales window used for the daily average (default 30, 1-365). */
+  days?: number;
+  /** Days of sales the order should cover on top of the reorder level (default 14, 1-180). */
+  coverDays?: number;
+}
+export interface ReorderSuggestion {
+  item: VariantView;
+  /** Net base units sold in the window. */
+  sold: number;
+  /** sold / days, rounded to 2 decimals. */
+  dailyAvg: number;
+  /** Whole days until stock runs out at the current rate; null when nothing sold. */
+  daysLeft: number | null;
+  /** max(0, reorderLevel + ceil(sold * coverDays / days) - onHand), in base units. */
+  suggestedQty: number;
+  /** Cost per priced unit used for the estimate (latest purchase, else the item cost). Null without view_cost. */
+  unitCost: Paisa | null;
+}
+export interface InsightsApi {
+  /** Till info panel for one cart item. Needs sell. */
+  item(input: ItemInsightInput): Promise<ItemInsight>;
+  /** Active accessories at or below their reorder level, or that run out within 7 days, most urgent first. Needs view_catalog. */
+  reorder(options?: ReorderOptions): Promise<ReorderSuggestion[]>;
 }
