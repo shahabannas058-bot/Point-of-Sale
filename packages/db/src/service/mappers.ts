@@ -1,4 +1,4 @@
-import type { AccessoryVariant, Product, VariantView } from '@pos/shared';
+import type { Item, Product, ItemView } from '@pos/shared';
 import { camelizeKeys } from '../rows';
 
 export type Raw = Record<string, unknown>;
@@ -26,23 +26,23 @@ function split(row: Raw): { item: Raw; product: Raw; onHand: number } {
 const join = (parts: (string | null | undefined)[], sep: string): string =>
   parts.filter((p): p is string => typeof p === 'string' && p !== '').join(sep);
 
-export function variantLabel(
+export function itemLabel(
   product: Pick<Product, 'brand' | 'name'>,
-  variant: Pick<AccessoryVariant, 'model' | 'colour'>,
+  item: Pick<Item, 'model' | 'colour'>,
 ): string {
-  const extra = join([variant.model, variant.colour], ', ');
+  const extra = join([item.model, item.colour], ', ');
   return join([`${product.brand} ${product.name}`, extra === '' ? null : `(${extra})`], ' ');
 }
 
-export function toVariantView(row: Raw): VariantView {
-  const { item, product, onHand } = split(row);
-  const variant = mapRow<AccessoryVariant>(item);
+export function toItemView(row: Raw): ItemView {
+  const { item: itemRow, product, onHand } = split(row);
+  const item = mapRow<Item>(itemRow);
   const prod = mapRow<Product>(product);
   return {
-    variant,
+    item,
     product: prod,
     onHand,
-    lowStock: onHand <= variant.reorderLevel,
-    label: variantLabel(prod, variant),
+    lowStock: onHand <= item.reorderLevel,
+    label: itemLabel(prod, item),
   };
 }

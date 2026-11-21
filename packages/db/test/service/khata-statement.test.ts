@@ -11,7 +11,7 @@ beforeEach(async () => {
 
 async function bilalOwes(amount: number): Promise<void> {
   await t.svc.checkout.commit({
-    lines: [{ variantId: t.ids.chargerId, quantity: amount / CHARGER_PRICE }],
+    lines: [{ itemId: t.ids.chargerId, quantity: amount / CHARGER_PRICE }],
     customerId: t.ids.bilalId,
     payments: [{ method: 'khata', amount }],
   });
@@ -77,7 +77,7 @@ describe('khata.statement', () => {
   it('a return credited to udhaar counts as paid; an opening balance counts as udhaar given', async () => {
     const c = await t.svc.khata.createCustomer({ name: 'Old Debtor', openingBalance: 80_000 });
     const inv = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       customerId: c.id,
       payments: [{ method: 'khata', amount: CHARGER_PRICE }],
     });

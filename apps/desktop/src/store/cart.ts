@@ -6,12 +6,12 @@ import {
   type CheckoutDraft,
   type UnitLabel,
   type UnitScale,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 
 export interface CartLine {
   key: string;
-  variantId: string;
+  itemId: string;
   label: string;
   sub: string;
   /** per piece, or per kg / litre for loose goods (integer paisa) */
@@ -68,7 +68,7 @@ interface CartState {
   note: string;
   selected: number;
   held: HeldBill[];
-  addVariant: (v: VariantView, qty?: number) => AddResult;
+  addItem: (v: ItemView, qty?: number) => AddResult;
   setQty: (key: string, qty: number) => AddResult;
   remove: (key: string) => void;
   setLineDiscount: (key: string, paisa: number) => void;
@@ -83,31 +83,57 @@ interface CartState {
   deleteHeld: (id: string) => void;
 }
 
-const variantSub = (v: VariantView): string =>
-  [v.variant.model, v.variant.colour, v.variant.sku].filter(Boolean).join(' · ');
+const itemSub = (v: ItemView): string =>
+  [v.item.model, v.item.colour, v.item.sku].filter(Boolean).join(' · ');
 
-const HELD_BILLS_VERSION = 1;
+/** v0 = the mobile-shop build, v1 = `variantId` lines, v2 = `itemId` lines. */
+const HELD_BILLS_VERSION = 2;
 
-/** A held line as an older version saved it: v0 also held phone lines (no variantId) and a `kind` tag. */
-type StoredLine = Partial<CartLine> & { kind?: unknown; phoneUnitId?: unknown };
+type Stored = Record<string, unknown>;
+
+const isRecord = (x: unknown): x is Stored =>
+  typeof x === 'object' && x !== null && !Array.isArray(x);
 
 /**
- * Held bills saved before version 1 (the mobile-shop build) may carry phone lines. Those cannot be sold any more,
- * so they are dropped; a bill left with no lines is dropped too. Item lines lose the old `kind` tag.
+ * One held line from an older version, or null when it cannot be sold any more.
+ * v0 and v1 lines name their item `variantId`; v0 phone lines have none (they hold a phoneUnitId) and a `kind` tag.
  */
-export function migrateHeldBills(persisted: unknown, version: number): { held: HeldBill[] } {
-  const stored = (persisted as { held?: unknown } | null)?.held;
-  const held = Array.isArray(stored) ? (stored as HeldBill[]) : [];
-  if (version >= HELD_BILLS_VERSION) return { held };
-  const kept = held.flatMap((bill) => {
-    const lines = (bill.lines as StoredLine[]).flatMap((line) => {
-      if (typeof line.variantId !== 'string') return [];
-      const { kind: _kind, phoneUnitId: _phoneUnitId, ...rest } = line;
-      return [rest as CartLine];
-    });
-    return lines.length > 0 ? [{ ...bill, lines }] : [];
+function migrateLine(line: unknown): CartLine | null {
+  if (!isRecord(line)) return null;
+  const { kind: _kind, phoneUnitId: _phoneUnitId, variantId, ...rest } = line;
+  const itemId = typeof rest.itemId === 'string' ? rest.itemId : variantId;
+  if (typeof itemId !== 'string' || itemId === '') return null;
+  return { ...rest, itemId } as unknown as CartLine;
+}
+
+/**
+ * A held bill from an older version. A bill left with no lines is dropped. When some lines were dropped the
+ * stored total is wrong, so it becomes 0, and the old attempt id is left out: reusing it could replay the
+ * invoice of the full, older bill.
+ */
+function migrateBill(bill: unknown): HeldBill[] {
+  if (!isRecord(bill) || !Array.isArray(bill.lines)) return [];
+  const stored: unknown[] = bill.lines;
+  const lines = stored.flatMap((l) => {
+    const m = migrateLine(l);
+    return m ? [m] : [];
   });
-  return { held: kept };
+  if (lines.length === 0) return [];
+  if (lines.length === stored.length) return [{ ...bill, lines } as unknown as HeldBill];
+  const { saleId: _saleId, ...rest } = bill;
+  return [{ ...rest, lines, total: 0 } as unknown as HeldBill];
+}
+
+/** zustand persist `migrate`: maps held bills saved by an older version to the current shape. Never throws. */
+export function migrateHeldBills(persisted: unknown, version: number): { held: HeldBill[] } {
+  try {
+    const stored = isRecord(persisted) ? persisted.held : undefined;
+    if (!Array.isArray(stored)) return { held: [] };
+    if (version >= HELD_BILLS_VERSION) return { held: stored as HeldBill[] };
+    return { held: stored.flatMap(migrateBill) };
+  } catch {
+    return { held: [] };
+  }
 }
 
 const empty = {
@@ -127,11 +153,11 @@ export const useCart = create<CartState>()(
     (set, get) => ({
       ...fresh(),
       held: [],
-      addVariant: (v, qty) => {
+      addItem: (v, qty) => {
         if (v.onHand <= 0) return 'out';
-        const scale = v.variant.unitScale;
+        const scale = v.item.unitScale;
         const { lines } = get();
-        const idx = lines.findIndex((l) => l.variantId === v.variant.id);
+        const idx = lines.findIndex((l) => l.itemId === v.item.id);
         if (idx >= 0) {
           const cur = lines[idx];
           if (!cur) return 'out';
@@ -152,13 +178,13 @@ export const useCart = create<CartState>()(
         // loose goods start at 1 kg (1000 g); the cashier then types the real weight
         const start = qty ?? (scale === 1 ? 1 : 1000);
         const line: CartLine = {
-          key: `v:${v.variant.id}`,
-          variantId: v.variant.id,
+          key: `v:${v.item.id}`,
+          itemId: v.item.id,
           label: v.label,
-          sub: variantSub(v),
-          unitPrice: v.variant.salePrice,
+          sub: itemSub(v),
+          unitPrice: v.item.salePrice,
           unitScale: scale,
-          unitLabel: v.variant.unitLabel,
+          unitLabel: v.item.unitLabel,
           qty: Math.min(start, v.onHand),
           maxQty: v.onHand,
           discount: 0,
@@ -265,7 +291,7 @@ export function cartToDraft(
 ): CheckoutDraft {
   return {
     lines: s.lines.map((l) => ({
-      variantId: l.variantId,
+      itemId: l.itemId,
       quantity: l.qty,
       discountAmount: l.discount,
     })),

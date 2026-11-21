@@ -5,7 +5,7 @@ import {
   parseQuantity,
   unitScaleFor,
   type ModuleId,
-  type NewAccessoryInput,
+  type NewItemInput,
   type Paisa,
   type UnitLabel,
 } from '@pos/shared';
@@ -319,10 +319,10 @@ export function toImportRows(text: string, opts: { modules: readonly ModuleId[] 
 export type ImportResult =
   { row: ImportRow; status: 'created' } | { row: ImportRow; status: 'failed'; error: unknown };
 
-/** The service call for one row: `service.catalog.createAccessory`. */
-export type CreateItem = (input: NewAccessoryInput) => Promise<unknown>;
+/** The service call for one row: `service.catalog.createItem`. */
+export type CreateItem = (input: NewItemInput) => Promise<unknown>;
 
-export const toAccessoryInput = (row: ImportRow): NewAccessoryInput => ({
+export const toItemInput = (row: ImportRow): NewItemInput => ({
   product: { brand: row.brand, name: row.name, category: 'Grocery' },
   sku: row.sku,
   barcode: row.barcode,
@@ -346,7 +346,7 @@ export async function runStockImport(
   const results: ImportResult[] = [];
   for (const row of rows) {
     try {
-      await create(toAccessoryInput(row));
+      await create(toItemInput(row));
       results.push({ row, status: 'created' });
     } catch (error) {
       results.push({ row, status: 'failed', error });

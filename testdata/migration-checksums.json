@@ -40,6 +40,11 @@
       "version": 8,
       "name": "cash_book",
       "checksum": "372cf05a553f44fc1d3ebb4ff107c191c35836e823cfc65c10b54e1d75f09fb6"
+    },
+    {
+      "version": 9,
+      "name": "grocery_items",
+      "checksum": "3c8c0a4cb7f2990ed423dd3a974e0ca3b7020d8e4673c23d93e3f9aa3cb79185"
     }
   ]
 }

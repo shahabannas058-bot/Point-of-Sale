@@ -1,17 +1,15 @@
 import { z } from 'zod';
-import { ProductKindSchema } from './enums';
 import {
   EpochMsSchema,
   NonNegativePaisaSchema,
   ProductIdSchema,
-  VariantIdSchema,
+  ItemIdSchema,
   makeIssue,
 } from './primitives';
 import { UnitLabelSchema, UnitScaleSchema, unitScaleFor } from './units';
 
 export const ProductSchema = z.object({
   id: ProductIdSchema,
-  kind: ProductKindSchema,
   brand: z.string().min(1).max(60),
   name: z.string().min(1).max(120),
   category: z.string().max(60).nullable(),
@@ -21,9 +19,9 @@ export const ProductSchema = z.object({
 });
 export type Product = z.infer<typeof ProductSchema>;
 
-export const AccessoryVariantSchema = z
+export const ItemSchema = z
   .object({
-    id: VariantIdSchema,
+    id: ItemIdSchema,
     productId: ProductIdSchema,
     sku: z.string().min(1).max(64),
     barcode: z.string().min(1).max(64).nullable(),
@@ -44,4 +42,4 @@ export const AccessoryVariantSchema = z
     if (unitScaleFor(v.unitLabel) !== v.unitScale)
       makeIssue(ctx)(['unitScale'], 'unitScale must match unitLabel (pcs = 1, kg / L = 1000)');
   });
-export type AccessoryVariant = z.infer<typeof AccessoryVariantSchema>;
+export type Item = z.infer<typeof ItemSchema>;

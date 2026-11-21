@@ -1,5 +1,5 @@
 import type { CashEntry, CashEntryType, DrawerBreakdown, ExpenseCategory } from './cash';
-import type { AccessoryVariant, Product } from './catalog';
+import type { Item, Product } from './catalog';
 import type { PaymentMethod, Role, SaleKind } from './enums';
 import type { LedgerEntry } from './ledger';
 import type { BusinessType, ModuleId } from './modules';
@@ -189,19 +189,19 @@ export interface AuthApi {
 // ---------- catalog ----------
 export type ProductRef =
   { productId: string } | { brand: string; name: string; category?: string | null }; // find-or-create by brand+name
-export interface VariantView {
-  variant: AccessoryVariant;
+export interface ItemView {
+  item: Item;
   product: Product;
   onHand: number;
   lowStock: boolean /* onHand <= reorderLevel */;
   label: string;
 }
 export interface CatalogHit {
-  kind: 'variant';
+  kind: 'item';
   matchedBy: 'barcode' | 'sku' | 'name';
-  item: VariantView;
+  item: ItemView;
 }
-export interface NewAccessoryInput {
+export interface NewItemInput {
   product: ProductRef;
   sku: string;
   barcode?: string | null;
@@ -220,7 +220,7 @@ export interface NewAccessoryInput {
 
 /* ---------- item history (one item's full stock story, like Abuzar's Ctrl+H) ---------- */
 export interface ItemRef {
-  variantId: string;
+  itemId: string;
 }
 export type ItemHistoryKind = 'sale' | 'return' | 'purchase' | 'adjustment' | 'transfer';
 /** What a stock movement belongs to, resolved for display. */
@@ -313,24 +313,24 @@ export interface CatalogApi {
     query: string,
     opts?: { limit?: number; inStockOnly?: boolean; prefixOnly?: boolean },
   ): Promise<CatalogHit[]>;
-  listAccessories(f?: { q?: string; lowStockOnly?: boolean }): Promise<VariantView[]>;
+  listItems(f?: { q?: string; lowStockOnly?: boolean }): Promise<ItemView[]>;
   /** Every stock movement of one item with running balance, newest first; needs `view_catalog` (unitCost is null without `view_cost`). */
   itemHistory(ref: ItemRef, q?: ItemHistoryQuery): Promise<ItemHistoryPage>;
-  createAccessory(i: NewAccessoryInput): Promise<VariantView>;
-  updateVariant(
+  createItem(i: NewItemInput): Promise<ItemView>;
+  updateItem(
     id: string,
     p: Partial<
       Pick<
-        NewAccessoryInput,
+        NewItemInput,
         'salePrice' | 'costPrice' | 'barcode' | 'reorderLevel' | 'model' | 'colour'
       >
     >,
-  ): Promise<VariantView>;
-  adjustStock(i: { variantId: string; delta: number; reason: string }): Promise<VariantView>; // adjust_stock; reason mandatory (DB CHECK)
+  ): Promise<ItemView>;
+  adjustStock(i: { itemId: string; delta: number; reason: string }): Promise<ItemView>; // adjust_stock; reason mandatory (DB CHECK)
   /** Billing's pinned one-tap items in pin order; any signed-in user. Items since deactivated or deleted are left out. */
-  quickItems(): Promise<VariantView[]>;
-  /** Replaces the pinned list (distinct variant ids, at most MAX_QUICK_ITEMS); manage_settings. */
-  setQuickItems(variantIds: string[]): Promise<VariantView[]>;
+  quickItems(): Promise<ItemView[]>;
+  /** Replaces the pinned list (distinct item ids, at most MAX_QUICK_ITEMS); manage_settings. */
+  setQuickItems(itemIds: string[]): Promise<ItemView[]>;
 }
 
 // ---------- purchasing ----------
@@ -338,13 +338,13 @@ export interface ReceivePurchaseInput {
   supplierId: string;
   referenceNo?: string | null;
   note?: string | null;
-  accessories: {
-    variantId: string;
+  items: {
+    itemId: string;
     quantity: number;
     unitCost: number;
     /** Module batch_expiry. Creates a batch for this line; the +qty movement belongs to it. */
     batch?: BatchInput | null;
-  }[]; // +qty movement; variant.cost_price := unitCost (latest cost)
+  }[]; // +qty movement; item.cost_price := unitCost (latest cost)
   paidNow?: { method: Exclude<PaymentMethod, 'khata'>; amount: number } | null;
 }
 /** A delivery's batch (module batch_expiry). `expiryDate` is a Pakistan calendar date, YYYY-MM-DD. */
@@ -386,7 +386,7 @@ export interface PurchasingApi {
 
 // ---------- checkout / returns ----------
 export interface CartLineInput {
-  variantId: string;
+  itemId: string;
   quantity: number;
   discountAmount?: number /* paisa, >=0 */;
 }
@@ -564,7 +564,7 @@ export interface PeriodSummary {
   estimatedProfit: Paisa; // netRevenue - estimatedCogs (before expenses)
   expenses: Paisa; // cash book expense entries in range, net of reversals
   netProfit: Paisa; // estimatedProfit - expenses
-  lowStock: VariantView[];
+  lowStock: ItemView[];
 }
 /** Ascending bucket boundaries: buckets[i]..buckets[i+1] is one chart point (the UI computes local days / months). */
 export interface DashboardInput {
@@ -645,7 +645,7 @@ export interface CashApi {
 // ---------- batches and expiry (module batch_expiry) ----------
 export interface BatchView {
   id: string;
-  variantId: string;
+  itemId: string;
   /** The item's display name, e.g. "Olpers Milk 1L". */
   label: string;
   batchNo: string | null;
@@ -661,7 +661,7 @@ export interface BatchView {
 }
 export interface BatchesApi {
   /** Batches that still have stock, earliest expiry first. Needs a session. */
-  list(f?: { withinDays?: number; variantId?: string }): Promise<BatchView[]>;
+  list(f?: { withinDays?: number; itemId?: string }): Promise<BatchView[]>;
   /** Moves a batch's whole stock out as an 'adjustment' with the reason. Needs adjust_stock. */
   writeOff(i: { batchId: string; reason: string }): Promise<void>;
 }
@@ -696,7 +696,7 @@ export interface PosService {
 
 // ---------- till insights + reorder suggestions ----------
 export interface ItemInsightInput {
-  variantId: string;
+  itemId: string;
   /** The bill's customer, for "last rate to this customer" and the khata balance. */
   customerId?: string | null;
 }
@@ -719,7 +719,7 @@ export interface ReorderOptions {
   coverDays?: number;
 }
 export interface ReorderSuggestion {
-  item: VariantView;
+  item: ItemView;
   /** Net base units sold in the window. */
   sold: number;
   /** sold / days, rounded to 2 decimals. */
@@ -734,6 +734,6 @@ export interface ReorderSuggestion {
 export interface InsightsApi {
   /** Till info panel for one cart item. Needs sell. */
   item(input: ItemInsightInput): Promise<ItemInsight>;
-  /** Active accessories at or below their reorder level, or that run out within 7 days, most urgent first. Needs view_catalog. */
+  /** Active items at or below their reorder level, or that run out within 7 days, most urgent first. Needs view_catalog. */
   reorder(options?: ReorderOptions): Promise<ReorderSuggestion[]>;
 }

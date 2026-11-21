@@ -87,7 +87,7 @@ describe('customers', () => {
 describe('ledger and payments', () => {
   async function bilalOwes(amount: number): Promise<void> {
     await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: amount / CHARGER_PRICE }],
+      lines: [{ itemId: t.ids.chargerId, quantity: amount / CHARGER_PRICE }],
       customerId: t.ids.bilalId,
       payments: [{ method: 'khata', amount }],
     });

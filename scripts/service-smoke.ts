@@ -38,7 +38,7 @@ head('1. Seed demo data');
 const t0 = Date.now();
 const seeded = await seedDemoData({ driver, pinIterations: 1000 });
 console.log('  seed summary:', JSON.stringify(seeded), `(${Date.now() - t0} ms)`);
-check('seed counts', seeded.accessories === 20 && seeded.customers === 5 && seeded.suppliers === 2);
+check('seed counts', seeded.items === 20 && seeded.customers === 5 && seeded.suppliers === 2);
 check('isSetUp', await svc.setup.isSetUp());
 const shop = await svc.setup.getShop();
 check('shop is demo', shop.isDemo, `${shop.branchName}, prefix ${shop.invoicePrefix}`);
@@ -58,7 +58,7 @@ check(
   session.user.role === 'cashier' && svc.auth.can('sell') && !svc.auth.can('view_reports'),
 );
 await expectCode('cashier cannot create items', 'FORBIDDEN', () =>
-  svc.catalog.createAccessory({
+  svc.catalog.createItem({
     product: { brand: 'X', name: 'Y' },
     sku: 'X-Y',
     costPrice: 1,
@@ -72,13 +72,13 @@ const haji = customers.find((c) => c.party.name === 'Haji Rafiq');
 if (haji === undefined) throw new Error('Haji Rafiq missing');
 const soap = (await svc.catalog.search('lux soap', {}))[0];
 if (soap === undefined) throw new Error('no soap found by name');
-const scanned = await svc.catalog.search(soap.item.variant.barcode ?? '');
+const scanned = await svc.catalog.search(soap.item.item.barcode ?? '');
 check(
   'barcode scan returns one exact hit',
   scanned.length === 1 && scanned[0]?.matchedBy === 'barcode',
 );
 const draft = {
-  lines: [{ variantId: soap.item.variant.id, quantity: 3 }],
+  lines: [{ itemId: soap.item.item.id, quantity: 3 }],
   customerId: haji.party.id,
 };
 const preview = await svc.checkout.preview(draft);
@@ -123,9 +123,9 @@ await expectCode('khata without customer', 'KHATA_NEEDS_CUSTOMER', () =>
 head('4. Cashier discount approval with a manager token');
 const surf = (await svc.catalog.search('surf excel', { inStockOnly: true }))[0];
 if (surf === undefined) throw new Error('no Surf Excel in stock');
-const gross = surf.item.variant.salePrice;
+const gross = surf.item.item.salePrice;
 const big = Math.floor((gross * 600) / 10_000); // 6% > the 5% cashier limit
-const pDraft = { lines: [{ variantId: surf.item.variant.id, quantity: 1, discountAmount: big }] };
+const pDraft = { lines: [{ itemId: surf.item.item.id, quantity: 1, discountAmount: big }] };
 const pPrev = await svc.checkout.preview(pDraft);
 check(
   'preview flags approval',
@@ -155,7 +155,7 @@ await expectCode('token is single use', 'APPROVAL_REQUIRED', () =>
   svc.checkout.commit({ ...pDraft, payments: pay, approvalToken: grant.token }),
 );
 await expectCode('more than on hand is refused', 'STOCK_INSUFFICIENT', () =>
-  svc.checkout.preview({ lines: [{ variantId: surf.item.variant.id, quantity: 10_000 }] }),
+  svc.checkout.preview({ lines: [{ itemId: surf.item.item.id, quantity: 10_000 }] }),
 );
 
 head('5. Return (manager)');
@@ -189,7 +189,7 @@ await expectCode('over-return', 'ALREADY_RETURNED', () =>
     reason: 'x',
   }),
 );
-const after = await svc.catalog.search(soap.item.variant.barcode ?? '');
+const after = await svc.catalog.search(soap.item.item.barcode ?? '');
 check(
   'stock came back',
   after[0]?.item.onHand === soap.item.onHand - 3 + 2,
@@ -251,12 +251,12 @@ check('chain ok again after restoring', (await svc.integrity.verifyChain()).ok);
 head('8. Two concurrent commits get distinct seq');
 const [a, b] = await Promise.all([
   svc.checkout.commit({
-    lines: [{ variantId: soap.item.variant.id, quantity: 1 }],
-    payments: [{ method: 'cash', amount: soap.item.variant.salePrice }],
+    lines: [{ itemId: soap.item.item.id, quantity: 1 }],
+    payments: [{ method: 'cash', amount: soap.item.item.salePrice }],
   }),
   svc.checkout.commit({
-    lines: [{ variantId: soap.item.variant.id, quantity: 1 }],
-    payments: [{ method: 'cash', amount: soap.item.variant.salePrice }],
+    lines: [{ itemId: soap.item.item.id, quantity: 1 }],
+    payments: [{ method: 'cash', amount: soap.item.item.salePrice }],
   }),
 ]);
 console.log(`  seqs ${a.seq} and ${b.seq}`);
@@ -264,8 +264,8 @@ check('distinct, consecutive seq', a.seq !== b.seq && Math.abs(a.seq - b.seq) ==
 const many = await Promise.all(
   Array.from({ length: 5 }, () =>
     svc.checkout.commit({
-      lines: [{ variantId: soap.item.variant.id, quantity: 1 }],
-      payments: [{ method: 'cash', amount: soap.item.variant.salePrice }],
+      lines: [{ itemId: soap.item.item.id, quantity: 1 }],
+      payments: [{ method: 'cash', amount: soap.item.item.salePrice }],
     }),
   ),
 );
@@ -279,7 +279,7 @@ check('chain still valid', (await svc.integrity.verifyChain()).ok);
 
 head('9. Licence hook and outbox');
 await svc.catalog.adjustStock({
-  variantId: soap.item.variant.id,
+  itemId: soap.item.item.id,
   delta: 20,
   reason: 'smoke restock',
 });
@@ -292,8 +292,8 @@ await blocked.auth.login('manager', '2345');
 const before = (await driver.query<{ n: number }>('SELECT COUNT(*) AS n FROM sales'))[0]?.n ?? 0;
 await expectCode('hook failure blocks the write', 'INTERNAL', () =>
   blocked.checkout.commit({
-    lines: [{ variantId: soap.item.variant.id, quantity: 1 }],
-    payments: [{ method: 'cash', amount: soap.item.variant.salePrice }],
+    lines: [{ itemId: soap.item.item.id, quantity: 1 }],
+    payments: [{ method: 'cash', amount: soap.item.item.salePrice }],
   }),
 );
 const afterN = (await driver.query<{ n: number }>('SELECT COUNT(*) AS n FROM sales'))[0]?.n ?? 0;

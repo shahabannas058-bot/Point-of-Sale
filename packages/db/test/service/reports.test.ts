@@ -18,11 +18,11 @@ describe('daily report arithmetic (spec 8)', () => {
   async function scenario(): Promise<void> {
     await t.loginAs('owner');
     const a = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 2, discountAmount: 10_000 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2, discountAmount: 10_000 }],
       payments: [{ method: 'cash', amount: 290_000 }],
     });
     await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
       customerId: t.ids.bilalId,
       invoiceDiscount: 100_000,
       payments: [
@@ -71,12 +71,12 @@ describe('daily report arithmetic (spec 8)', () => {
   it('low stock lists an item only when on hand <= its reorder level', async () => {
     await scenario();
     const ids = async (): Promise<string[]> =>
-      (await t.svc.reports.summary(WIDE)).lowStock.map((v) => v.variant.id);
+      (await t.svc.reports.summary(WIDE)).lowStock.map((v) => v.item.id);
     // the carton sold out (0 <= 0); the charger has 10 - 2 + 1 = 9 > 3
     expect(await ids()).toEqual([t.ids.cartonId]);
-    await t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: -6, reason: 'Damaged' });
+    await t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: -6, reason: 'Damaged' });
     const low = (await t.svc.reports.summary(WIDE)).lowStock;
-    expect(low.find((v) => v.variant.id === t.ids.chargerId)).toMatchObject({
+    expect(low.find((v) => v.item.id === t.ids.chargerId)).toMatchObject({
       onHand: 3,
       lowStock: true,
     });
@@ -105,7 +105,7 @@ describe('daily report arithmetic (spec 8)', () => {
   it('the range is half-open [from, to)', async () => {
     await t.loginAs('owner');
     const inv = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       payments: [{ method: 'cash', amount: CHARGER_PRICE }],
     });
     const exact = await t.svc.reports.summary({ fromMs: inv.createdAt, toMs: inv.createdAt + 1 });
@@ -119,7 +119,7 @@ describe('daily report arithmetic (spec 8)', () => {
   it('splits payment methods and nets refunds', async () => {
     await t.loginAs('owner');
     const sale = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 4 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 4 }],
       payments: [
         { method: 'cash', amount: 200_000 },
         { method: 'jazzcash', amount: 250_000 },

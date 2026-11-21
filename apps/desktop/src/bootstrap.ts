@@ -2,7 +2,18 @@ import { describeError, log } from '@pos/shared';
 import type { AppRuntime } from './service/context';
 
 export type BootResult =
-  { kind: 'ready'; runtime: AppRuntime } | { kind: 'locked' } | { kind: 'error'; error: unknown };
+  | { kind: 'ready'; runtime: AppRuntime }
+  | { kind: 'locked' }
+  /** the stored database still holds mobile-shop data, so migration 0009 refused it (nothing was changed) */
+  | { kind: 'legacy'; error: unknown }
+  | { kind: 'error'; error: unknown };
+
+/** Text of the migration 0009 guard (packages/db/migrations/0009_grocery_items.sql). */
+const GROCERY_UPGRADE_REFUSED = 'grocery upgrade refused';
+
+/** True when opening the database failed because migration 0009 found mobile-shop data. */
+export const isGroceryUpgradeRefused = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes(GROCERY_UPGRADE_REFUSED);
 
 /** Opens the real service (SQLite via sql.js, persisted in IndexedDB). */
 export async function bootstrap(): Promise<BootResult> {
@@ -23,7 +34,7 @@ export async function bootstrap(): Promise<BootResult> {
     return { kind: 'ready', runtime };
   } catch (error) {
     log.error('boot.failed', { error: describeError(error) });
-    return { kind: 'error', error };
+    return isGroceryUpgradeRefused(error) ? { kind: 'legacy', error } : { kind: 'error', error };
   }
 }
 

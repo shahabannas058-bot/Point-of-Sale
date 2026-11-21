@@ -19,16 +19,16 @@ afterEach(() => {
 });
 
 describe('migration runner', () => {
-  it('applies versions 1-8, records them, and is idempotent', async () => {
+  it('applies versions 1-9, records them, and is idempotent', async () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
-    expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
-    expect(await migrate(db, migrations)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(await migrate(db, migrations)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     const rows = await db.query<{ version: number; name: string; checksum: string }>(
       'select version, name, checksum from schema_migrations order by version',
     );
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(9);
     expect(rows.map((r) => r.name)).toEqual([
       'masters',
       'stock',
@@ -38,18 +38,19 @@ describe('migration runner', () => {
       'weighted_units',
       'batch_expiry',
       'cash_book',
+      'grocery_items',
     ]);
     rows.forEach((r, i) => expect(r.checksum).toBe(checksum(migrations[i]!.sql)));
 
     expect(await migrate(db, migrations)).toEqual([]);
-    expect(await db.query('select 1 from schema_migrations')).toHaveLength(8);
+    expect(await db.query('select 1 from schema_migrations')).toHaveLength(9);
   });
 
   it('applies only the missing migrations when the app gets newer', async () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
     expect(await migrate(db, migrations.slice(0, 2))).toEqual([1, 2]);
-    expect(await migrate(db, migrations)).toEqual([3, 4, 5, 6, 7, 8]);
+    expect(await migrate(db, migrations)).toEqual([3, 4, 5, 6, 7, 8, 9]);
   });
 
   it('refuses a migration whose SQL changed after it was applied', async () => {
@@ -67,7 +68,7 @@ describe('migration runner', () => {
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
     await db.query(
-      "insert into schema_migrations (version, name, checksum, applied_at) values (9, 'future', 'x', 0)",
+      "insert into schema_migrations (version, name, checksum, applied_at) values (10, 'future', 'x', 0)",
     );
     const rejection = migrate(db, migrations);
     await expect(rejection).rejects.toThrow(/newer than the app/);
@@ -79,18 +80,18 @@ describe('migration runner', () => {
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
     const broken: Migration = {
-      version: 9,
+      version: 10,
       name: 'broken',
       sql: 'CREATE TABLE should_not_survive (id INTEGER PRIMARY KEY);\nTHIS IS NOT VALID SQL;',
     };
     await expect(migrate(db, [...migrations, broken])).rejects.toThrow(
-      /Migration 9 \(broken\) failed/,
+      /Migration 10 \(broken\) failed/,
     );
     const tables = await db.query(
       "select name from sqlite_master where name = 'should_not_survive'",
     );
     expect(tables).toEqual([]);
-    expect(await db.query('select * from schema_migrations where version = 9')).toEqual([]);
+    expect(await db.query('select * from schema_migrations where version = 10')).toEqual([]);
     // and the runner is still usable afterwards
     expect(await migrate(db, migrations)).toEqual([]);
   });
@@ -99,10 +100,10 @@ describe('migration runner', () => {
     const db = freshDriver();
     const migrations = loadMigrationsFromDir();
     await migrate(db, migrations);
-    const broken: Migration = { version: 9, name: 'extra', sql: 'CREATE TABLE a (;' };
+    const broken: Migration = { version: 10, name: 'extra', sql: 'CREATE TABLE a (;' };
     await expect(migrate(db, [...migrations, broken])).rejects.toBeInstanceOf(MigrationError);
     const fixed: Migration = { ...broken, sql: 'CREATE TABLE a (id INTEGER PRIMARY KEY) STRICT;' };
-    expect(await migrate(db, [...migrations, fixed])).toEqual([9]);
+    expect(await migrate(db, [...migrations, fixed])).toEqual([10]);
   });
 });
 
@@ -194,22 +195,17 @@ describe('migrated schema', () => {
       ).map((r) => r.name);
     expect(await names('table')).toEqual(
       [
-        'accessory_variants',
         'app_meta',
         'branches',
         'cash_entries',
         'customers',
         'day_closes',
+        'items',
         'ledger_entries',
         'outbox',
         'payments',
-        'phone_units',
         'products',
         'purchases',
-        'repair_parts',
-        'repair_payments',
-        'repair_status_history',
-        'repair_tickets',
         'sale_lines',
         'sales',
         'schema_migrations',
@@ -217,45 +213,72 @@ describe('migrated schema', () => {
         'stock_movements',
         'suppliers',
         'users',
-        'warranties',
       ].sort(),
     );
     expect(await names('view')).toEqual([
       'v_customer_balance',
-      'v_phone_unit_on_hand',
+      'v_item_on_hand',
       'v_sale_line_mismatch',
       'v_sale_payment_mismatch',
       'v_supplier_balance',
-      'v_variant_on_hand',
     ]);
-    const triggers = await names('trigger');
-    for (const expected of [
-      'trg_sales_no_update',
-      'trg_sales_no_delete',
-      'trg_sales_chain_guard',
-      'trg_stock_movements_no_update',
-      'trg_stock_movements_no_delete',
-      'trg_stock_movements_unit_guard',
-      'trg_outbox_frozen',
-      'trg_outbox_no_delete_unsent',
-      'repair_tickets_identity_fixed',
-      'repair_payments_no_update',
-      'warranties_no_delete',
-      'warranties_unit_on_sale', // dropped and recreated by 0006: must still exist
-      'trg_sale_lines_no_update',
-      'trg_sale_lines_no_delete',
-      'trg_sale_lines_unit_scale',
-      'trg_variants_unit_insert',
-      'trg_variants_unit_update',
-      'trg_stock_batches_no_update',
-      'trg_stock_batches_no_delete',
-      'trg_stock_movements_batch_guard',
-      'trg_cash_entries_reversal_guard',
+    // exact lists: 0009 dropped the phone / repair / warranty objects and recreated the rebuilt tables' triggers
+    expect(await names('trigger')).toEqual([
+      'trg_cash_entries_no_delete',
       'trg_cash_entries_no_update',
+      'trg_cash_entries_reversal_guard',
       'trg_day_closes_chain_guard',
       'trg_day_closes_no_delete',
-    ])
-      expect(triggers).toContain(expected);
+      'trg_day_closes_no_update',
+      'trg_items_unit_insert',
+      'trg_items_unit_update',
+      'trg_ledger_entries_no_delete',
+      'trg_ledger_entries_no_update',
+      'trg_outbox_frozen',
+      'trg_outbox_no_delete_unsent',
+      'trg_payments_khata_guard',
+      'trg_payments_no_delete',
+      'trg_payments_no_update',
+      'trg_purchases_no_delete',
+      'trg_purchases_no_update',
+      'trg_sale_lines_no_delete',
+      'trg_sale_lines_no_update',
+      'trg_sale_lines_unit_scale',
+      'trg_sales_chain_guard',
+      'trg_sales_no_delete',
+      'trg_sales_no_update',
+      'trg_sales_original_guard',
+      'trg_stock_batches_no_delete',
+      'trg_stock_batches_no_update',
+      'trg_stock_movements_batch_guard',
+      'trg_stock_movements_no_delete',
+      'trg_stock_movements_no_update',
+    ]);
+    expect(await names('index')).toEqual([
+      'ix_batches_expiry',
+      'ix_batches_item',
+      'ix_cash_entries_created',
+      'ix_customers_name',
+      'ix_customers_phone',
+      'ix_day_closes_branch',
+      'ix_items_product',
+      'ix_ledger_customer',
+      'ix_ledger_supplier',
+      'ix_outbox_pending',
+      'ix_payments_sale',
+      'ix_products_kind_name',
+      'ix_purchases_supplier',
+      'ix_sale_lines_item',
+      'ix_sales_created',
+      'ix_sales_customer',
+      'ix_sales_original',
+      'ix_sm_batch',
+      'ix_sm_created',
+      'ix_sm_item',
+      'ix_sm_ref',
+      'ix_suppliers_name',
+      'ux_items_barcode',
+    ]);
   });
 
   it('the test driver applies the pragmas the app relies on', async () => {

@@ -44,9 +44,9 @@ export function invoiceHashPayload(inv: UnsealedInvoice): CanonicalValue {
       id: l.id,
       lineNo: l.lineNo,
       productId: l.productId,
-      // Legacy key from the mobile-shop era: every stored hash includes it, so it stays forever as null.
+      // Legacy keys: every stored hash includes "phoneUnitId" (always null now) and "variantId" (the item id), so they stay forever.
       phoneUnitId: null,
-      variantId: l.variantId,
+      variantId: l.itemId,
       description: l.description,
       quantity: l.quantity,
       unitPrice: l.unitPrice,

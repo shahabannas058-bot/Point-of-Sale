@@ -13,7 +13,7 @@ import {
   SaleLineIdSchema,
   Sha256HexSchema,
   UserIdSchema,
-  VariantIdSchema,
+  ItemIdSchema,
   makeIssue,
 } from './primitives';
 import { UnitScaleSchema, lineGross } from './units';
@@ -35,7 +35,7 @@ export const SaleLineSchema = z
     saleId: SaleIdSchema,
     lineNo: z.number().int().positive(),
     productId: ProductIdSchema,
-    variantId: VariantIdSchema,
+    itemId: ItemIdSchema,
     description: z.string().min(1).max(200), // name snapshot at time of sale
     /** Base units (pieces, or grams / millilitres when unitScale is 1000). */
     quantity: z

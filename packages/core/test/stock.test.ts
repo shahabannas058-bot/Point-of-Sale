@@ -7,67 +7,67 @@ const V = gen();
 const B1 = gen();
 const B2 = gen();
 
-const variantMove = (quantity: number, branch: string = B1, variant: string = V): MovementLike =>
-  ({ branchId: branch, variantId: variant, quantity }) as unknown as MovementLike;
+const itemMove = (quantity: number, branch: string = B1, item: string = V): MovementLike =>
+  ({ branchId: branch, itemId: item, quantity }) as unknown as MovementLike;
 
 const shopLedger = (): MovementLike[] => [
-  variantMove(10), // purchase
-  variantMove(-3), // sale
-  variantMove(-2), // sale
-  variantMove(1), // return
-  variantMove(-1), // adjustment
+  itemMove(10), // purchase
+  itemMove(-3), // sale
+  itemMove(-2), // sale
+  itemMove(1), // return
+  itemMove(-1), // adjustment
 ];
 
 describe('stockOnHand', () => {
   it('is the sum of the ledger: +10 -3 -2 +1 -1 = 5', () => {
-    expect(stockOnHand(shopLedger(), { variantId: V, branchId: B1 })).toBe(5);
+    expect(stockOnHand(shopLedger(), { itemId: V, branchId: B1 })).toBe(5);
   });
 
   it('handles a branch transfer', () => {
-    const movements = [...shopLedger(), variantMove(-4, B1), variantMove(4, B2)];
-    expect(stockOnHand(movements, { variantId: V, branchId: B1 })).toBe(1);
-    expect(stockOnHand(movements, { variantId: V, branchId: B2 })).toBe(4);
-    expect(stockOnHand(movements, { variantId: V })).toBe(5);
+    const movements = [...shopLedger(), itemMove(-4, B1), itemMove(4, B2)];
+    expect(stockOnHand(movements, { itemId: V, branchId: B1 })).toBe(1);
+    expect(stockOnHand(movements, { itemId: V, branchId: B2 })).toBe(4);
+    expect(stockOnHand(movements, { itemId: V })).toBe(5);
   });
 
-  it('ignores other variants', () => {
+  it('ignores other items', () => {
     const other = gen();
-    const movements = [...shopLedger(), variantMove(99, B1, other)];
-    expect(stockOnHand(movements, { variantId: V })).toBe(5);
-    expect(stockOnHand(movements, { variantId: other })).toBe(99);
+    const movements = [...shopLedger(), itemMove(99, B1, other)];
+    expect(stockOnHand(movements, { itemId: V })).toBe(5);
+    expect(stockOnHand(movements, { itemId: other })).toBe(99);
   });
 
   it('does not depend on movement order (20 shuffles)', () => {
     const rand = mulberry32(3);
-    const base = [...shopLedger(), variantMove(-4, B1), variantMove(4, B2)];
+    const base = [...shopLedger(), itemMove(-4, B1), itemMove(4, B2)];
     for (let round = 0; round < 20; round++) {
       const shuffled = [...base];
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = randInt(rand, 0, i);
         [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
       }
-      expect(stockOnHand(shuffled, { variantId: V, branchId: B1 })).toBe(1);
-      expect(stockOnHand(shuffled, { variantId: V, branchId: B2 })).toBe(4);
-      expect(stockOnHand(shuffled, { variantId: V })).toBe(5);
+      expect(stockOnHand(shuffled, { itemId: V, branchId: B1 })).toBe(1);
+      expect(stockOnHand(shuffled, { itemId: V, branchId: B2 })).toBe(4);
+      expect(stockOnHand(shuffled, { itemId: V })).toBe(5);
     }
   });
 
   it('detects a sum beyond the safe-integer range', () => {
-    const huge = [variantMove(Number.MAX_SAFE_INTEGER), variantMove(Number.MAX_SAFE_INTEGER)];
-    expectDomainError(() => stockOnHand(huge, { variantId: V }), 'STOCK_INVALID');
+    const huge = [itemMove(Number.MAX_SAFE_INTEGER), itemMove(Number.MAX_SAFE_INTEGER)];
+    expectDomainError(() => stockOnHand(huge, { itemId: V }), 'STOCK_INVALID');
   });
 });
 
 describe('onHandByItem', () => {
   it('matches a reference sum for 10,000 random movements', () => {
     const rand = mulberry32(777);
-    const variants = [gen(), gen(), gen(), gen(), gen()];
+    const items = [gen(), gen(), gen(), gen(), gen()];
     const movements: MovementLike[] = [];
     const reference = new Map<string, number>();
     for (let i = 0; i < 10_000; i++) {
       const qty = randInt(rand, -20, 20) || 1;
-      const v = variants[randInt(rand, 0, variants.length - 1)]!;
-      movements.push(variantMove(qty, B1, v));
+      const v = items[randInt(rand, 0, items.length - 1)]!;
+      movements.push(itemMove(qty, B1, v));
       reference.set(v, (reference.get(v) ?? 0) + qty);
     }
     const result = onHandByItem(movements);
@@ -76,7 +76,7 @@ describe('onHandByItem', () => {
   });
 
   it('can be restricted to one branch', () => {
-    const movements = [variantMove(5, B1), variantMove(7, B2)];
+    const movements = [itemMove(5, B1), itemMove(7, B2)];
     expect(onHandByItem(movements, B1).get(V)).toBe(5);
     expect(onHandByItem(movements, B2).get(V)).toBe(7);
     expect(onHandByItem(movements).get(V)).toBe(12);
@@ -84,8 +84,8 @@ describe('onHandByItem', () => {
 });
 
 describe('assertSellable', () => {
-  const key = { variantId: V, branchId: B1 };
-  const five = (): MovementLike[] => [variantMove(5)];
+  const key = { itemId: V, branchId: B1 };
+  const five = (): MovementLike[] => [itemMove(5)];
 
   it('blocks selling more than on hand', () => {
     expectDomainError(() => assertSellable(five(), key, 6), 'STOCK_INSUFFICIENT');

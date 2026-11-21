@@ -39,12 +39,12 @@ describe('reports.dashboard', () => {
   it('buckets revenue and profit, nets returns, and ranks categories', async () => {
     await t.loginAs('owner');
     const a = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
       payments: [{ method: 'cash', amount: 2 * CHARGER_PRICE }],
     }); // bucket 0
     t.clock.advance(HOUR);
     await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
       payments: [{ method: 'cash', amount: CARTON_PRICE }],
     }); // bucket 1
     await t.svc.checkout.createReturn({
@@ -84,7 +84,7 @@ describe('reports.dashboard', () => {
     await t.loginAs('owner');
     t.clock.advance(5 * HOUR);
     await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       payments: [{ method: 'cash', amount: CHARGER_PRICE }],
     });
     const d = await t.svc.reports.dashboard({ buckets: BUCKETS });

@@ -28,7 +28,7 @@ describe('seedDemoData for a kiryana shop', () => {
       modules: MODULE_PRESETS.kiryana,
     });
     expect(summary).not.toHaveProperty('phones');
-    expect(summary.accessories).toBeGreaterThanOrEqual(15);
+    expect(summary.items).toBeGreaterThanOrEqual(15);
     expect(summary.customers).toBeGreaterThanOrEqual(4);
     expect(summary.suppliers).toBeGreaterThanOrEqual(2);
     expect((await svc.auth.listLoginUsers()).map((u) => u.username)).toEqual([
@@ -42,14 +42,14 @@ describe('seedDemoData for a kiryana shop', () => {
   it('stocks loose goods per kg / litre and packed goods per piece with a barcode', async () => {
     const { driver, svc } = await seededKiryana();
     await svc.auth.login('owner', '1234');
-    const items = await svc.catalog.listAccessories();
-    const loose = items.filter((i) => i.variant.unitScale === 1000);
-    const packed = items.filter((i) => i.variant.unitScale === 1);
+    const items = await svc.catalog.listItems();
+    const loose = items.filter((i) => i.item.unitScale === 1000);
+    const packed = items.filter((i) => i.item.unitScale === 1);
     expect(loose.length).toBeGreaterThanOrEqual(6);
     expect(packed.length).toBeGreaterThanOrEqual(8);
-    expect(loose.some((i) => i.variant.unitLabel === 'L')).toBe(true);
-    expect(loose.some((i) => i.variant.unitLabel === 'kg')).toBe(true);
-    expect(packed.every((i) => i.variant.barcode !== null)).toBe(true);
+    expect(loose.some((i) => i.item.unitLabel === 'L')).toBe(true);
+    expect(loose.some((i) => i.item.unitLabel === 'kg')).toBe(true);
+    expect(packed.every((i) => i.item.barcode !== null)).toBe(true);
     expect(items.every((i) => i.onHand > 0)).toBe(true);
     driver.close();
   });
@@ -57,7 +57,7 @@ describe('seedDemoData for a kiryana shop', () => {
   it('has a few low-stock items so the weekly wholesale list is not empty', async () => {
     const { driver, svc } = await seededKiryana();
     await svc.auth.login('owner', '1234');
-    const low = await svc.catalog.listAccessories({ lowStockOnly: true });
+    const low = await svc.catalog.listItems({ lowStockOnly: true });
     expect(low.length).toBeGreaterThanOrEqual(2);
     driver.close();
   });
@@ -92,9 +92,9 @@ describe('seedDemoData for a kiryana shop', () => {
       [...batches.map((b) => b.daysLeft)].sort((a, b) => a - b),
     );
     // a batch of a perishable item never exceeds the stock the item has on hand
-    const items = await svc.catalog.listAccessories();
+    const items = await svc.catalog.listItems();
     for (const b of batches) {
-      const item = items.find((i) => i.variant.id === b.variantId);
+      const item = items.find((i) => i.item.id === b.itemId);
       expect(item?.onHand ?? 0).toBeGreaterThanOrEqual(b.onHand);
     }
     driver.close();
@@ -115,7 +115,7 @@ describe('seedDemoData for a kiryana shop', () => {
     const b = await seededKiryana();
     const skus = (d: typeof a.driver) =>
       d.query<{ sku: string; barcode: string | null }>(
-        'select sku, barcode from accessory_variants order by sku',
+        'select sku, barcode from items order by sku',
       );
     expect(await skus(a.driver)).toEqual(await skus(b.driver));
     const dev = (d: typeof a.driver) =>

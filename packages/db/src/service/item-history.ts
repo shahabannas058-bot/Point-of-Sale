@@ -9,7 +9,7 @@ import type {
 } from '@pos/shared';
 import { canDo, type Ctx } from './deps';
 import { intIn, invalid } from './errors';
-import { loadVariantRec } from './queries';
+import { loadItemRec } from './queries';
 import type { SqlValue } from '../types';
 
 /*
@@ -65,10 +65,10 @@ export function uuid(v: unknown, field: string): string {
   return v;
 }
 
-/** The item's variant id, a UUID. */
+/** The item id, a UUID. */
 export function resolveItemRef(ref: unknown): string {
   if (typeof ref !== 'object' || ref === null) throw invalid('ref', 'ref is required');
-  return uuid((ref as Partial<Record<'variantId', unknown>>).variantId, 'variantId');
+  return uuid((ref as Partial<Record<'itemId', unknown>>).itemId, 'itemId');
 }
 
 export function bounds(q: ItemHistoryQuery): Bounds {
@@ -112,7 +112,7 @@ const HISTORY_SQL = `
     LEFT JOIN customers c      ON c.id = s.customer_id
     LEFT JOIN purchases p      ON sm.ref_type = 'purchase' AND p.id = sm.ref_id
     LEFT JOIN suppliers sp     ON sp.id = p.supplier_id
-    WHERE sm.variant_id = ?
+    WHERE sm.item_id = ?
   )
   WHERE (? IS NULL OR created_at >= ?)
     AND (? IS NULL OR created_at <= ?)
@@ -126,7 +126,7 @@ const SUMMARY_SQL = `
          SUM(CASE WHEN (? IS NULL OR created_at >= ?) AND (? IS NULL OR created_at <= ?)
                   THEN quantity ELSE 0 END) AS in_range,
          SUM(quantity) AS total
-  FROM stock_movements WHERE variant_id = ? GROUP BY type`;
+  FROM stock_movements WHERE item_id = ? GROUP BY type`;
 
 // ---------- row mapping ----------
 
@@ -207,16 +207,16 @@ export async function queryItemHistory(
   ref: ItemRef,
   q: ItemHistoryQuery = {},
 ): Promise<ItemHistoryPage> {
-  const variantId = resolveItemRef(ref);
+  const itemId = resolveItemRef(ref);
   const { from, to } = bounds(q);
   const limit = pageLimit(q.limit);
   const before = cursor(q.before);
-  await loadVariantRec(ctx.driver, variantId); // NOT_FOUND
+  await loadItemRec(ctx.driver, itemId); // NOT_FOUND
 
   const beforeAt: SqlValue = before === null ? null : before.at;
   const beforeId: SqlValue = before === null ? null : before.id;
   const rows = await ctx.driver.query<HistoryRow>(HISTORY_SQL, [
-    variantId,
+    itemId,
     from,
     from,
     to,
@@ -232,7 +232,7 @@ export async function queryItemHistory(
   const nextBefore =
     rows.length > limit && last !== undefined ? { at: Number(last.created_at), id: last.id } : null;
 
-  const totals = await ctx.driver.query<SummaryRow>(SUMMARY_SQL, [from, from, to, to, variantId]);
+  const totals = await ctx.driver.query<SummaryRow>(SUMMARY_SQL, [from, from, to, to, itemId]);
 
   const showCost = canDo(ctx, 'view_cost'); // cashiers see the movements, not what the shop paid
   return {

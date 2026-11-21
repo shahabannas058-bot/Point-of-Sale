@@ -16,7 +16,7 @@ beforeEach(async () => {
 
 const sellCash = (qty: number) =>
   t.svc.checkout.commit({
-    lines: [{ variantId: t.ids.chargerId, quantity: qty }],
+    lines: [{ itemId: t.ids.chargerId, quantity: qty }],
     payments: [{ method: 'cash', amount: qty * CHARGER_PRICE }],
   });
 
@@ -45,11 +45,11 @@ describe('cash.drawer', () => {
     await t.loginAs('mgr');
     const sale = await sellCash(3); // +4,500
     await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       payments: [{ method: 'jazzcash', amount: CHARGER_PRICE }],
     }); // not cash
     await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
       customerId: t.ids.bilalId,
       payments: [{ method: 'khata', amount: 2 * CHARGER_PRICE }],
     }); // udhaar, not cash
@@ -72,7 +72,7 @@ describe('cash.drawer', () => {
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Metro' });
     await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      accessories: [{ variantId: t.ids.chargerId, quantity: 10, unitCost: 90_000 }],
+      items: [{ itemId: t.ids.chargerId, quantity: 10, unitCost: 90_000 }],
       paidNow: { method: 'cash', amount: 50_000 },
     }); // -500
     await t.svc.purchasing.paySupplier({

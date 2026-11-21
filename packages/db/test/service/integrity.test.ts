@@ -32,8 +32,8 @@ describe('verifyChain / checks', () => {
 
   it('is ok after mixed sales, returns and voids', async () => {
     await t.loginAs('mgr');
-    const a = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 3 }]);
-    await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }], { customerId: t.ids.bilalId });
+    const a = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 3 }]);
+    await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }], { customerId: t.ids.bilalId });
     await t.svc.checkout.createReturn({
       originalSaleId: a.id,
       lines: [{ lineId: first(a.lines).id, quantity: 1 }],
@@ -50,7 +50,7 @@ describe('verifyChain / checks', () => {
 
   it('a tampered total in the middle of the chain is reported with its seq and invoice number', async () => {
     await t.loginAs('owner');
-    for (let i = 0; i < 3; i += 1) await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    for (let i = 0; i < 3; i += 1) await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     await t.driver.exec('DROP TRIGGER trg_sales_no_update');
     await t.driver.exec('UPDATE sales SET note = $x WHERE seq = 2'.replace('$x', "'edited'"));
     const r = await t.svc.integrity.verifyChain();
@@ -64,7 +64,7 @@ describe('verifyChain / checks', () => {
 
   it('a deleted middle invoice is detected', async () => {
     await t.loginAs('owner');
-    for (let i = 0; i < 3; i += 1) await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    for (let i = 0; i < 3; i += 1) await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     await t.driver.exec('DROP TRIGGER trg_sales_no_delete');
     await t.driver.exec('PRAGMA foreign_keys = OFF');
     await t.driver.exec('DROP TRIGGER trg_sale_lines_no_delete');
@@ -78,14 +78,14 @@ describe('verifyChain / checks', () => {
 
   it('the database refuses edits and deletes of sales unless the trigger was dropped', async () => {
     await t.loginAs('owner');
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     await expect(t.driver.exec("UPDATE sales SET note = 'x'")).rejects.toThrow(/immutable/);
     await expect(t.driver.exec('DELETE FROM sales')).rejects.toThrow(/immutable/);
   });
 
   it('checks() sees a payment that does not add up to the total', async () => {
     await t.loginAs('owner');
-    const inv = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    const inv = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     await t.driver.batch([
       {
         sql: 'insert into payments (id, sale_id, method, amount, reference, created_at) values (?,?,?,?,?,?)',
@@ -156,14 +156,14 @@ describe('mapError taxonomy', () => {
   });
 
   it('extracts table and field from a UNIQUE violation', () => {
-    const e = mapError(new Error('UNIQUE constraint failed: accessory_variants.sku'));
+    const e = mapError(new Error('UNIQUE constraint failed: items.sku'));
     expect(e.code).toBe('DUPLICATE');
-    expect(e.details).toEqual({ table: 'accessory_variants', field: 'sku' });
+    expect(e.details).toEqual({ table: 'items', field: 'sku' });
   });
 
   it('real database errors map through the same rules', async () => {
     await t.loginAs('owner');
-    const sale = await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }]);
     const errOf = async (p: Promise<unknown>): Promise<ServiceError> => {
       try {
         await p;
@@ -176,7 +176,7 @@ describe('mapError taxonomy', () => {
     const positiveSale = await errOf(
       t.driver.batch([
         {
-          sql: 'insert into stock_movements (id, branch_id, type, variant_id, quantity, created_by, created_at) values (?,?,?,?,?,?,?)',
+          sql: 'insert into stock_movements (id, branch_id, type, item_id, quantity, created_by, created_at) values (?,?,?,?,?,?,?)',
           params: [t.newId(), t.ids.branchId, 'sale', t.ids.cartonId, 1, t.ids.ownerId, 1],
         },
       ]),
@@ -195,9 +195,9 @@ describe('mapError taxonomy', () => {
     );
     const dup = await errOf(
       t.driver.exec(
-        `INSERT INTO accessory_variants (id, product_id, sku, cost_price, sale_price, created_at, updated_at)
+        `INSERT INTO items (id, product_id, sku, cost_price, sale_price, created_at, updated_at)
          SELECT '${t.newId()}', product_id, sku, cost_price, sale_price, created_at, updated_at
-         FROM accessory_variants WHERE id = '${t.ids.cartonId}'`,
+         FROM items WHERE id = '${t.ids.cartonId}'`,
       ),
     );
     expect(dup.code).toBe('DUPLICATE');
@@ -214,7 +214,7 @@ describe('mapError taxonomy', () => {
     const fk = await errOf(
       t.driver.batch([
         {
-          sql: 'insert into sale_lines (id, sale_id, line_no, product_id, variant_id, description, quantity, unit_price, cost_price, discount_amount, line_total, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+          sql: 'insert into sale_lines (id, sale_id, line_no, product_id, item_id, description, quantity, unit_price, cost_price, discount_amount, line_total, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
           params: [t.newId(), t.newId(), 1, t.newId(), t.newId(), 'd', 1, 1, 1, 0, 1, 1],
         },
       ]),
@@ -228,7 +228,7 @@ describe('mapError taxonomy', () => {
     const raw = [
       t.svc.checkout.getInvoice(t.newId()),
       t.svc.khata.getLedger(t.newId()),
-      t.svc.catalog.updateVariant(t.newId(), { salePrice: 1 }),
+      t.svc.catalog.updateItem(t.newId(), { salePrice: 1 }),
       t.svc.checkout.previewReturn(t.newId(), []),
     ];
     for (const p of raw) {

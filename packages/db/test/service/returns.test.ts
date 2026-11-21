@@ -17,13 +17,13 @@ beforeEach(async () => {
   t = await makeService();
 });
 
-const onHand = (): Promise<number> => stockSum(t.driver, { variantId: t.ids.chargerId });
+const onHand = (): Promise<number> => stockSum(t.driver, { itemId: t.ids.chargerId });
 
 describe('return restores stock (spec 7)', () => {
   it('returns 2 of 3 chargers: negative lines, payment and total, stock 10-3+2, chain intact', async () => {
     await t.loginAs('mgr');
     const sale = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 3 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 3 }],
       payments: [{ method: 'cash', amount: 450_000 }],
     });
     const line = first(sale.lines, 'line');
@@ -53,7 +53,7 @@ describe('return restores stock (spec 7)', () => {
 
   it('a second return of 2 gives ALREADY_RETURNED (1 remaining) and writes nothing', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 3 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 3 }]);
     const line = first(sale.lines);
     await t.svc.checkout.createReturn({
       originalSaleId: sale.id,
@@ -77,7 +77,7 @@ describe('return restores stock (spec 7)', () => {
 
   it('previewReturn reports remaining quantities and a refund suggestion', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 3 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 3 }]);
     const line = first(sale.lines);
     const p1 = await t.svc.checkout.previewReturn(sale.id, [{ lineId: line.id, quantity: 1 }]);
     expect(p1.total).toBe(-150_000);
@@ -96,7 +96,7 @@ describe('return restores stock (spec 7)', () => {
 
   it('a cashier return without a token needs approval (reason return); with a grant it works', async () => {
     await t.loginAs('cash');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 2 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 2 }]);
     const line = first(sale.lines);
     const input = {
       originalSaleId: sale.id,
@@ -121,7 +121,7 @@ describe('return restores stock (spec 7)', () => {
   it('a khata sale returned with a khata refund books return_credit -150 000 and zeroes the balance', async () => {
     await t.loginAs('mgr');
     const sale = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       customerId: t.ids.bilalId,
       payments: [{ method: 'khata', amount: CHARGER_PRICE }],
     });
@@ -146,7 +146,7 @@ describe('return restores stock (spec 7)', () => {
 
   it('a khata refund on a sale without a customer is KHATA_NEEDS_CUSTOMER', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     await expectCode(
       t.svc.checkout.createReturn({
         originalSaleId: sale.id,
@@ -160,7 +160,7 @@ describe('return restores stock (spec 7)', () => {
 
   it('a refund that does not match the return total is PAYMENT_MISMATCH', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 2 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 2 }]);
     await expectCode(
       t.svc.checkout.createReturn({
         originalSaleId: sale.id,
@@ -174,24 +174,24 @@ describe('return restores stock (spec 7)', () => {
 
   it('a returned single carton is back in stock and can be sold again', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
-    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
+    const sale = await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }]);
+    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(0);
     await t.svc.checkout.createReturn({
       originalSaleId: sale.id,
       lines: [{ lineId: first(sale.lines).id, quantity: 1 }],
       refund: [{ method: 'cash', amount: CARTON_PRICE }],
       reason: 'Dead on arrival',
     });
-    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(1);
-    const again = await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
+    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(1);
+    const again = await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }]);
     expect(again.seq).toBe(3);
-    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
+    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(0);
     expect((await t.svc.integrity.checks()).saleLineMismatch).toBe(0);
   });
 
   it('a return invoice cannot itself be returned (RETURN_NOT_ALLOWED)', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 2 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 2 }]);
     const ret = await t.svc.checkout.createReturn({
       originalSaleId: sale.id,
       lines: [{ lineId: first(sale.lines).id, quantity: 1 }],
@@ -207,7 +207,7 @@ describe('return restores stock (spec 7)', () => {
 
   it('validation: missing reason, empty lines, unknown line, zero quantity', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 2 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 2 }]);
     const line = first(sale.lines);
     const base = {
       originalSaleId: sale.id,
@@ -233,7 +233,7 @@ describe('return restores stock (spec 7)', () => {
 
   it('createReturn is idempotent per saleId', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 3 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 3 }]);
     const input = {
       originalSaleId: sale.id,
       lines: [{ lineId: first(sale.lines).id, quantity: 1 }],
@@ -253,7 +253,7 @@ describe('voidSale', () => {
   it('creates a void invoice that mirrors the split payments and reverses khata and stock', async () => {
     await t.loginAs('mgr');
     const sale = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
       customerId: t.ids.bilalId,
       payments: [
         { method: 'cash', amount: 100_000 },
@@ -285,7 +285,7 @@ describe('voidSale', () => {
 
   it('voids only what is left after a partial return, scaling the refund', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 3 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 3 }]);
     await t.svc.checkout.createReturn({
       originalSaleId: sale.id,
       lines: [{ lineId: first(sale.lines).id, quantity: 1 }],
@@ -300,7 +300,7 @@ describe('voidSale', () => {
 
   it('a cashier void needs approval (reason void)', async () => {
     await t.loginAs('cash');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     const e = await expectCode(
       t.svc.checkout.voidSale({ originalSaleId: sale.id, reason: 'oops' }),
       'APPROVAL_REQUIRED',
@@ -317,7 +317,7 @@ describe('voidSale', () => {
 
   it('a reason is mandatory', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     await expectCode(
       t.svc.checkout.voidSale({ originalSaleId: sale.id, reason: '' }),
       'VALIDATION',
@@ -326,7 +326,7 @@ describe('voidSale', () => {
 
   it('calls the licence hook with the void action and honours a block', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     t.assertCanSell.mockClear();
     t.assertCanSell.mockRejectedValueOnce(new Error('boom'));
     const before = await snapshotCounts(t.driver);
@@ -348,7 +348,7 @@ describe('discount rounding on partial returns (spec 16, corrected)', () => {
 
   /** 3 chargers with a 100 paisa line discount. */
   async function discountedSale(): Promise<ReturnType<typeof sellCash>> {
-    return sellCash(t, [{ variantId: t.ids.chargerId, quantity: 3, discountAmount: 100 }]);
+    return sellCash(t, [{ itemId: t.ids.chargerId, quantity: 3, discountAmount: 100 }]);
   }
 
   it('three single-unit returns give back 33, 34 and 33 and sum to the original discount', async () => {
@@ -411,8 +411,8 @@ describe('discount rounding on partial returns (spec 16, corrected)', () => {
     const sale = await sellCash(
       t,
       [
-        { variantId: t.ids.chargerId, quantity: 2 },
-        { variantId: t.ids.cartonId, quantity: 1 },
+        { itemId: t.ids.chargerId, quantity: 2 },
+        { itemId: t.ids.cartonId, quantity: 1 },
       ],
       { invoiceDiscount: 100_001 },
     );

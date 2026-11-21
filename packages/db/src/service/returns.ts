@@ -67,20 +67,20 @@ async function loadReturnContext(
     throw new ServiceError('RETURN_NOT_ALLOWED', 'Only a sale invoice can be returned', {
       kind: original.kind,
     });
-  const prior = await driver.query<{ variant_id: string; qty: number }>(
-    `SELECT l.variant_id, -SUM(l.quantity) AS qty
+  const prior = await driver.query<{ item_id: string; qty: number }>(
+    `SELECT l.item_id, -SUM(l.quantity) AS qty
      FROM sale_lines l JOIN sales s ON s.id = l.sale_id
      WHERE s.original_sale_id = ? AND s.kind IN ('return', 'void')
-     GROUP BY l.variant_id`,
+     GROUP BY l.item_id`,
     [original.id],
   );
-  const pool = new Map(prior.map((r) => [r.variant_id, r.qty]));
+  const pool = new Map(prior.map((r) => [r.item_id, r.qty]));
   const states = [...original.lines]
     .sort((a, b) => a.lineNo - b.lineNo)
     .map((line): LineState => {
-      const available = pool.get(line.variantId) ?? 0;
+      const available = pool.get(line.itemId) ?? 0;
       const returnedQty = Math.min(available, line.quantity);
-      pool.set(line.variantId, available - returnedQty);
+      pool.set(line.itemId, available - returnedQty);
       return { line, returnedQty, remainingQty: line.quantity - returnedQty };
     });
   const disc = await driver.query<{ d: number }>(
@@ -125,7 +125,7 @@ function computeReturn(
       lineDiscountShare(d, st.returnedQty + q, n) - lineDiscountShare(d, st.returnedQty, n);
     specs.push({
       productId: st.line.productId,
-      variantId: st.line.variantId,
+      itemId: st.line.itemId,
       description: st.line.description,
       quantity: -q,
       unitScale: st.line.unitScale,

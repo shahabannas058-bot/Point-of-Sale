@@ -19,7 +19,7 @@ import { createNodeSqliteDriver, loadMigrationsFromDir, type NodeSqliteDriver } 
 import { BASE_MS, buildChain, makeInvoice, mulberry32, randInt } from '../../core/test/fixtures';
 import {
   SHOP,
-  addVariant,
+  addItem,
   count,
   createMigratedDb,
   createSeededDb,
@@ -53,16 +53,16 @@ const allMovements = async (): Promise<MovementLike[]> =>
   );
 
 describe('core stockOnHand and SQL views agree', () => {
-  it('matches for 200 random variant movements over 3 variants and 2 branches', async () => {
-    const variants = [SHOP.variantId, await addVariant(db, 'V2'), await addVariant(db, 'V3')];
+  it('matches for 200 random item movements over 3 items and 2 branches', async () => {
+    const items = [SHOP.itemId, await addItem(db, 'V2'), await addItem(db, 'V3')];
     const branches = [SHOP.branchId, SHOP.branch2Id];
     const rand = mulberry32(1234);
     const rows = [];
     for (let i = 0; i < 200; i++) {
       const kind = randInt(rand, 0, 3);
-      const variant = variants[randInt(rand, 0, variants.length - 1)]!;
+      const item = items[randInt(rand, 0, items.length - 1)]!;
       const branch = branches[randInt(rand, 0, branches.length - 1)]!;
-      const base = { variant_id: variant, branch_id: branch, created_at: BASE_MS + i };
+      const base = { item_id: item, branch_id: branch, created_at: BASE_MS + i };
       if (kind === 0)
         rows.push(movementRow({ ...base, type: 'purchase', quantity: randInt(rand, 1, 20) }));
       else if (kind === 1)
@@ -83,21 +83,21 @@ describe('core stockOnHand and SQL views agree', () => {
 
     const movements = await allMovements();
     expect(movements).toHaveLength(200);
-    const view = await db.query<{ variant_id: string; branch_id: string; on_hand: number }>(
-      'select variant_id, branch_id, on_hand from v_variant_on_hand',
+    const view = await db.query<{ item_id: string; branch_id: string; on_hand: number }>(
+      'select item_id, branch_id, on_hand from v_item_on_hand',
     );
-    for (const variantId of variants) {
+    for (const itemId of items) {
       for (const branchId of branches) {
-        const fromView = view.find((r) => r.variant_id === variantId && r.branch_id === branchId);
-        expect(fromView?.on_hand ?? 0).toBe(stockOnHand(movements, { variantId, branchId }));
+        const fromView = view.find((r) => r.item_id === itemId && r.branch_id === branchId);
+        expect(fromView?.on_hand ?? 0).toBe(stockOnHand(movements, { itemId, branchId }));
       }
     }
     // and the all-branch total
-    for (const variantId of variants) {
+    for (const itemId of items) {
       const sqlTotal = view
-        .filter((r) => r.variant_id === variantId)
+        .filter((r) => r.item_id === itemId)
         .reduce((sum, r) => sum + r.on_hand, 0);
-      expect(sqlTotal).toBe(stockOnHand(movements, { variantId }));
+      expect(sqlTotal).toBe(stockOnHand(movements, { itemId }));
     }
   });
 });
@@ -251,11 +251,11 @@ describe('atomic commit', () => {
     await insertRow(
       db,
       'stock_movements',
-      movementRow({ type: 'purchase', variant_id: SHOP.variant2Id, quantity: 5 }),
+      movementRow({ type: 'purchase', item_id: SHOP.item2Id, quantity: 5 }),
     );
   };
-  const onHand = (variantId: string): Promise<unknown[]> =>
-    db.query('select on_hand from v_variant_on_hand where variant_id = ?', [variantId]);
+  const onHand = (itemId: string): Promise<unknown[]> =>
+    db.query('select on_hand from v_item_on_hand where item_id = ?', [itemId]);
   const tables = ['sales', 'sale_lines', 'payments', 'ledger_entries', 'outbox'] as const;
 
   it('rolls back every table when the last statement of the batch violates a CHECK', async () => {
@@ -274,9 +274,7 @@ describe('atomic commit', () => {
     for (const table of tables) expect(await count(db, table), table).toBe(0);
     expect(await count(db, 'stock_movements')).toBe(before);
     expect(
-      await db.query('select on_hand from v_variant_on_hand where variant_id = ?', [
-        SHOP.variantId,
-      ]),
+      await db.query('select on_hand from v_item_on_hand where item_id = ?', [SHOP.itemId]),
     ).toEqual([{ on_hand: 10 }]);
   });
 
@@ -313,8 +311,8 @@ describe('atomic commit', () => {
     expect(await count(db, 'ledger_entries')).toBe(1);
     expect(await count(db, 'outbox')).toBe(1);
     // stock: 10 chargers - 2 sold = 8; 5 cables - 1 sold = 4
-    expect(await onHand(SHOP.variantId)).toEqual([{ on_hand: 8 }]);
-    expect(await onHand(SHOP.variant2Id)).toEqual([{ on_hand: 4 }]);
+    expect(await onHand(SHOP.itemId)).toEqual([{ on_hand: 8 }]);
+    expect(await onHand(SHOP.item2Id)).toEqual([{ on_hand: 4 }]);
     const [queued] = await db.query<{ payload: string }>('select payload from outbox');
     expect(InvoiceSchema.parse(JSON.parse(queued!.payload)).id).toBe(invoice!.id);
   });
@@ -362,7 +360,7 @@ describe('end to end: price, split, seal, store, verify', () => {
     await insertRow(
       db,
       'stock_movements',
-      movementRow({ type: 'purchase', variant_id: SHOP.variant2Id, quantity: 1 }),
+      movementRow({ type: 'purchase', item_id: SHOP.item2Id, quantity: 1 }),
     );
     await insertRow(db, 'stock_movements', movementRow({ type: 'purchase', quantity: 10 }));
 
@@ -415,14 +413,10 @@ describe('end to end: price, split, seal, store, verify', () => {
       { balance: totals.total - 500_000 },
     ]);
     expect(
-      await db.query('select on_hand from v_variant_on_hand where variant_id = ?', [
-        SHOP.variantId,
-      ]),
+      await db.query('select on_hand from v_item_on_hand where item_id = ?', [SHOP.itemId]),
     ).toEqual([{ on_hand: 8 }]);
     expect(
-      await db.query('select on_hand from v_variant_on_hand where variant_id = ?', [
-        SHOP.variant2Id,
-      ]),
+      await db.query('select on_hand from v_item_on_hand where item_id = ?', [SHOP.item2Id]),
     ).toEqual([{ on_hand: 0 }]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { VariantView } from '@pos/shared';
+import type { ItemView } from '@pos/shared';
 import {
   addMilk,
   addSupplier,
@@ -15,12 +15,12 @@ describe('receiving stock with a batch and expiry date', () => {
   it('creates a batch whose on-hand and days left are readable', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [{ qty: 10, days: 10, batchNo: 'L-01' }]);
+    await receive(t, milk.item.id, [{ qty: 10, days: 10, batchNo: 'L-01' }]);
 
     const rows = await t.svc.batches.list();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      variantId: milk.variant.id,
+      itemId: milk.item.id,
       batchNo: 'L-01',
       expiryDate: inDays(t, 10),
       onHand: 10,
@@ -28,13 +28,13 @@ describe('receiving stock with a batch and expiry date', () => {
       unitScale: 1,
       unitLabel: 'pcs',
     });
-    expect(await stockSum(t.driver, { variantId: milk.variant.id })).toBe(10);
+    expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(10);
   });
 
   it('a batch number is optional', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [{ qty: 3, days: 4 }]);
+    await receive(t, milk.item.id, [{ qty: 3, days: 4 }]);
     expect((await t.svc.batches.list())[0]).toMatchObject({ batchNo: null, onHand: 3 });
   });
 
@@ -45,9 +45,9 @@ describe('receiving stock with a batch and expiry date', () => {
     const before = await snapshotCounts(t.driver);
     const line = (batch: unknown) => ({
       supplierId,
-      accessories: [
+      items: [
         {
-          variantId: milk.variant.id,
+          itemId: milk.item.id,
           quantity: 5,
           unitCost: 29_000,
           batch: batch as { expiryDate: string },
@@ -63,15 +63,15 @@ describe('receiving stock with a batch and expiry date', () => {
 
   it('works for loose goods: a 10 kg batch is held in grams', async () => {
     const t = await shopOf();
-    const atta = await t.svc.catalog.createAccessory({
+    const atta = await t.svc.catalog.createItem({
       product: { brand: 'Loose', name: 'Atta' },
       sku: 'ATTA',
       costPrice: 13_500,
       salePrice: 15_000,
       unit: 'kg',
     });
-    await receive(t, atta.variant.id, [{ qty: 10_000, days: 60, batchNo: 'A-1' }]);
-    await sellCash(t, [{ variantId: atta.variant.id, quantity: 1_250 }]);
+    await receive(t, atta.item.id, [{ qty: 10_000, days: 60, batchNo: 'A-1' }]);
+    await sellCash(t, [{ itemId: atta.item.id, quantity: 1_250 }]);
     expect(await t.svc.batches.list()).toEqual([
       expect.objectContaining({ batchNo: 'A-1', onHand: 8_750, unitScale: 1000, unitLabel: 'kg' }),
     ]);
@@ -80,7 +80,7 @@ describe('receiving stock with a batch and expiry date', () => {
   it('writes a stock_batch row and a batch-carrying movement to the outbox', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [{ qty: 6, days: 9, batchNo: 'L-02' }]);
+    await receive(t, milk.item.id, [{ qty: 6, days: 9, batchNo: 'L-02' }]);
     const rows = await t.driver.query<{ entity_type: string; payload: string }>(
       "select entity_type, payload from outbox where entity_type in ('stock_batch', 'stock_movement') order by id",
     );
@@ -88,7 +88,7 @@ describe('receiving stock with a batch and expiry date', () => {
     expect(JSON.parse(batch?.payload ?? '{}')).toMatchObject({
       batchNo: 'L-02',
       expiryDate: inDays(t, 9),
-      variantId: milk.variant.id,
+      itemId: milk.item.id,
     });
     const batchId = (JSON.parse(batch?.payload ?? '{}') as { id: string }).id;
     const movement = rows
@@ -103,11 +103,11 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
   it('takes from the batch that expires first, even if it was received last', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [
+    await receive(t, milk.item.id, [
       { qty: 10, days: 20, batchNo: 'LATE' },
       { qty: 4, days: 5, batchNo: 'SOON' },
     ]);
-    await sellCash(t, [{ variantId: milk.variant.id, quantity: 6 }]);
+    await sellCash(t, [{ itemId: milk.item.id, quantity: 6 }]);
 
     expect(await batchOnHand(t, 'SOON')).toBe(0);
     expect(await batchOnHand(t, 'LATE')).toBe(8);
@@ -115,19 +115,19 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
       "select quantity from stock_movements where type = 'sale' order by quantity",
     );
     expect(sold.map((m) => m.quantity)).toEqual([-4, -2]);
-    expect(await stockSum(t.driver, { variantId: milk.variant.id })).toBe(8);
+    expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(8);
   });
 
   it('two cart lines of the same item consume the batches one after the other', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [
+    await receive(t, milk.item.id, [
       { qty: 4, days: 5, batchNo: 'SOON' },
       { qty: 10, days: 20, batchNo: 'LATE' },
     ]);
     await sellCash(t, [
-      { variantId: milk.variant.id, quantity: 3 },
-      { variantId: milk.variant.id, quantity: 3 },
+      { itemId: milk.item.id, quantity: 3 },
+      { itemId: milk.item.id, quantity: 3 },
     ]);
     expect(await batchOnHand(t, 'SOON')).toBe(0);
     expect(await batchOnHand(t, 'LATE')).toBe(8);
@@ -136,16 +136,16 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
   it('never sells an expired batch: it is skipped, and short stock reports the expired quantity', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [
+    await receive(t, milk.item.id, [
       { qty: 5, days: -2, batchNo: 'OLD' },
       { qty: 3, days: 10, batchNo: 'FRESH' },
     ]);
-    await sellCash(t, [{ variantId: milk.variant.id, quantity: 3 }]);
+    await sellCash(t, [{ itemId: milk.item.id, quantity: 3 }]);
     expect(await batchOnHand(t, 'FRESH')).toBe(0);
     expect(await batchOnHand(t, 'OLD')).toBe(5);
 
     const e = await expectCode(
-      sellCash(t, [{ variantId: milk.variant.id, quantity: 1 }]),
+      sellCash(t, [{ itemId: milk.item.id, quantity: 1 }]),
       'STOCK_INSUFFICIENT',
     );
     expect(e.details).toMatchObject({ onHand: 0, expiredOnHand: 5 });
@@ -153,15 +153,15 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
 
   it('sells batches first and stock without a batch last', async () => {
     const t = await shopOf();
-    const milk = await t.svc.catalog.createAccessory({
+    const milk = await t.svc.catalog.createItem({
       product: { brand: 'Olpers', name: 'Milk 1L' },
       sku: 'MILK-1L',
       costPrice: 29_000,
       salePrice: 32_000,
       openingQty: 4, // counted before batches were tracked: no batch
     });
-    await receive(t, milk.variant.id, [{ qty: 3, days: 10, batchNo: 'B1' }]);
-    await sellCash(t, [{ variantId: milk.variant.id, quantity: 5 }]);
+    await receive(t, milk.item.id, [{ qty: 3, days: 10, batchNo: 'B1' }]);
+    await sellCash(t, [{ itemId: milk.item.id, quantity: 5 }]);
 
     const sold = await t.driver.query<{ batch_id: string | null; quantity: number }>(
       "select batch_id, quantity from stock_movements where type = 'sale' order by quantity",
@@ -169,30 +169,30 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
     expect(sold.map((m) => m.quantity)).toEqual([-3, -2]);
     expect(sold.filter((m) => m.batch_id === null).map((m) => m.quantity)).toEqual([-2]);
     expect(await batchOnHand(t, 'B1')).toBe(0);
-    expect(await stockSum(t.driver, { variantId: milk.variant.id })).toBe(2);
+    expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(2);
   });
 
   it('with negative stock allowed, the shortfall goes to the no-batch bucket', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [{ qty: 3, days: 10, batchNo: 'B1' }]);
+    await receive(t, milk.item.id, [{ qty: 3, days: 10, batchNo: 'B1' }]);
     await t.svc.settings.update({ allowNegativeStock: true });
-    await sellCash(t, [{ variantId: milk.variant.id, quantity: 5 }]);
+    await sellCash(t, [{ itemId: milk.item.id, quantity: 5 }]);
     const sold = await t.driver.query<{ batch_id: string | null; quantity: number }>(
       "select batch_id, quantity from stock_movements where type = 'sale' order by quantity",
     );
     expect(sold.map((m) => m.quantity)).toEqual([-3, -2]);
-    expect(await stockSum(t.driver, { variantId: milk.variant.id })).toBe(-2);
+    expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(-2);
   });
 });
 
 describe('returning batch-tracked goods', () => {
-  async function soldSix(t: TestService, milk: VariantView) {
-    await receive(t, milk.variant.id, [
+  async function soldSix(t: TestService, milk: ItemView) {
+    await receive(t, milk.item.id, [
       { qty: 4, days: 5, batchNo: 'SOON' },
       { qty: 10, days: 20, batchNo: 'LATE' },
     ]);
-    return sellCash(t, [{ variantId: milk.variant.id, quantity: 6 }]);
+    return sellCash(t, [{ itemId: milk.item.id, quantity: 6 }]);
   }
   async function giveBack(t: TestService, saleId: string, lineId: string, quantity: number) {
     const preview = await t.svc.checkout.previewReturn(saleId, [{ lineId, quantity }]);
@@ -225,7 +225,7 @@ describe('returning batch-tracked goods', () => {
     await giveBack(t, sale.id, line.id, 1);
     expect(await batchOnHand(t, 'SOON')).toBe(4);
     expect(await batchOnHand(t, 'LATE')).toBe(10);
-    expect(await stockSum(t.driver, { variantId: milk.variant.id })).toBe(14);
+    expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(14);
   });
 });
 
@@ -233,13 +233,13 @@ describe('the expiry list and writing off expired goods', () => {
   it('lists batches that still have stock, earliest expiry first, and filters by days left', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [
+    await receive(t, milk.item.id, [
       { qty: 4, days: 20, batchNo: 'D20' },
       { qty: 4, days: -3, batchNo: 'GONE' },
       { qty: 4, days: 5, batchNo: 'D5' },
       { qty: 1, days: 1, batchNo: 'SOLD-OUT' },
     ]);
-    await sellCash(t, [{ variantId: milk.variant.id, quantity: 1 }]); // empties SOLD-OUT (soonest valid)
+    await sellCash(t, [{ itemId: milk.item.id, quantity: 1 }]); // empties SOLD-OUT (soonest valid)
 
     expect((await t.svc.batches.list()).map((b) => b.batchNo)).toEqual(['GONE', 'D5', 'D20']);
     expect((await t.svc.batches.list({ withinDays: 7 })).map((b) => b.batchNo)).toEqual([
@@ -247,7 +247,7 @@ describe('the expiry list and writing off expired goods', () => {
       'D5',
     ]);
     expect((await t.svc.batches.list())[0]?.daysLeft).toBe(-3);
-    expect((await t.svc.batches.list({ variantId: 'no-such-item' })).map((b) => b.batchNo)).toEqual(
+    expect((await t.svc.batches.list({ itemId: 'no-such-item' })).map((b) => b.batchNo)).toEqual(
       [],
     );
   });
@@ -255,7 +255,7 @@ describe('the expiry list and writing off expired goods', () => {
   it('writeOff removes the whole batch from stock with a reason and keeps the ledger intact', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [
+    await receive(t, milk.item.id, [
       { qty: 5, days: -2, batchNo: 'OLD' },
       { qty: 3, days: 10, batchNo: 'FRESH' },
     ]);
@@ -267,7 +267,7 @@ describe('the expiry list and writing off expired goods', () => {
     await t.svc.batches.writeOff({ batchId: old.id, reason: 'Expired, thrown away' });
 
     expect((await t.svc.batches.list()).map((b) => b.batchNo)).toEqual(['FRESH']);
-    expect(await stockSum(t.driver, { variantId: milk.variant.id })).toBe(3);
+    expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(3);
     const adj = await t.driver.query<{ quantity: number; reason: string; batch_id: string }>(
       "select quantity, reason, batch_id from stock_movements where type = 'adjustment' and batch_id is not null",
     );
@@ -277,7 +277,7 @@ describe('the expiry list and writing off expired goods', () => {
   it('writeOff needs a reason, a real batch with stock, and the adjust-stock permission', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);
-    await receive(t, milk.variant.id, [{ qty: 5, days: -2, batchNo: 'OLD' }]);
+    await receive(t, milk.item.id, [{ qty: 5, days: -2, batchNo: 'OLD' }]);
     const old = first(await t.svc.batches.list(), 'batch');
 
     await expectCode(t.svc.batches.writeOff({ batchId: old.id, reason: ' ' }), 'VALIDATION');
@@ -299,7 +299,7 @@ describe('the batch_expiry module', () => {
   it('a shop without the module cannot receive batches or read the expiry list', async () => {
     const t = await shopOf();
     await setModules(t, ['weight_units']);
-    const pens = await t.svc.catalog.createAccessory({
+    const pens = await t.svc.catalog.createItem({
       product: { brand: 'Reynolds', name: 'Pen' },
       sku: 'PEN',
       costPrice: 1_500,
@@ -310,9 +310,9 @@ describe('the batch_expiry module', () => {
     const e = await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: [
+        items: [
           {
-            variantId: pens.variant.id,
+            itemId: pens.item.id,
             quantity: 5,
             unitCost: 1_500,
             batch: { batchNo: 'X', expiryDate: inDays(t, 30) },
@@ -331,10 +331,10 @@ describe('the batch_expiry module', () => {
     const milk = await addMilk(t);
     await t.svc.purchasing.receive({
       supplierId: await addSupplier(t),
-      accessories: [{ variantId: milk.variant.id, quantity: 5, unitCost: 29_000 }],
+      items: [{ itemId: milk.item.id, quantity: 5, unitCost: 29_000 }],
     });
-    await sellCash(t, [{ variantId: milk.variant.id, quantity: 2 }]);
-    expect(await stockSum(t.driver, { variantId: milk.variant.id })).toBe(3);
+    await sellCash(t, [{ itemId: milk.item.id, quantity: 2 }]);
+    expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(3);
     expect(await t.svc.batches.list()).toEqual([]);
   });
 });

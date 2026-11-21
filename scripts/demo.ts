@@ -15,6 +15,7 @@ import {
 } from '@pos/core';
 import { camelizeKeys, migrate } from '../packages/db/src/index';
 import { createNodeSqliteDriver, loadMigrationsFromDir } from '../packages/db/src/node';
+import { LEGACY_PRODUCT_KIND } from '../packages/db/src/service/queries';
 
 const gen = createUuidV7Generator();
 const id = (): string => gen();
@@ -44,7 +45,7 @@ const device = id();
 const ITEMS = {
   rice: {
     product: id(),
-    variant: id(),
+    item: id(),
     brand: 'Guard',
     name: 'Basmati Rice 5kg',
     category: 'Rice',
@@ -56,7 +57,7 @@ const ITEMS = {
   },
   tea: {
     product: id(),
-    variant: id(),
+    item: id(),
     brand: 'Tapal',
     name: 'Danedar 190g',
     category: 'Tea',
@@ -86,12 +87,12 @@ await db.batch([
   ...itemList.flatMap((it) => [
     {
       sql: 'insert into products (id,kind,brand,name,category,created_at,updated_at) values (?,?,?,?,?,?,?)',
-      params: [it.product, 'accessory', it.brand, it.name, it.category, now, now],
+      params: [it.product, LEGACY_PRODUCT_KIND, it.brand, it.name, it.category, now, now],
     },
     {
-      sql: `insert into accessory_variants (id,product_id,sku,barcode,cost_price,sale_price,reorder_level,created_at,updated_at)
+      sql: `insert into items (id,product_id,sku,barcode,cost_price,sale_price,reorder_level,created_at,updated_at)
             values (?,?,?,?,?,?,?,?,?)`,
-      params: [it.variant, it.product, it.sku, it.barcode, it.cost, it.price, 3, now, now],
+      params: [it.item, it.product, it.sku, it.barcode, it.cost, it.price, 3, now, now],
     },
   ]),
 ]);
@@ -119,13 +120,13 @@ await db.batch([
     ],
   },
   ...itemList.map((it) => ({
-    sql: `insert into stock_movements (id,branch_id,type,variant_id,quantity,unit_cost,ref_type,ref_id,created_by,created_at)
+    sql: `insert into stock_movements (id,branch_id,type,item_id,quantity,unit_cost,ref_type,ref_id,created_by,created_at)
           values (?,?,?,?,?,?,?,?,?,?)`,
     params: [
       id(),
       branch,
       'purchase',
-      it.variant,
+      it.item,
       it.bought,
       it.cost,
       'purchase',
@@ -139,8 +140,8 @@ const onHand = async (): Promise<string> => {
   const parts: string[] = [];
   for (const it of itemList) {
     const v = await db.query<{ on_hand: number }>(
-      'select on_hand from v_variant_on_hand where variant_id=?',
-      [it.variant],
+      'select on_hand from v_item_on_hand where item_id=?',
+      [it.item],
     );
     parts.push(`${it.name} on hand: ${v[0]?.on_hand ?? 0}`);
   }
@@ -193,7 +194,7 @@ async function sell(opts: {
       saleId,
       lineNo: i + 1,
       productId: ITEMS[l.item].product,
-      variantId: ITEMS[l.item].variant,
+      itemId: ITEMS[l.item].item,
       description: `${ITEMS[l.item].brand} ${ITEMS[l.item].name}`,
       quantity: l.quantity,
       unitPrice: l.unitPrice,
@@ -240,14 +241,14 @@ async function sell(opts: {
     },
     ...s.lines.flatMap((l) => [
       {
-        sql: `insert into sale_lines (id,sale_id,line_no,product_id,variant_id,description,quantity,
+        sql: `insert into sale_lines (id,sale_id,line_no,product_id,item_id,description,quantity,
               unit_price,cost_price,discount_amount,line_total,created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)`,
         params: [
           l.id,
           l.saleId,
           l.lineNo,
           l.productId,
-          l.variantId,
+          l.itemId,
           l.description,
           l.quantity,
           l.unitPrice,
@@ -258,9 +259,9 @@ async function sell(opts: {
         ],
       },
       {
-        sql: `insert into stock_movements (id,branch_id,type,variant_id,quantity,ref_type,ref_id,created_by,created_at)
+        sql: `insert into stock_movements (id,branch_id,type,item_id,quantity,ref_type,ref_id,created_by,created_at)
               values (?,?,?,?,?,?,?,?,?)`,
-        params: [id(), branch, 'sale', l.variantId, -l.quantity, 'sale', s.id, user, l.createdAt],
+        params: [id(), branch, 'sale', l.itemId, -l.quantity, 'sale', s.id, user, l.createdAt],
       },
     ]),
     ...s.payments.map((p) => ({
@@ -333,9 +334,9 @@ await tryIt('delete an invoice', () => db.query('delete from sales where seq = 1
 await tryIt('delete a stock movement', () => db.query('delete from stock_movements'));
 await tryIt('a "sale" movement that adds stock instead of removing it', () =>
   db.query(
-    `insert into stock_movements (id,branch_id,type,variant_id,quantity,ref_type,ref_id,created_by,created_at)
+    `insert into stock_movements (id,branch_id,type,item_id,quantity,ref_type,ref_id,created_by,created_at)
      values (?,?,?,?,?,?,?,?,?)`,
-    [id(), branch, 'sale', ITEMS.rice.variant, 1, 'sale', inv1.id, user, now],
+    [id(), branch, 'sale', ITEMS.rice.item, 1, 'sale', inv1.id, user, now],
   ),
 );
 await tryIt('khata payment on a walk-in sale', () =>

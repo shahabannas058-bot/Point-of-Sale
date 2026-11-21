@@ -1,11 +1,11 @@
-import { MAX_QUICK_ITEMS, type VariantView } from '@pos/shared';
+import { MAX_QUICK_ITEMS, type ItemView } from '@pos/shared';
 import { WriteBatch } from './batch';
 import type { Ctx } from './deps';
 import { invalid } from './errors';
 import { uuid } from './item-history';
-import { toVariantView, type Raw } from './mappers';
+import { toItemView, type Raw } from './mappers';
 import { META, deleteMeta, readMetaMap, upsertMeta } from './meta';
-import { VARIANT_VIEW_SQL, loadVariantRec } from './queries';
+import { ITEM_VIEW_SQL, loadItemRec } from './queries';
 
 /** Pinned ids in order; an unreadable stored value counts as nothing pinned rather than an error at the till. */
 async function pinnedIds(ctx: Ctx): Promise<string[]> {
@@ -13,27 +13,27 @@ async function pinnedIds(ctx: Ctx): Promise<string[]> {
   return raw.split(',').filter((id) => id !== '');
 }
 
-/** Active pinned variants with their on-hand, in pin order. */
-export async function loadQuickItems(ctx: Ctx, branchId: string): Promise<VariantView[]> {
+/** Active pinned items with their on-hand, in pin order. */
+export async function loadQuickItems(ctx: Ctx, branchId: string): Promise<ItemView[]> {
   const ids = await pinnedIds(ctx);
   if (ids.length === 0) return [];
   const rows = await ctx.driver.query<Raw>(
-    `${VARIANT_VIEW_SQL} WHERE av.id IN (${ids.map(() => '?').join(', ')}) AND av.is_active = 1 AND p.is_active = 1`,
+    `${ITEM_VIEW_SQL} WHERE it.id IN (${ids.map(() => '?').join(', ')}) AND it.is_active = 1 AND p.is_active = 1`,
     [branchId, ...ids],
   );
-  const byId = new Map(rows.map((r) => [String(r.id), toVariantView(r)]));
+  const byId = new Map(rows.map((r) => [String(r.id), toItemView(r)]));
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-/** Caller has checked the permission. VALIDATION on a bad list, NOT_FOUND on an unknown variant. */
-export async function saveQuickItems(ctx: Ctx, variantIds: unknown): Promise<void> {
-  if (!Array.isArray(variantIds)) throw invalid('variantIds', 'variantIds must be a list');
-  if (variantIds.length > MAX_QUICK_ITEMS)
-    throw invalid('variantIds', `At most ${MAX_QUICK_ITEMS} quick items`);
-  const ids = variantIds.map((v, i) => uuid(v, `variantIds[${i}]`));
-  if (new Set(ids).size !== ids.length) throw invalid('variantIds', 'An item is pinned twice');
+/** Caller has checked the permission. VALIDATION on a bad list, NOT_FOUND on an unknown item. */
+export async function saveQuickItems(ctx: Ctx, itemIds: unknown): Promise<void> {
+  if (!Array.isArray(itemIds)) throw invalid('itemIds', 'itemIds must be a list');
+  if (itemIds.length > MAX_QUICK_ITEMS)
+    throw invalid('itemIds', `At most ${MAX_QUICK_ITEMS} quick items`);
+  const ids = itemIds.map((v, i) => uuid(v, `itemIds[${i}]`));
+  if (new Set(ids).size !== ids.length) throw invalid('itemIds', 'An item is pinned twice');
   await ctx.lock(async () => {
-    for (const id of ids) await loadVariantRec(ctx.driver, id); // NOT_FOUND
+    for (const id of ids) await loadItemRec(ctx.driver, id); // NOT_FOUND
     const b = new WriteBatch(ctx.newId, ctx.clock());
     const s =
       ids.length === 0 ? deleteMeta(META.quickItems) : upsertMeta(META.quickItems, ids.join(','));

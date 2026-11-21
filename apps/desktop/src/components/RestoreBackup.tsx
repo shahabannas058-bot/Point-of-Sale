@@ -18,24 +18,36 @@ const CONFIRM_WORD = 'RESTORE';
 export function RestoreBackup(): ReactNode {
   const t = useT();
   const rt = useRuntime();
+  if (rt.restore === undefined)
+    return <p className="text-sm text-muted">{t('settings.restoreUnavailable')}</p>;
+  return <RestoreBackupControl restore={rt.restore} />;
+}
+
+/**
+ * The restore button, its confirm dialog and the reload, for any `restore` function. Also used by the boot error
+ * screen, where no runtime exists yet (the database could not be opened).
+ */
+export function RestoreBackupControl({
+  restore: restoreBytes,
+}: {
+  restore: (bytes: Uint8Array) => Promise<void>;
+}): ReactNode {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [word, setWord] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const { busy, run: restore } = useBusyAction(async (): Promise<void> => {
-    if (file === null || rt.restore === undefined) return;
+    if (file === null) return;
     try {
-      await rt.restore(new Uint8Array(await file.arrayBuffer()));
+      await restoreBytes(new Uint8Array(await file.arrayBuffer()));
       // no hash change before the reload: the router would mount Login against the already closed database
       window.location.reload();
     } catch (e) {
       setError(errorMessage(e, t));
     }
   });
-
-  if (rt.restore === undefined)
-    return <p className="text-sm text-muted">{t('settings.restoreUnavailable')}</p>;
 
   const pick = (chosen: File | null): void => {
     setFile(chosen);

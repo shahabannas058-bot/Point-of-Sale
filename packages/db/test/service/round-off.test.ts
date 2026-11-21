@@ -11,7 +11,7 @@ let chawalId: string;
 beforeEach(async () => {
   t = await makeService();
   await t.loginAs('owner');
-  const v = await t.svc.catalog.createAccessory({
+  const v = await t.svc.catalog.createItem({
     product: { brand: 'Loose', name: 'Chawal Basmati', category: 'Grocery' },
     sku: 'CHAWAL-LOOSE',
     costPrice: 15_000,
@@ -20,14 +20,14 @@ beforeEach(async () => {
     openingQty: 10_000,
     unit: 'kg',
   });
-  chawalId = v.variant.id;
+  chawalId = v.item.id;
 });
 
-const line = { variantId: '', quantity: 1316, discountAmount: 4 };
+const line = { itemId: '', quantity: 1316, discountAmount: 4 };
 
 describe('a weight round-off is not a discount', () => {
   it('preview: the cart shows no item discount and the gross is the rupees typed', async () => {
-    const p = await t.svc.checkout.preview({ lines: [{ ...line, variantId: chawalId }] });
+    const p = await t.svc.checkout.preview({ lines: [{ ...line, itemId: chawalId }] });
     expect(p.lines[0]?.lineTotal).toBe(25_000);
     expect(p).toMatchObject({
       grossTotal: 25_000,
@@ -41,17 +41,17 @@ describe('a weight round-off is not a discount', () => {
 
   it('commit: the invoice still keeps the 4 paisa in discount_amount (total = gross - discount holds) and stock drops 1.316 kg', async () => {
     const inv = await t.svc.checkout.commit({
-      lines: [{ ...line, variantId: chawalId }],
+      lines: [{ ...line, itemId: chawalId }],
       payments: [{ method: 'cash', amount: 25_000 }],
     });
     expect(inv.lines[0]).toMatchObject({ quantity: 1316, discountAmount: 4, lineTotal: 25_000 });
     expect(inv.total).toBe(25_000);
-    expect(await stockSum(t.driver, { variantId: chawalId })).toBe(10_000 - 1316);
+    expect(await stockSum(t.driver, { itemId: chawalId })).toBe(10_000 - 1316);
   });
 
   it('report: discounts given stay 0 and gross equals net sales', async () => {
     await t.svc.checkout.commit({
-      lines: [{ ...line, variantId: chawalId }],
+      lines: [{ ...line, itemId: chawalId }],
       payments: [{ method: 'cash', amount: 25_000 }],
     });
     const s = await t.svc.reports.summary(WIDE);
@@ -60,7 +60,7 @@ describe('a weight round-off is not a discount', () => {
 
   it('a real discount on a weighed line still counts everywhere', async () => {
     const p = await t.svc.checkout.preview({
-      lines: [{ variantId: chawalId, quantity: 2000, discountAmount: 1_000 }],
+      lines: [{ itemId: chawalId, quantity: 2000, discountAmount: 1_000 }],
     });
     expect(p).toMatchObject({ grossTotal: 38_000, lineDiscounts: 1_000, total: 37_000 });
   });

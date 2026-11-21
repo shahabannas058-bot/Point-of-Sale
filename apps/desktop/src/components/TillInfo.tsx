@@ -25,14 +25,12 @@ export function TillInfo({
   customerId: string | null;
 }): ReactNode {
   const t = useT();
+  // only ask once there is a real item id: an empty id must never reach the service
+  const itemId = line?.itemId ? line.itemId : null;
   const q = useServiceQuery(
-    (s) =>
-      s.insights.item({
-        variantId: line?.variantId ?? '',
-        customerId,
-      }),
-    [line?.variantId, customerId],
-    line !== undefined,
+    (s) => (itemId === null ? Promise.resolve(null) : s.insights.item({ itemId, customerId })),
+    [itemId, customerId],
+    itemId !== null,
   );
   if (!line) return null;
   const d = q.data;

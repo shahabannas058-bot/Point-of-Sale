@@ -73,7 +73,7 @@ public sealed class WebBridgeTests : IDisposable
     [Fact]
     public async Task A_fractional_quantity_survives_the_trip_as_a_VALIDATION_error()
     {
-        var cart = $$"""{ "lines": [ { "variantId": "{{_fx.S.VariantId}}", "quantity": 1.5 } ], "payments": [] }""";
+        var cart = $$"""{ "lines": [ { "itemId": "{{_fx.S.ItemId}}", "quantity": 1.5 } ], "payments": [] }""";
         var error = (await Send("req-5", "checkout.commit", Commit(cart))).GetProperty("error");
         Assert.Equal("VALIDATION", error.GetProperty("code").GetString());
         Assert.Equal("lines.0.quantity", error.GetProperty("details").GetProperty("field").GetString());

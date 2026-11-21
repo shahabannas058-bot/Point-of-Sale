@@ -19,6 +19,7 @@ import {
   outboxRow,
   paymentRow,
   purchaseRow,
+  rowStatement,
   saleRow,
 } from './helpers';
 
@@ -49,8 +50,8 @@ describe('stock_movements is append-only', () => {
     await insertRow(db, 'stock_movements', row);
     await expect(
       db.query(
-        'insert or replace into stock_movements (id, branch_id, type, variant_id, quantity, created_by, created_at) values (?,?,?,?,?,?,?)',
-        [row.id as string, SHOP.branchId, 'purchase', SHOP.variantId, 999, SHOP.cashierId, 1],
+        'insert or replace into stock_movements (id, branch_id, type, item_id, quantity, created_by, created_at) values (?,?,?,?,?,?,?)',
+        [row.id as string, SHOP.branchId, 'purchase', SHOP.itemId, 999, SHOP.cashierId, 1],
       ),
     ).rejects.toThrow(/append-only/);
     const [still] = await db.query<{ quantity: number }>(
@@ -109,9 +110,9 @@ describe('stock_movements is append-only', () => {
       insertRow(db, 'stock_movements', movementRow({ type: 'purchase', quantity: 0 })),
     ).rejects.toThrow(/CHECK constraint failed/);
     // no target item
-    await expect(
-      insertRow(db, 'stock_movements', movementRow({ variant_id: null })),
-    ).rejects.toThrow(/CHECK constraint failed/);
+    await expect(insertRow(db, 'stock_movements', movementRow({ item_id: null }))).rejects.toThrow(
+      /NOT NULL constraint failed: stock_movements\.item_id/,
+    );
     // transfer needs ref_type = 'transfer'; ref_type and ref_id come together
     await expect(
       insertRow(
@@ -136,12 +137,88 @@ describe('transfer movements require a ref_type', () => {
   });
 });
 
+describe('transfers of plain items (stock ledger)', () => {
+  // A transfer is a pair of rows sharing one ref_id: -n at the source branch, then +n at the destination.
+  const transferPair = (quantity: number) => {
+    const ref = newId();
+    const out = movementRow({
+      type: 'transfer',
+      quantity: -quantity,
+      ref_type: 'transfer',
+      ref_id: ref,
+    });
+    const into = movementRow({
+      type: 'transfer',
+      branch_id: SHOP.branch2Id,
+      quantity,
+      ref_type: 'transfer',
+      ref_id: ref,
+    });
+    return { ref, out, into };
+  };
+  const onHand = async (branchId: string): Promise<number> => {
+    const rows = await db.query<{ n: number }>(
+      'select coalesce(sum(quantity), 0) as n from stock_movements where item_id = ? and branch_id = ?',
+      [SHOP.itemId, branchId],
+    );
+    return rows[0]?.n ?? 0;
+  };
+
+  it('moves stock between branches and the total stays the same', async () => {
+    await insertRow(db, 'stock_movements', movementRow({ quantity: 10 }));
+    const { out, into } = transferPair(4);
+    await db.batch([rowStatement('stock_movements', out), rowStatement('stock_movements', into)]);
+    expect(await onHand(SHOP.branchId)).toBe(6);
+    expect(await onHand(SHOP.branch2Id)).toBe(4);
+    const view = await db.query<{ branch_id: string; on_hand: number }>(
+      'select branch_id, on_hand from v_item_on_hand where item_id = ? order by on_hand',
+      [SHOP.itemId],
+    );
+    expect(view.map((r) => r.on_hand)).toEqual([4, 6]);
+  });
+
+  it('either row order is accepted for plain items (no per-unit guard any more)', async () => {
+    await insertRow(db, 'stock_movements', movementRow({ quantity: 2 }));
+    const { out, into } = transferPair(2);
+    // destination first: plain items have no 0..1 on-hand rule, so the order does not matter
+    await db.batch([rowStatement('stock_movements', into), rowStatement('stock_movements', out)]);
+    expect(await onHand(SHOP.branchId)).toBe(0);
+    expect(await onHand(SHOP.branch2Id)).toBe(2);
+  });
+
+  it('transfer rows are append-only like every movement', async () => {
+    const { ref, out, into } = transferPair(1);
+    await db.batch([rowStatement('stock_movements', out), rowStatement('stock_movements', into)]);
+    await expect(
+      db.exec(`update stock_movements set quantity = -5 where ref_id = '${ref}'`),
+    ).rejects.toThrow(/append-only/);
+    await expect(db.exec(`delete from stock_movements where ref_id = '${ref}'`)).rejects.toThrow(
+      /append-only/,
+    );
+    await expect(
+      insertRow(db, 'stock_movements', { ...out, quantity: -9 }), // same id again
+    ).rejects.toThrow(/UNIQUE constraint failed|append-only/);
+    expect(await count(db, 'stock_movements')).toBe(2);
+  });
+
+  it('a failed half rolls the whole transfer back', async () => {
+    const { out, into } = transferPair(3);
+    await expect(
+      db.batch([
+        rowStatement('stock_movements', out),
+        rowStatement('stock_movements', { ...into, ref_type: null, ref_id: null }), // breaks the CHECK
+      ]),
+    ).rejects.toThrow(/CHECK constraint failed/);
+    expect(await count(db, 'stock_movements')).toBe(0);
+  });
+});
+
 describe('item barcodes are unique', () => {
   it('a duplicate barcode fails', async () => {
     await expect(
-      insertRow(db, 'accessory_variants', {
+      insertRow(db, 'items', {
         id: newId(),
-        product_id: SHOP.accessoryProductId,
+        product_id: SHOP.itemProductId,
         sku: 'OTHER-SKU',
         barcode: '8961234567890',
         cost_price: 1,
@@ -383,8 +460,8 @@ describe('return and void rules', () => {
     await expect(
       insertRow(db, 'sale_lines', lineRow(id, { quantity: 0, line_total: 0 })),
     ).rejects.toThrow(/CHECK/);
-    await expect(insertRow(db, 'sale_lines', lineRow(id, { variant_id: null }))).rejects.toThrow(
-      /CHECK/,
+    await expect(insertRow(db, 'sale_lines', lineRow(id, { item_id: null }))).rejects.toThrow(
+      /NOT NULL constraint failed: sale_lines\.item_id/,
     );
     await expect(
       insertRow(db, 'sale_lines', lineRow(id, { unit_price: -1, line_total: -1 })),

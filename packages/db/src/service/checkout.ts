@@ -57,7 +57,7 @@ import {
   loadCustomerRec,
   loadHead,
   loadInvoiceBy,
-  loadVariantView,
+  loadItemView,
   likePattern,
   requireInvoice,
   type CustomerRec,
@@ -67,7 +67,7 @@ import type { SqlDriver, SqlValue } from '../types';
 // ---------- shared invoice writer (used by sales, returns and voids) ----------
 export interface LineSpec {
   productId: string;
-  variantId: string;
+  itemId: string;
   description: string;
   /** Signed base units (pieces, or grams / millilitres): positive on a sale, negative on a return/void. */
   quantity: number;
@@ -157,7 +157,7 @@ export async function writeInvoice(
           saleId: spec.saleId,
           lineNo: i + 1,
           productId: l.productId,
-          variantId: l.variantId,
+          itemId: l.itemId,
           description: l.description,
           quantity: l.quantity,
           unitScale: l.unitScale,
@@ -190,11 +190,11 @@ export async function writeInvoice(
       const restored = new Map<string | null, number>();
       for (const l of invoice.lines) {
         let parts: Allocation[] = [{ batchId: null, quantity: Math.abs(l.quantity) }];
-        if (batched && (await hasBatches(ctx.driver, l.variantId))) {
+        if (batched && (await hasBatches(ctx.driver, l.itemId))) {
           if (spec.kind === 'sale')
             parts = await allocateSale(
               ctx.driver,
-              l.variantId,
+              l.itemId,
               shop.branchId,
               l.quantity,
               today,
@@ -204,7 +204,7 @@ export async function writeInvoice(
             parts = await allocateReturn(
               ctx.driver,
               spec.originalSaleId,
-              l.variantId,
+              l.itemId,
               -l.quantity,
               restored,
             );
@@ -214,7 +214,7 @@ export async function writeInvoice(
             id: ctx.newId(),
             branchId: shop.branchId,
             type: spec.kind === 'sale' ? 'sale' : 'return',
-            variantId: l.variantId,
+            itemId: l.itemId,
             batchId: p.batchId,
             quantity: l.quantity > 0 ? -p.quantity : p.quantity,
             unitCost: l.costPrice,
@@ -321,10 +321,10 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
   // total requested per item across all lines (an item may appear on several lines)
   const requested = new Map<string, number>();
   for (const l of draft.lines)
-    if (typeof l.variantId === 'string')
+    if (typeof l.itemId === 'string')
       requested.set(
-        l.variantId,
-        (requested.get(l.variantId) ?? 0) + (Number.isSafeInteger(l.quantity) ? l.quantity : 0),
+        l.itemId,
+        (requested.get(l.itemId) ?? 0) + (Number.isSafeInteger(l.quantity) ? l.quantity : 0),
       );
 
   const items: PricedItem[] = [];
@@ -332,31 +332,26 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
   for (const [idx, l] of draft.lines.entries()) {
     const lineNo = idx + 1;
     const field = `lines.${idx}`;
-    if (typeof l.variantId !== 'string') throw invalid(field, 'Each line needs a variantId');
+    if (typeof l.itemId !== 'string') throw invalid(field, 'Each line needs an itemId');
     const quantity = intIn(l.quantity, `${field}.quantity`, 1, MAX_QUANTITY_ANY);
     const discount = discountMoney(l.discountAmount ?? 0, `${field}.discountAmount`);
 
-    const view = await loadVariantView(ctx.driver, l.variantId, shop.branchId);
-    if (view === null || !view.variant.isActive)
-      throw new ServiceError('NOT_FOUND', 'Accessory not found', { lineNo });
-    if (quantity > maxQuantity(view.variant.unitScale))
+    const view = await loadItemView(ctx.driver, l.itemId, shop.branchId);
+    if (view === null || !view.item.isActive)
+      throw new ServiceError('NOT_FOUND', 'Item not found', { lineNo });
+    if (quantity > maxQuantity(view.item.unitScale))
       throw invalid(`${field}.quantity`, 'Quantity is larger than this item allows');
-    const cum = (cumulative.get(view.variant.id) ?? 0) + quantity;
-    cumulative.set(view.variant.id, cum);
+    const cum = (cumulative.get(view.item.id) ?? 0) + quantity;
+    cumulative.set(view.item.id, cum);
     // Module batch_expiry: stock in batches past their expiry date cannot be sold
     let expired = 0;
-    if (hasModule(shop.modules, 'batch_expiry') && (await hasBatches(ctx.driver, view.variant.id)))
-      expired = await expiredOnHand(
-        ctx.driver,
-        view.variant.id,
-        shop.branchId,
-        pktDate(ctx.clock()),
-      );
+    if (hasModule(shop.modules, 'batch_expiry') && (await hasBatches(ctx.driver, view.item.id)))
+      expired = await expiredOnHand(ctx.driver, view.item.id, shop.branchId, pktDate(ctx.clock()));
     const sellable = view.onHand - expired;
     if (!shop.settings.allowNegativeStock && cum > sellable)
       throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
         onHand: sellable,
-        requested: requested.get(view.variant.id) ?? cum,
+        requested: requested.get(view.item.id) ?? cum,
         lineNo,
         ...(expired > 0 ? { expiredOnHand: expired } : {}),
       });
@@ -364,13 +359,13 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
       lineNo,
       onHand: sellable,
       spec: {
-        productId: view.variant.productId,
-        variantId: view.variant.id,
+        productId: view.item.productId,
+        itemId: view.item.id,
         description: view.label.slice(0, 200),
         quantity,
-        unitScale: view.variant.unitScale,
-        unitPrice: view.variant.salePrice,
-        costPrice: view.variant.costPrice,
+        unitScale: view.item.unitScale,
+        unitPrice: view.item.salePrice,
+        costPrice: view.item.costPrice,
         discountAmount: discount,
       },
     });
@@ -591,14 +586,14 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
 function assertSameSale(existing: Invoice, input: CommitSaleInput): void {
   const tally = (
     lines: readonly {
-      variantId?: string | null;
+      itemId?: string | null;
       quantity: number;
       discountAmount?: number;
     }[],
   ): string => {
     const acc = new Map<string, { qty: number; disc: number }>();
     for (const l of lines) {
-      const key = l.variantId ?? '';
+      const key = l.itemId ?? '';
       const cur = acc.get(key) ?? { qty: 0, disc: 0 };
       acc.set(key, {
         qty: cur.qty + Math.abs(l.quantity),

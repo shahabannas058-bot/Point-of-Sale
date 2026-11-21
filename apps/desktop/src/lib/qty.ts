@@ -2,7 +2,7 @@ import {
   formatQuantity,
   lineGross,
   parseQuantity,
-  type AccessoryVariant,
+  type Item,
   type UnitLabel,
   type UnitScale,
 } from '@pos/shared';
@@ -39,10 +39,8 @@ export function adjustmentDelta(
 }
 
 /** A stock number in the item's own unit: "3" for a piece item, "1.25 kg" for a loose one. */
-export const variantQtyText = (
-  quantity: number,
-  v: Pick<AccessoryVariant, 'unitScale' | 'unitLabel'>,
-): string => qtyText(quantity, v.unitScale, v.unitLabel);
+export const itemQtyText = (quantity: number, v: Pick<Item, 'unitScale' | 'unitLabel'>): string =>
+  qtyText(quantity, v.unitScale, v.unitLabel);
 
 /** What the + and - keys change: one piece, or 250 g for goods sold by weight. */
 export const qtyStep = (scale: UnitScale): number => (scale === 1 ? 1 : 250);

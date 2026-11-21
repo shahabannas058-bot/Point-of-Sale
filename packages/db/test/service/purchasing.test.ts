@@ -37,9 +37,9 @@ describe('purchase receipt (spec 9)', () => {
     const result = await t.svc.purchasing.receive({
       supplierId,
       referenceNo: 'INV-9001',
-      accessories: [
-        { variantId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST },
-        { variantId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST },
+      items: [
+        { itemId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST },
+        { itemId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST },
       ],
       paidNow: { method: 'cash', amount: 2_000_000 },
     });
@@ -69,7 +69,7 @@ describe('purchase receipt (spec 9)', () => {
       ref_type: string;
       ref_id: string;
     }>(
-      "select type, quantity, unit_cost, ref_type, ref_id from stock_movements where variant_id = ? and type = 'purchase'",
+      "select type, quantity, unit_cost, ref_type, ref_id from stock_movements where item_id = ? and type = 'purchase'",
       [t.ids.cartonId],
     );
     expect(cartonMoves).toEqual([
@@ -81,14 +81,14 @@ describe('purchase receipt (spec 9)', () => {
         ref_id: result.purchase.id,
       },
     ]);
-    const variantMoves = await t.driver.query<{ type: string; quantity: number }>(
-      "select type, quantity from stock_movements where variant_id = ? and type = 'purchase'",
+    const itemMoves = await t.driver.query<{ type: string; quantity: number }>(
+      "select type, quantity from stock_movements where item_id = ? and type = 'purchase'",
       [t.ids.chargerId],
     );
-    expect(variantMoves).toEqual([{ type: 'purchase', quantity: 10 }]);
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(20);
+    expect(itemMoves).toEqual([{ type: 'purchase', quantity: 10 }]);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(20);
 
-    // outbox: purchase, 2 stock movements, 2 ledger entries, 2 variant cost updates
+    // outbox: purchase, 2 stock movements, 2 ledger entries, 2 item cost updates
     const after = await snapshotCounts(t.driver);
     expect(after.outbox).toBeGreaterThan(outboxBefore.outbox);
     const typesAfter = await typeCounts();
@@ -97,7 +97,7 @@ describe('purchase receipt (spec 9)', () => {
     expect(added('product')).toBe(0);
     expect(added('ledger_entry')).toBe(2);
     expect(added('stock_movement')).toBe(2);
-    expect(added('accessory_variant')).toBe(2);
+    expect(added('item')).toBe(2);
 
     expect(
       await t.svc.purchasing.paySupplier({ supplierId, amount: 6_700_000, method: 'cash' }),
@@ -106,17 +106,15 @@ describe('purchase receipt (spec 9)', () => {
     expect(list.find((s) => s.party.id === supplierId)?.balance).toBe(0);
   });
 
-  it('updates the variant cost to the latest unit cost', async () => {
+  it('updates the item cost to the latest unit cost', async () => {
     await t.loginAs('mgr');
     const supplierId = await makeSupplier();
     await t.svc.purchasing.receive({
       supplierId,
-      accessories: [{ variantId: t.ids.chargerId, quantity: 5, unitCost: 95_000 }],
+      items: [{ itemId: t.ids.chargerId, quantity: 5, unitCost: 95_000 }],
     });
-    const view = (await t.svc.catalog.listAccessories()).find(
-      (v) => v.variant.id === t.ids.chargerId,
-    );
-    expect(view?.variant.costPrice).toBe(95_000);
+    const view = (await t.svc.catalog.listItems()).find((v) => v.item.id === t.ids.chargerId);
+    expect(view?.item.costPrice).toBe(95_000);
     expect(view?.onHand).toBe(15);
   });
 
@@ -125,14 +123,14 @@ describe('purchase receipt (spec 9)', () => {
     const supplierId = await makeSupplier();
     const input = {
       supplierId,
-      accessories: [{ variantId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST }],
+      items: [{ itemId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST }],
     };
     t.assertCanSell.mockClear();
     t.assertCanSell.mockRejectedValueOnce(new Error('locked'));
     const before = await snapshotCounts(t.driver);
     await expectCode(t.svc.purchasing.receive(input), 'INTERNAL');
     expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(1);
+    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(1);
     await t.svc.purchasing.receive(input);
     expect(t.assertCanSell).toHaveBeenLastCalledWith(
       expect.objectContaining({ action: 'purchase' }),
@@ -146,29 +144,29 @@ describe('purchase receipt (spec 9)', () => {
     const e = await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: [
-          { variantId: t.ids.chargerId, quantity: 1, unitCost: CHARGER_COST },
-          { variantId: t.ids.cartonId, quantity: 0, unitCost: CARTON_COST },
+        items: [
+          { itemId: t.ids.chargerId, quantity: 1, unitCost: CHARGER_COST },
+          { itemId: t.ids.cartonId, quantity: 0, unitCost: CARTON_COST },
         ],
       }),
       'VALIDATION',
     );
-    expect(e.details).toMatchObject({ field: 'accessories.1.quantity' });
+    expect(e.details).toMatchObject({ field: 'items.1.quantity' });
     expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(10);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(10);
   });
 });
 
 describe('purchase validation and access', () => {
-  it('rejects empty purchases, over-payment, khata pay-now, unknown supplier and variant', async () => {
+  it('rejects empty purchases, over-payment, khata pay-now, unknown supplier and item', async () => {
     await t.loginAs('mgr');
     const supplierId = await makeSupplier();
-    await expectCode(t.svc.purchasing.receive({ supplierId, accessories: [] }), 'VALIDATION');
-    const acc = [{ variantId: t.ids.chargerId, quantity: 1, unitCost: CHARGER_COST }];
+    await expectCode(t.svc.purchasing.receive({ supplierId, items: [] }), 'VALIDATION');
+    const acc = [{ itemId: t.ids.chargerId, quantity: 1, unitCost: CHARGER_COST }];
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: acc,
+        items: acc,
         paidNow: { method: 'cash', amount: CHARGER_COST + 1 },
       }),
       'VALIDATION',
@@ -176,33 +174,30 @@ describe('purchase validation and access', () => {
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: acc,
+        items: acc,
         paidNow: { method: 'khata' as never, amount: 1 },
       }),
       'VALIDATION',
     );
-    await expectCode(
-      t.svc.purchasing.receive({ supplierId: t.newId(), accessories: acc }),
-      'NOT_FOUND',
-    );
+    await expectCode(t.svc.purchasing.receive({ supplierId: t.newId(), items: acc }), 'NOT_FOUND');
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: [{ variantId: t.newId(), quantity: 1, unitCost: 1 }],
+        items: [{ itemId: t.newId(), quantity: 1, unitCost: 1 }],
       }),
       'NOT_FOUND',
     );
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: [{ variantId: t.ids.chargerId, quantity: 1, unitCost: 10.5 }],
+        items: [{ itemId: t.ids.chargerId, quantity: 1, unitCost: 10.5 }],
       }),
       'MONEY_INVALID',
     );
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: [{ variantId: t.ids.chargerId, quantity: 0, unitCost: 1 }],
+        items: [{ itemId: t.ids.chargerId, quantity: 0, unitCost: 1 }],
       }),
       'VALIDATION',
     );
@@ -217,7 +212,7 @@ describe('purchase validation and access', () => {
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        accessories: [{ variantId: t.ids.chargerId, quantity: 1, unitCost: 1 }],
+        items: [{ itemId: t.ids.chargerId, quantity: 1, unitCost: 1 }],
       }),
       'FORBIDDEN',
     );

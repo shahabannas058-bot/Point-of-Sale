@@ -21,7 +21,7 @@ import {
   type CartPreview,
   type CatalogHit,
   type PaymentInput,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { CustomerPicker } from '../components/CustomerPicker';
@@ -61,7 +61,7 @@ import {
   qtyStep,
   qtyText,
   quickLabel,
-  variantQtyText,
+  itemQtyText,
   weightForAmount,
 } from '../lib/qty';
 
@@ -372,7 +372,7 @@ export function Billing(): ReactNode {
   const [dropOpen, setDropOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const can = useCan();
-  const [quick, setQuick] = useState<VariantView[]>([]);
+  const [quick, setQuick] = useState<ItemView[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
 
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -444,7 +444,7 @@ export function Billing(): ReactNode {
   );
   const addHit = useCallback(
     (h: CatalogHit): void => {
-      report(useCart.getState().addVariant(h.item), variantQtyText(h.item.onHand, h.item.variant));
+      report(useCart.getState().addItem(h.item), itemQtyText(h.item.onHand, h.item.item));
       setQ('');
       setHits([]);
       setDropOpen(false);
@@ -466,7 +466,7 @@ export function Billing(): ReactNode {
     };
   }, [service, version]);
   const addQuick = useCallback(
-    (v: VariantView): void => addHit({ kind: 'variant', matchedBy: 'sku', item: v }),
+    (v: ItemView): void => addHit({ kind: 'item', matchedBy: 'sku', item: v }),
     [addHit],
   );
   const quickKeys = Object.fromEntries(
@@ -738,7 +738,7 @@ export function Billing(): ReactNode {
             >
               {hits.map((h, i) => (
                 <li
-                  key={h.item.variant.id}
+                  key={h.item.item.id}
                   id={`hit-${i}`}
                   role="option"
                   aria-selected={i === active}
@@ -751,15 +751,15 @@ export function Billing(): ReactNode {
                 >
                   <span className="flex-1">
                     <span className="block font-semibold">{h.item.label}</span>
-                    <span className="ltr block text-xs text-muted">{h.item.variant.sku}</span>
+                    <span className="ltr block text-xs text-muted">{h.item.item.sku}</span>
                   </span>
                   <Badge tone={h.item.lowStock ? 'warning' : 'muted'}>
-                    {t('inv.onHand', { n: variantQtyText(h.item.onHand, h.item.variant) })}
+                    {t('inv.onHand', { n: itemQtyText(h.item.onHand, h.item.item) })}
                   </Badge>
                   <span className="whitespace-nowrap">
-                    <Money value={h.item.variant.salePrice} className="font-semibold" />
+                    <Money value={h.item.item.salePrice} className="font-semibold" />
                     <span className="ltr text-xs text-muted">
-                      {perUnit(h.item.variant.unitScale, h.item.variant.unitLabel)}
+                      {perUnit(h.item.item.unitScale, h.item.item.unitLabel)}
                     </span>
                   </span>
                 </li>

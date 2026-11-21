@@ -22,9 +22,9 @@ async function receiveBig(supplierId: string): Promise<void> {
   await t.svc.purchasing.receive({
     supplierId,
     referenceNo: 'INV-9001',
-    accessories: [
-      { variantId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST },
-      { variantId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST },
+    items: [
+      { itemId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST },
+      { itemId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST },
     ],
     paidNow: { method: 'cash', amount: 2_000_000 },
   });

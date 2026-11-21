@@ -4,61 +4,60 @@ import {
   type Invoice,
   type LedgerEntryType,
   type PaymentMethod,
-  type ProductKind,
   type Role,
   type StockMovementType,
   type StockRefType,
   type UnitLabel,
   type UnitScale,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 import { camelizeKeys } from '../rows';
 import type { SqlDriver, SqlValue } from '../types';
 import type { WriteBatch } from './batch';
-import { mapRow, toVariantView, type Raw } from './mappers';
+import { mapRow, toItemView, type Raw } from './mappers';
 
 // ---------- read SQL ----------
-const PRODUCT_COLS = `p.kind AS p_kind, p.brand AS p_brand, p.name AS p_name, p.category AS p_category,
+const PRODUCT_COLS = `p.brand AS p_brand, p.name AS p_name, p.category AS p_category,
   p.is_active AS p_is_active, p.created_at AS p_created_at, p.updated_at AS p_updated_at`;
 
-/** One accessory variant + its product + on-hand in a branch. The FIRST bind param is the branch id. */
-export const VARIANT_VIEW_SQL = `SELECT av.*, ${PRODUCT_COLS},
-  COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.variant_id = av.id AND sm.branch_id = ?), 0) AS on_hand
-  FROM accessory_variants av JOIN products p ON p.id = av.product_id`;
+/** One item + its product + on-hand in a branch. The FIRST bind param is the branch id. */
+export const ITEM_VIEW_SQL = `SELECT it.*, ${PRODUCT_COLS},
+  COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.item_id = it.id AND sm.branch_id = ?), 0) AS on_hand
+  FROM items it JOIN products p ON p.id = it.product_id`;
 
 export const USER_COLS = 'id, username, display_name, role, is_active, created_at, updated_at';
 
 /** Escapes % _ \ for LIKE ... ESCAPE '\'. */
 export const likePattern = (q: string): string => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
-export async function loadVariantView(
+export async function loadItemView(
   driver: SqlDriver,
   id: string,
   branchId: string,
-): Promise<VariantView | null> {
-  const rows = await driver.query<Raw>(`${VARIANT_VIEW_SQL} WHERE av.id = ?`, [branchId, id]);
+): Promise<ItemView | null> {
+  const rows = await driver.query<Raw>(`${ITEM_VIEW_SQL} WHERE it.id = ?`, [branchId, id]);
   const row = rows[0];
-  return row === undefined ? null : toVariantView(row);
+  return row === undefined ? null : toItemView(row);
 }
 
-export async function requireVariantView(
+export async function requireItemView(
   driver: SqlDriver,
   id: string,
   branchId: string,
-): Promise<VariantView> {
-  const v = await loadVariantView(driver, id, branchId);
-  if (v === null) throw new ServiceError('NOT_FOUND', 'Accessory variant not found', { id });
+): Promise<ItemView> {
+  const v = await loadItemView(driver, id, branchId);
+  if (v === null) throw new ServiceError('NOT_FOUND', 'Item not found', { id });
   return v;
 }
 
-export async function variantOnHand(
+export async function itemOnHand(
   driver: SqlDriver,
-  variantId: string,
+  itemId: string,
   branchId: string,
 ): Promise<number> {
   const rows = await driver.query<{ n: number }>(
-    'SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_movements WHERE variant_id = ? AND branch_id = ?',
-    [variantId, branchId],
+    'SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_movements WHERE item_id = ? AND branch_id = ?',
+    [itemId, branchId],
   );
   return rows[0]?.n ?? 0;
 }
@@ -141,9 +140,14 @@ export async function saleExists(driver: SqlDriver, id: string): Promise<boolean
 }
 
 // ---------- plain records (what is inserted AND what is emitted to the outbox) ----------
+/**
+ * Legacy constant stored in products.kind (its CHECK still allows the mobile-shop value 'phone', which migration
+ * 0009 refuses). Every product row is written with it; it is not part of the public contract.
+ */
+export const LEGACY_PRODUCT_KIND = 'accessory';
 export interface ProductRec {
   id: string;
-  kind: ProductKind;
+  kind: typeof LEGACY_PRODUCT_KIND;
   brand: string;
   name: string;
   category: string | null;
@@ -158,7 +162,7 @@ export function insertProduct(b: WriteBatch, p: ProductRec): void {
   ).emit('product', p.id, 'insert', p);
 }
 
-export interface VariantRec {
+export interface ItemRec {
   id: string;
   productId: string;
   sku: string;
@@ -174,9 +178,9 @@ export interface VariantRec {
   createdAt: number;
   updatedAt: number;
 }
-export function insertVariant(b: WriteBatch, v: VariantRec): void {
+export function insertItem(b: WriteBatch, v: ItemRec): void {
   b.add(
-    `INSERT INTO accessory_variants (id, product_id, sku, barcode, model, colour, cost_price, sale_price,
+    `INSERT INTO items (id, product_id, sku, barcode, model, colour, cost_price, sale_price,
        reorder_level, unit_scale, unit_label, is_active, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       v.id,
@@ -194,20 +198,20 @@ export function insertVariant(b: WriteBatch, v: VariantRec): void {
       v.createdAt,
       v.updatedAt,
     ],
-  ).emit('accessory_variant', v.id, 'insert', v);
+  ).emit('item', v.id, 'insert', v);
 }
-export function updateVariant(b: WriteBatch, v: VariantRec): void {
+export function updateItem(b: WriteBatch, v: ItemRec): void {
   b.add(
-    `UPDATE accessory_variants SET barcode = ?, model = ?, colour = ?, cost_price = ?, sale_price = ?,
+    `UPDATE items SET barcode = ?, model = ?, colour = ?, cost_price = ?, sale_price = ?,
        reorder_level = ?, updated_at = ? WHERE id = ?`,
     [v.barcode, v.model, v.colour, v.costPrice, v.salePrice, v.reorderLevel, v.updatedAt, v.id],
-  ).emit('accessory_variant', v.id, 'update', v);
+  ).emit('item', v.id, 'update', v);
 }
-export async function loadVariantRec(driver: SqlDriver, id: string): Promise<VariantRec> {
-  const rows = await driver.query<Raw>('SELECT * FROM accessory_variants WHERE id = ?', [id]);
+export async function loadItemRec(driver: SqlDriver, id: string): Promise<ItemRec> {
+  const rows = await driver.query<Raw>('SELECT * FROM items WHERE id = ?', [id]);
   const row = rows[0];
-  if (row === undefined) throw new ServiceError('NOT_FOUND', 'Accessory variant not found', { id });
-  return mapRow<VariantRec>(row);
+  if (row === undefined) throw new ServiceError('NOT_FOUND', 'Item not found', { id });
+  return mapRow<ItemRec>(row);
 }
 
 export interface CustomerRec {
@@ -318,7 +322,7 @@ export interface MovementRec {
   id: string;
   branchId: string;
   type: StockMovementType;
-  variantId: string;
+  itemId: string;
   /** Module batch_expiry: the batch this movement belongs to; absent or null = stock without a batch. */
   batchId?: string | null;
   quantity: number;
@@ -331,13 +335,13 @@ export interface MovementRec {
 }
 export function insertMovement(b: WriteBatch, m: MovementRec): void {
   b.add(
-    `INSERT INTO stock_movements (id, branch_id, type, variant_id, batch_id, quantity, unit_cost,
+    `INSERT INTO stock_movements (id, branch_id, type, item_id, batch_id, quantity, unit_cost,
        ref_type, ref_id, reason, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       m.id,
       m.branchId,
       m.type,
-      m.variantId,
+      m.itemId,
       m.batchId ?? null,
       m.quantity,
       m.unitCost,
@@ -440,14 +444,14 @@ export function insertInvoice(b: WriteBatch, s: Invoice): void {
   );
   for (const l of s.lines)
     b.add(
-      `INSERT INTO sale_lines (id, sale_id, line_no, product_id, variant_id, description, quantity,
+      `INSERT INTO sale_lines (id, sale_id, line_no, product_id, item_id, description, quantity,
          unit_price, cost_price, discount_amount, line_total, unit_scale, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         l.id,
         l.saleId,
         l.lineNo,
         l.productId,
-        l.variantId,
+        l.itemId,
         l.description,
         l.quantity,
         l.unitPrice,

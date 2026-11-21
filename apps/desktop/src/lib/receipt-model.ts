@@ -54,7 +54,7 @@ export function buildReceiptModel(
   view: InvoiceView,
   shop: Pick<ShopInfo, 'branchName'>,
   settings: ShopSettings,
-  /** variantId -> unit label; an invoice line only stores its scale, so loose goods default to kg */
+  /** itemId -> unit label; an invoice line only stores its scale, so loose goods default to kg */
   unitLabels: Readonly<Record<string, UnitLabel>> = {},
 ): ReceiptModel {
   const inv = view.invoice;
@@ -77,7 +77,7 @@ export function buildReceiptModel(
       name: l.description,
       qty: Math.abs(l.quantity),
       unitScale: l.unitScale,
-      unitLabel: unitLabels[l.variantId] ?? labelFor(l.unitScale),
+      unitLabel: unitLabels[l.itemId] ?? labelFor(l.unitScale),
       unitPrice: l.unitPrice,
       discount: shownDiscount(l),
       total: Math.abs(l.lineTotal) + shownDiscount(l),
@@ -101,8 +101,7 @@ export async function loadReceiptModel(service: PosService, idOrNo: string): Pro
   const unitLabels: Record<string, UnitLabel> = {};
   if (view.invoice.lines.some((l) => l.unitScale !== 1)) {
     try {
-      for (const v of await service.catalog.listAccessories())
-        unitLabels[v.variant.id] = v.variant.unitLabel;
+      for (const v of await service.catalog.listItems()) unitLabels[v.item.id] = v.item.unitLabel;
     } catch {
       /* without view_catalog the receipt simply says kg */
     }

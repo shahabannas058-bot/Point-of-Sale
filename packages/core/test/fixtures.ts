@@ -63,8 +63,8 @@ type Ids = {
   cashierId: UnsealedInvoice['cashierId'];
   customerId: NonNullable<UnsealedInvoice['customerId']>;
   productId: UnsealedInvoice['lines'][number]['productId'];
-  variantId: UnsealedInvoice['lines'][number]['variantId'];
-  variant2Id: UnsealedInvoice['lines'][number]['variantId'];
+  itemId: UnsealedInvoice['lines'][number]['itemId'];
+  item2Id: UnsealedInvoice['lines'][number]['itemId'];
 };
 
 /** Stable ids shared by every fixture invoice (the db helpers seed exactly these rows). */
@@ -74,8 +74,8 @@ export const FIXTURE_IDS: Ids = {
   cashierId: castId(),
   customerId: castId(),
   productId: castId(),
-  variant2Id: castId(),
-  variantId: castId(),
+  item2Id: castId(),
+  itemId: castId(),
 };
 
 const invoiceIdGen = makeIdGenerator(11, BASE_MS + 10_000);
@@ -94,7 +94,7 @@ export function makeInvoice(overrides: Partial<UnsealedInvoice> = {}): UnsealedI
       saleId: id,
       lineNo: 1,
       productId: FIXTURE_IDS.productId,
-      variantId: FIXTURE_IDS.variantId,
+      itemId: FIXTURE_IDS.itemId,
       description: 'Fast Charger 25W',
       quantity: 2,
       unitPrice: 50000,
@@ -108,7 +108,7 @@ export function makeInvoice(overrides: Partial<UnsealedInvoice> = {}): UnsealedI
       saleId: id,
       lineNo: 2,
       productId: FIXTURE_IDS.productId,
-      variantId: FIXTURE_IDS.variant2Id,
+      itemId: FIXTURE_IDS.item2Id,
       description: 'Braided Cable 2m',
       quantity: 1,
       unitPrice: 199950,

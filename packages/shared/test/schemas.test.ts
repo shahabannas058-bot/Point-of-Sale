@@ -112,7 +112,7 @@ describe('StockMovementSchema', () => {
     id: uid(30),
     branchId: uid(31),
     type: 'purchase',
-    variantId: uid(32),
+    itemId: uid(32),
     quantity: 10,
     unitCost: 90_000,
     refType: null,
@@ -136,8 +136,8 @@ describe('StockMovementSchema', () => {
     expectRejected(StockMovementSchema, { ...movement, quantity: 0 }, 'zero');
   });
 
-  it('rejects a movement without a variant', () => {
-    expectRejected(StockMovementSchema, { ...movement, variantId: null });
+  it('rejects a movement without a item', () => {
+    expectRejected(StockMovementSchema, { ...movement, itemId: null });
   });
 
   it('rejects an adjustment without a reason, accepts it with one', () => {
@@ -182,7 +182,7 @@ describe('PurchaseSchema', () => {
 
 describe('Invoice schemas', () => {
   const SALE = uid(50);
-  /** One accessory line of 150000, paid half cash and half khata. */
+  /** One item line of 150000, paid half cash and half khata. */
   const sale = {
     id: SALE,
     deviceId: uid(51),
@@ -207,7 +207,7 @@ describe('Invoice schemas', () => {
         saleId: SALE,
         lineNo: 1,
         productId: uid(56),
-        variantId: uid(57),
+        itemId: uid(57),
         description: 'Fast Charger 25W',
         quantity: 1,
         unitPrice: 150000,
@@ -327,10 +327,10 @@ describe('Invoice schemas', () => {
     expectRejected(InvoiceSchema, payBad, 'another sale');
   });
 
-  it('rejects a line without a variant', () => {
-    const noVariant = clone(sale);
-    noVariant.lines[0]!.variantId = null as unknown as string;
-    expectRejected(InvoiceSchema, noVariant);
+  it('rejects a line without a item', () => {
+    const noItem = clone(sale);
+    noItem.lines[0]!.itemId = null as unknown as string;
+    expectRejected(InvoiceSchema, noItem);
   });
 
   it('rejects a payment of zero and a wrong-sign payment', () => {

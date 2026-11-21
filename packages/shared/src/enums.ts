@@ -1,10 +1,5 @@
 import { z } from 'zod';
 
-/** Stored in products.kind. 'accessory' is the legacy value every item row carries. */
-export const PRODUCT_KINDS = ['accessory'] as const;
-export const ProductKindSchema = z.enum(PRODUCT_KINDS);
-export type ProductKind = z.infer<typeof ProductKindSchema>;
-
 export const STOCK_MOVEMENT_TYPES = [
   'sale',
   'purchase',
@@ -80,7 +75,7 @@ export const OUTBOX_ENTITY_TYPES = [
   'branch',
   'user',
   'product',
-  'accessory_variant',
+  'item',
   'customer',
   'supplier',
   'purchase',

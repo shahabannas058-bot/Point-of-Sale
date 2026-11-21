@@ -11,7 +11,7 @@ import {
   SupplierIdSchema,
   UserIdSchema,
   UuidV7Schema,
-  VariantIdSchema,
+  ItemIdSchema,
   makeIssue,
 } from './primitives';
 
@@ -20,7 +20,7 @@ export const StockMovementSchema = z
     id: StockMovementIdSchema,
     branchId: BranchIdSchema,
     type: StockMovementTypeSchema,
-    variantId: VariantIdSchema,
+    itemId: ItemIdSchema,
     /** Signed. sale < 0, purchase > 0; return/adjustment/transfer either sign. */
     quantity: QuantitySchema,
     unitCost: NonNegativePaisaSchema.nullable(),

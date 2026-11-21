@@ -49,6 +49,11 @@ export async function restoreBrowserDb(
   await set(DB_KEY, bytes);
 }
 
+/** The stored database bytes as they are, without opening or migrating them (a copy to keep before a reset). */
+export async function readStoredBrowserDb(): Promise<Uint8Array | undefined> {
+  return get<Uint8Array>(DB_KEY);
+}
+
 /** Removes the persisted database. The caller must close any open driver first. */
 export async function resetBrowserDb(): Promise<void> {
   await del(DB_KEY);

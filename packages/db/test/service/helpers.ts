@@ -36,7 +36,7 @@ export interface TestIds {
   cashierId: string;
   /** Ghee carton X (1 on hand). */
   cartonId: string;
-  /** Charger variant C. */
+  /** Charger C. */
   chargerId: string;
   /** Customer Bilal. */
   bilalId: string;
@@ -135,14 +135,14 @@ export async function makeService(options: MakeServiceOptions = {}): Promise<Tes
     role: 'cashier',
     pin: PINS.cash,
   });
-  const carton = await svc.catalog.createAccessory({
+  const carton = await svc.catalog.createItem({
     product: { brand: 'Dalda', name: 'Ghee Carton 16kg', category: 'Ghee' },
     sku: 'GHEE-CTN',
     costPrice: CARTON_COST,
     salePrice: CARTON_PRICE,
     openingQty: 1,
   });
-  const charger = await svc.catalog.createAccessory({
+  const charger = await svc.catalog.createItem({
     product: { brand: 'Generic', name: 'Fast Charger 25W', category: 'Charger' },
     sku: 'CHG-25W',
     barcode: '8961234567890',
@@ -170,8 +170,8 @@ export async function makeService(options: MakeServiceOptions = {}): Promise<Tes
       ownerId: session.user.id,
       managerId: manager.id,
       cashierId: cashier.id,
-      cartonId: carton.variant.id,
-      chargerId: charger.variant.id,
+      cartonId: carton.item.id,
+      chargerId: charger.item.id,
       bilalId: bilal.id,
     },
     clock,
@@ -212,11 +212,11 @@ export async function expectCode(
 /** Sum of stock_movements.quantity for one item. */
 export async function stockSum(
   driver: NodeSqliteDriver,
-  target: { variantId: string },
+  target: { itemId: string },
 ): Promise<number> {
   const rows = await driver.query<{ n: number }>(
-    'select coalesce(sum(quantity), 0) as n from stock_movements where variant_id = ?',
-    [target.variantId],
+    'select coalesce(sum(quantity), 0) as n from stock_movements where item_id = ?',
+    [target.itemId],
   );
   return rows[0]?.n ?? 0;
 }
@@ -250,7 +250,7 @@ export async function snapshotCounts(driver: NodeSqliteDriver): Promise<Counts> 
 /** Commit helper: one cash payment equal to `total`. */
 export async function sellCash(
   t: TestService,
-  lines: { variantId: string; quantity: number; discountAmount?: number }[],
+  lines: { itemId: string; quantity: number; discountAmount?: number }[],
   extra: { customerId?: string; invoiceDiscount?: number; saleId?: string } = {},
 ): Promise<Invoice> {
   const preview = await t.svc.checkout.preview({ lines, ...extra });

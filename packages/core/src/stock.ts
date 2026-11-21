@@ -1,9 +1,9 @@
 import type { StockMovement } from '@pos/shared';
 import { DomainError } from './errors';
 
-export type MovementLike = Pick<StockMovement, 'branchId' | 'variantId' | 'quantity'>;
+export type MovementLike = Pick<StockMovement, 'branchId' | 'itemId' | 'quantity'>;
 export interface StockKey {
-  variantId: string;
+  itemId: string;
   branchId?: string;
 }
 
@@ -11,7 +11,7 @@ export interface StockKey {
 export function stockOnHand(movements: readonly MovementLike[], key: StockKey): number {
   let sum = 0;
   for (const m of movements) {
-    if (m.variantId !== key.variantId) continue;
+    if (m.itemId !== key.itemId) continue;
     if (key.branchId !== undefined && m.branchId !== key.branchId) continue;
     sum += m.quantity;
   }
@@ -19,7 +19,7 @@ export function stockOnHand(movements: readonly MovementLike[], key: StockKey): 
   return sum;
 }
 
-/** On hand per variant id (optionally restricted to one branch). */
+/** On hand per item id (optionally restricted to one branch). */
 export function onHandByItem(
   movements: readonly MovementLike[],
   branchId?: string,
@@ -27,7 +27,7 @@ export function onHandByItem(
   const out = new Map<string, number>();
   for (const m of movements) {
     if (branchId !== undefined && m.branchId !== branchId) continue;
-    out.set(m.variantId, (out.get(m.variantId) ?? 0) + m.quantity);
+    out.set(m.itemId, (out.get(m.itemId) ?? 0) + m.quantity);
   }
   return out;
 }

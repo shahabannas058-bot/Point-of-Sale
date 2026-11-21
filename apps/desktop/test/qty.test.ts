@@ -8,7 +8,7 @@ import {
   qtyText,
   quantityForAmount,
   quickLabel,
-  variantQtyText,
+  itemQtyText,
   weightForAmount,
   adjustmentDelta,
   qtyWithUnit,
@@ -238,10 +238,10 @@ describe('adjustmentDelta: the cashier picks add or remove and types a plain num
   });
 });
 
-describe('variantQtyText: a stock number in the item own unit', () => {
-  it('uses the variant unit', () => {
-    expect(variantQtyText(1250, { unitScale: 1000, unitLabel: 'kg' })).toBe('1.25 kg');
-    expect(variantQtyText(3, { unitScale: 1, unitLabel: 'pcs' })).toBe('3');
+describe('itemQtyText: a stock number in the item own unit', () => {
+  it('uses the item unit', () => {
+    expect(itemQtyText(1250, { unitScale: 1000, unitLabel: 'kg' })).toBe('1.25 kg');
+    expect(itemQtyText(3, { unitScale: 1, unitLabel: 'pcs' })).toBe('3');
   });
 });
 

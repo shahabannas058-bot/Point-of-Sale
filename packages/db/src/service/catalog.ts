@@ -7,10 +7,9 @@ import {
   unitScaleFor,
   type CatalogApi,
   type CatalogHit,
-  type NewAccessoryInput,
-  type ProductKind,
+  type NewItemInput,
   type ProductRef,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 import { WriteBatch } from './batch';
 import { takeOutParts } from './batches';
@@ -19,27 +18,27 @@ import { guardApi, intIn, invalid, money, optText, reqText } from './errors';
 import { queryItemHistory } from './item-history';
 import { loadQuickItems, saveQuickItems } from './quick-items';
 import type { Raw } from './mappers';
-import { toVariantView } from './mappers';
+import { toItemView } from './mappers';
 import { loadShop } from './meta';
 import { assertModule } from './modules';
 import {
-  VARIANT_VIEW_SQL,
+  ITEM_VIEW_SQL,
+  LEGACY_PRODUCT_KIND,
   insertMovement,
   insertProduct,
-  insertVariant,
+  insertItem,
   likePattern,
-  loadVariantRec,
-  requireVariantView,
-  updateVariant,
-  variantOnHand,
+  loadItemRec,
+  requireItemView,
+  updateItem,
+  itemOnHand,
   type ProductRec,
-  type VariantRec,
+  type ItemRec,
 } from './queries';
 import type { SqlValue } from '../types';
 
 // ---------- product find-or-create (batch-scoped) ----------
-/** Every item's product row carries this legacy products.kind value. */
-const ITEM_KIND: ProductKind = 'accessory';
+const ITEM_KIND = LEGACY_PRODUCT_KIND;
 
 type ProductResolver = (ref: ProductRef) => Promise<string>;
 
@@ -84,8 +83,8 @@ function createProductResolver(ctx: Ctx, b: WriteBatch, at: number): ProductReso
 }
 
 // ---------- search ----------
-const VARIANT_TEXT =
-  "(p.brand || ' ' || p.name || ' ' || COALESCE(av.model, '') || ' ' || COALESCE(av.colour, '') || ' ' || av.sku || ' ' || COALESCE(av.barcode, ''))";
+const ITEM_TEXT =
+  "(p.brand || ' ' || p.name || ' ' || COALESCE(it.model, '') || ' ' || COALESCE(it.colour, '') || ' ' || it.sku || ' ' || COALESCE(it.barcode, ''))";
 
 const tokenClauses = (text: string, q: string): { sql: string; params: SqlValue[] } => {
   const tokens = q.split(/\s+/).filter((t) => t !== '');
@@ -111,16 +110,16 @@ const textRank = (label: string, q: string): TextRank => {
 export function createCatalogApi(ctx: Ctx): CatalogApi {
   const branch = async (): Promise<string> => (await loadShop(ctx.driver)).branchId;
 
-  const variants = async (
+  const itemViews = async (
     branchId: string,
     where: string,
     params: SqlValue[],
-  ): Promise<VariantView[]> => {
+  ): Promise<ItemView[]> => {
     const rows = await ctx.driver.query<Raw>(
-      `${VARIANT_VIEW_SQL} ${where} ORDER BY p.brand, p.name, av.model, av.colour, av.sku`,
+      `${ITEM_VIEW_SQL} ${where} ORDER BY p.brand, p.name, it.model, it.colour, it.sku`,
       [branchId, ...params],
     );
-    return rows.map(toVariantView);
+    return rows.map(toItemView);
   };
 
   return guardApi<CatalogApi>({
@@ -134,32 +133,32 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       const hits: CatalogHit[] = [];
       const seen = new Set<string>();
       const push = (hit: CatalogHit): void => {
-        const id = hit.item.variant.id;
+        const id = hit.item.item.id;
         if (seen.has(id) || hits.length >= limit) return;
         seen.add(id);
         hits.push(hit);
       };
-      const variantStock = stock ? ' AND on_hand > 0' : '';
+      const itemStock = stock ? ' AND on_hand > 0' : '';
 
       // 1. exact scanner hits
-      for (const v of await variants(
+      for (const v of await itemViews(
         branchId,
-        `WHERE av.is_active = 1 AND (av.barcode = ? OR av.sku = ?)${variantStock}`,
+        `WHERE it.is_active = 1 AND (it.barcode = ? OR it.sku = ?)${itemStock}`,
         [q, q],
       ))
-        push({ kind: 'variant', matchedBy: v.variant.barcode === q ? 'barcode' : 'sku', item: v });
+        push({ kind: 'item', matchedBy: v.item.barcode === q ? 'barcode' : 'sku', item: v });
 
       // 2. text search on names (every word must match); names that start with the text come first
-      const vt = tokenClauses(VARIANT_TEXT, q);
+      const vt = tokenClauses(ITEM_TEXT, q);
       const text: { rank: TextRank; hit: CatalogHit }[] = [];
-      for (const v of await variants(
+      for (const v of await itemViews(
         branchId,
-        `WHERE av.is_active = 1 AND ${vt.sql}${variantStock}`,
+        `WHERE it.is_active = 1 AND ${vt.sql}${itemStock}`,
         vt.params,
       ))
         text.push({
           rank: textRank(v.label, q),
-          hit: { kind: 'variant', matchedBy: 'name', item: v },
+          hit: { kind: 'item', matchedBy: 'name', item: v },
         });
       // Array.sort is stable: inside one rank the brand / name order from SQL is kept
       text.sort((a, b) => a.rank - b.rank);
@@ -167,17 +166,17 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       return hits;
     },
 
-    async listAccessories(f = {}) {
+    async listItems(f = {}) {
       requireSession(ctx);
-      const conds: string[] = ['av.is_active = 1'];
+      const conds: string[] = ['it.is_active = 1'];
       const params: SqlValue[] = [];
       if (f.q !== undefined && f.q.trim() !== '') {
-        const t = tokenClauses(VARIANT_TEXT, f.q.trim());
+        const t = tokenClauses(ITEM_TEXT, f.q.trim());
         conds.push(t.sql);
         params.push(...t.params);
       }
-      if (f.lowStockOnly === true) conds.push('on_hand <= av.reorder_level');
-      return variants(await branch(), `WHERE ${conds.join(' AND ')}`, params);
+      if (f.lowStockOnly === true) conds.push('on_hand <= it.reorder_level');
+      return itemViews(await branch(), `WHERE ${conds.join(' AND ')}`, params);
     },
 
     async itemHistory(ref, q = {}) {
@@ -186,7 +185,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       return queryItemHistory(ctx, ref, q);
     },
 
-    async createAccessory(i: NewAccessoryInput) {
+    async createItem(i: NewItemInput) {
       const session = requirePermission(ctx, 'edit_catalog');
       const shop = await loadShop(ctx.driver);
       const sku = reqText(i.sku, 'sku', 1, 64);
@@ -207,11 +206,11 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         i.openingQty === undefined
           ? 0
           : intIn(i.openingQty, 'openingQty', 0, maxQuantity(unitScale));
-      const variantId = await ctx.lock(async () => {
+      const itemId = await ctx.lock(async () => {
         const at = ctx.clock();
         const b = new WriteBatch(ctx.newId, at);
         const productId = await createProductResolver(ctx, b, at)(i.product);
-        const rec: VariantRec = {
+        const rec: ItemRec = {
           id: ctx.newId(),
           productId,
           sku,
@@ -227,13 +226,13 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
           createdAt: at,
           updatedAt: at,
         };
-        insertVariant(b, rec);
+        insertItem(b, rec);
         if (openingQty > 0) {
           insertMovement(b, {
             id: ctx.newId(),
             branchId: shop.branchId,
             type: 'adjustment',
-            variantId: rec.id,
+            itemId: rec.id,
             quantity: openingQty,
             unitCost: costPrice,
             refType: null,
@@ -247,16 +246,16 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         await b.commit(ctx.driver);
         return rec.id;
       });
-      return requireVariantView(ctx.driver, variantId, shop.branchId);
+      return requireItemView(ctx.driver, itemId, shop.branchId);
     },
 
-    async updateVariant(id, p) {
+    async updateItem(id, p) {
       requirePermission(ctx, 'edit_catalog');
       const branchId = await branch();
       await ctx.lock(async () => {
-        const cur = await loadVariantRec(ctx.driver, id);
+        const cur = await loadItemRec(ctx.driver, id);
         const at = ctx.clock();
-        const next: VariantRec = { ...cur, updatedAt: at };
+        const next: ItemRec = { ...cur, updatedAt: at };
         if (p.salePrice !== undefined) next.salePrice = money(p.salePrice, 'salePrice');
         if (p.costPrice !== undefined) next.costPrice = money(p.costPrice, 'costPrice');
         if (p.barcode !== undefined) next.barcode = optText(p.barcode, 'barcode', 64);
@@ -265,10 +264,10 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         if (p.model !== undefined) next.model = optText(p.model, 'model', 80);
         if (p.colour !== undefined) next.colour = optText(p.colour, 'colour', 40);
         const b = new WriteBatch(ctx.newId, at);
-        updateVariant(b, next);
+        updateItem(b, next);
         await b.commit(ctx.driver);
       });
-      return requireVariantView(ctx.driver, id, branchId);
+      return requireItemView(ctx.driver, id, branchId);
     },
 
     async adjustStock(i) {
@@ -278,11 +277,11 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       if (delta === 0) throw invalid('delta', 'Adjustment cannot be zero');
       const reason = reqText(i.reason, 'reason', 1, 300);
       await ctx.lock(async () => {
-        const variant = await loadVariantRec(ctx.driver, i.variantId); // NOT_FOUND
-        if (Math.abs(delta) > maxQuantity(variant.unitScale))
+        const rec = await loadItemRec(ctx.driver, i.itemId); // NOT_FOUND
+        if (Math.abs(delta) > maxQuantity(rec.unitScale))
           throw invalid('delta', 'Adjustment is larger than this item allows');
         if (delta < 0 && !shop.settings.allowNegativeStock) {
-          const onHand = await variantOnHand(ctx.driver, i.variantId, shop.branchId);
+          const onHand = await itemOnHand(ctx.driver, i.itemId, shop.branchId);
           if (onHand + delta < 0)
             throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock for this adjustment', {
               onHand,
@@ -297,7 +296,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         const parts =
           delta > 0
             ? [{ batchId: null, quantity: delta }]
-            : await takeOutParts(ctx.driver, shop, i.variantId, -delta, pktDate(at), {
+            : await takeOutParts(ctx.driver, shop, i.itemId, -delta, pktDate(at), {
                 includeExpired: true,
               });
         const b = new WriteBatch(ctx.newId, at);
@@ -306,7 +305,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
             id: ctx.newId(),
             branchId: shop.branchId,
             type: 'adjustment',
-            variantId: i.variantId,
+            itemId: i.itemId,
             batchId: p.batchId,
             quantity: delta > 0 ? p.quantity : -p.quantity,
             unitCost: null,
@@ -319,7 +318,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         await ctx.assertCanSell({ action: 'stock_entry', branchId: shop.branchId, now: at });
         await b.commit(ctx.driver);
       });
-      return requireVariantView(ctx.driver, i.variantId, shop.branchId);
+      return requireItemView(ctx.driver, i.itemId, shop.branchId);
     },
 
     async quickItems() {
@@ -327,10 +326,10 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       return loadQuickItems(ctx, await branch());
     },
 
-    async setQuickItems(variantIds) {
+    async setQuickItems(itemIds) {
       requirePermission(ctx, 'manage_settings');
       const branchId = await branch();
-      await saveQuickItems(ctx, variantIds);
+      await saveQuickItems(ctx, itemIds);
       return loadQuickItems(ctx, branchId);
     },
   });

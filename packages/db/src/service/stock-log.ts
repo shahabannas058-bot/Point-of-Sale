@@ -2,7 +2,7 @@ import type { StockLogEntry, StockLogPage, StockLogQuery, UnitLabel, UnitScale }
 import type { Ctx } from './deps';
 import { optText } from './errors';
 import { bounds, cursor, pageLimit } from './item-history';
-import { variantLabel } from './mappers';
+import { itemLabel } from './mappers';
 import { likePattern } from './queries';
 import type { SqlValue } from '../types';
 
@@ -18,7 +18,7 @@ interface LogRow {
   created_at: number;
   quantity: number;
   reason: string | null;
-  variant_id: string;
+  item_id: string;
   brand: string;
   name: string;
   model: string | null;
@@ -35,16 +35,16 @@ interface LogRow {
 
 const BASE_SQL = `
   SELECT * FROM (
-    SELECT sm.id, sm.created_at, sm.type, sm.quantity, sm.reason, sm.variant_id,
-           p.brand, p.name, av.model, av.colour AS v_colour, av.unit_scale, av.unit_label,
+    SELECT sm.id, sm.created_at, sm.type, sm.quantity, sm.reason, sm.item_id,
+           p.brand, p.name, it.model, it.colour AS v_colour, it.unit_scale, it.unit_label,
            sm.batch_id, sb.batch_no, sb.expiry_date,
            sm.created_by, u.display_name,
            SUM(sm.quantity) OVER (
-             PARTITION BY sm.variant_id ORDER BY sm.created_at, sm.id
+             PARTITION BY sm.item_id ORDER BY sm.created_at, sm.id
            ) AS balance_after
     FROM stock_movements sm
-    JOIN accessory_variants av ON av.id = sm.variant_id
-    JOIN products p            ON p.id = av.product_id
+    JOIN items it ON it.id = sm.item_id
+    JOIN products p            ON p.id = it.product_id
     LEFT JOIN users u          ON u.id = sm.created_by
     LEFT JOIN stock_batches sb ON sb.id = sm.batch_id
     WHERE sm.branch_id = ?
@@ -69,8 +69,8 @@ function toEntry(r: LogRow): StockLogEntry {
   return {
     id: r.id,
     at: Number(r.created_at),
-    item: { variantId: r.variant_id },
-    label: variantLabel({ brand: r.brand, name: r.name }, { model: r.model, colour: r.v_colour }),
+    item: { itemId: r.item_id },
+    label: itemLabel({ brand: r.brand, name: r.name }, { model: r.model, colour: r.v_colour }),
     unitScale: Number(r.unit_scale) as UnitScale,
     unitLabel: r.unit_label as UnitLabel,
     quantity,

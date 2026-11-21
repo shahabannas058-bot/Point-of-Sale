@@ -112,7 +112,7 @@ describe('login (spec 10)', () => {
     // the old token is gone, so a discount needing approval still asks for it
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 1_000_000 }],
+        lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 1_000_000 }],
         payments: [{ method: 'cash', amount: 7_500_000 }],
         approvalToken: grant.token,
       }),
@@ -157,7 +157,7 @@ describe('roles and permissions (spec 10)', () => {
   it('without a session everything is NOT_AUTHENTICATED', async () => {
     await expectCode(t.svc.checkout.preview({ lines: [] }), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.catalog.search('x'), 'NOT_AUTHENTICATED');
-    await expectCode(t.svc.catalog.listAccessories(), 'NOT_AUTHENTICATED');
+    await expectCode(t.svc.catalog.listItems(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.settings.get(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.auth.listUsers(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.integrity.verifyChain(), 'NOT_AUTHENTICATED');
@@ -168,7 +168,7 @@ describe('roles and permissions (spec 10)', () => {
   it('a cashier cannot create items, summarise reports, adjust stock, manage users or settings', async () => {
     await t.loginAs('cash');
     await expectCode(
-      t.svc.catalog.createAccessory({
+      t.svc.catalog.createItem({
         product: { brand: 'X', name: 'Y' },
         sku: 'X-Y',
         costPrice: 1,
@@ -178,7 +178,7 @@ describe('roles and permissions (spec 10)', () => {
     );
     await expectCode(t.svc.reports.summary({ fromMs: 0, toMs: 1 }), 'FORBIDDEN');
     await expectCode(
-      t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: 1, reason: 'x' }),
+      t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: 1, reason: 'x' }),
       'FORBIDDEN',
     );
     await expectCode(t.svc.auth.listUsers(), 'FORBIDDEN');

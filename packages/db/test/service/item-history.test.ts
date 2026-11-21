@@ -11,39 +11,39 @@ beforeEach(async () => {
 const SUPPLIER_REF = 'SUP-INV-77';
 
 interface Fixture {
-  variantId: string;
+  itemId: string;
   invoiceNos: { cashSale: string; bilalSale: string; ret: string };
   /** The clock value just before the return was created (first entry of the "from" window). */
   returnFrom: number;
 }
 
 /**
- * A fresh accessory (no opening stock) with: purchase +10, sale -2 (cashier), sale -3 (owner, Bilal),
+ * A fresh item (no opening stock) with: purchase +10, sale -2 (cashier), sale -3 (owner, Bilal),
  * return +1, adjustment -1 and a write-off -1. Ends logged in as owner. On hand = 4.
  */
-async function buildVariantFixture(): Promise<Fixture> {
+async function buildItemFixture(): Promise<Fixture> {
   await t.loginAs('owner');
-  const protector = await t.svc.catalog.createAccessory({
+  const protector = await t.svc.catalog.createItem({
     product: { brand: 'Generic', name: 'Screen Protector', category: 'Protector' },
     sku: 'SP-A55',
     costPrice: 20_000,
     salePrice: 50_000,
     reorderLevel: 2,
   });
-  const variantId = protector.variant.id;
+  const itemId = protector.item.id;
   const supplier = await t.svc.purchasing.createSupplier({ name: 'Karachi Wholesale' });
   await t.svc.purchasing.receive({
     supplierId: supplier.id,
     referenceNo: SUPPLIER_REF,
-    accessories: [{ variantId, quantity: 10, unitCost: 20_000 }],
+    items: [{ itemId, quantity: 10, unitCost: 20_000 }],
   });
 
   t.svc.auth.logout();
   await t.loginAs('cash');
-  const cashSale = await sellCash(t, [{ variantId, quantity: 2 }]);
+  const cashSale = await sellCash(t, [{ itemId, quantity: 2 }]);
   t.svc.auth.logout();
   await t.loginAs('owner');
-  const bilalSale = await sellCash(t, [{ variantId, quantity: 3 }], { customerId: t.ids.bilalId });
+  const bilalSale = await sellCash(t, [{ itemId, quantity: 3 }], { customerId: t.ids.bilalId });
 
   const returnFrom = t.clock.peek();
   const ret = await t.svc.checkout.createReturn({
@@ -52,12 +52,12 @@ async function buildVariantFixture(): Promise<Fixture> {
     refund: [{ method: 'cash', amount: 50_000 }],
     reason: 'Scratched',
   });
-  await t.svc.catalog.adjustStock({ variantId, delta: -1, reason: 'Damaged in store' });
+  await t.svc.catalog.adjustStock({ itemId, delta: -1, reason: 'Damaged in store' });
 
-  await t.svc.catalog.adjustStock({ variantId, delta: -1, reason: 'Written off' });
+  await t.svc.catalog.adjustStock({ itemId, delta: -1, reason: 'Written off' });
 
   return {
-    variantId,
+    itemId,
     invoiceNos: {
       cashSale: cashSale.invoiceNo,
       bilalSale: bilalSale.invoiceNo,
@@ -71,11 +71,11 @@ const kinds = (p: ItemHistoryPage): string[] => p.entries.map((e) => e.kind);
 const quantities = (p: ItemHistoryPage): number[] => p.entries.map((e) => e.quantity);
 const balances = (p: ItemHistoryPage): number[] => p.entries.map((e) => e.balanceAfter);
 
-describe('catalog.itemHistory: an accessory variant', () => {
+describe('catalog.itemHistory: a piece item', () => {
   it('lists every movement newest first with kinds, refs, signed quantities and running balance', async () => {
-    const f = await buildVariantFixture();
+    const f = await buildItemFixture();
 
-    const page = await t.svc.catalog.itemHistory({ variantId: f.variantId });
+    const page = await t.svc.catalog.itemHistory({ itemId: f.itemId });
 
     expect(page.entries).toHaveLength(6);
     expect(page.nextBefore).toBeNull();
@@ -138,17 +138,14 @@ describe('catalog.itemHistory: an accessory variant', () => {
   });
 
   it('walks every entry exactly once through nextBefore with limit 2', async () => {
-    const f = await buildVariantFixture();
-    const all = await t.svc.catalog.itemHistory({ variantId: f.variantId });
+    const f = await buildItemFixture();
+    const all = await t.svc.catalog.itemHistory({ itemId: f.itemId });
 
     const seen: string[] = [];
     let before: { at: number; id: string } | undefined;
     let pages = 0;
     do {
-      const page = await t.svc.catalog.itemHistory(
-        { variantId: f.variantId },
-        { limit: 2, before },
-      );
+      const page = await t.svc.catalog.itemHistory({ itemId: f.itemId }, { limit: 2, before });
       pages += 1;
       expect(page.entries.length).toBeLessThanOrEqual(2);
       seen.push(...page.entries.map((e) => e.id));
@@ -161,29 +158,23 @@ describe('catalog.itemHistory: an accessory variant', () => {
   });
 
   it('narrows entries with from/to but keeps onHand as the all-time total', async () => {
-    const f = await buildVariantFixture();
+    const f = await buildItemFixture();
 
-    const page = await t.svc.catalog.itemHistory(
-      { variantId: f.variantId },
-      { from: f.returnFrom },
-    );
+    const page = await t.svc.catalog.itemHistory({ itemId: f.itemId }, { from: f.returnFrom });
 
     expect(kinds(page)).toEqual(['adjustment', 'adjustment', 'return']);
     // the running balance keeps counting from the full ledger, not from the window
     expect(balances(page)).toEqual([4, 5, 6]);
     expect(page.summary).toEqual({ purchased: 0, sold: 0, returned: 1, adjusted: -2, onHand: 4 });
 
-    const older = await t.svc.catalog.itemHistory(
-      { variantId: f.variantId },
-      { to: f.returnFrom - 1 },
-    );
+    const older = await t.svc.catalog.itemHistory({ itemId: f.itemId }, { to: f.returnFrom - 1 });
     expect(kinds(older)).toEqual(['sale', 'sale', 'purchase']);
     expect(older.summary).toEqual({ purchased: 10, sold: 5, returned: 0, adjusted: 0, onHand: 4 });
   });
 
   it('clamps an out-of-range integer limit instead of rejecting it', async () => {
-    const f = await buildVariantFixture();
-    const page = await t.svc.catalog.itemHistory({ variantId: f.variantId }, { limit: 0 });
+    const f = await buildItemFixture();
+    const page = await t.svc.catalog.itemHistory({ itemId: f.itemId }, { limit: 0 });
     expect(page.entries).toHaveLength(1);
     expect(page.nextBefore).not.toBeNull();
   });
@@ -193,10 +184,10 @@ describe('catalog.itemHistory: batches (kiryana)', () => {
   it('carries the batch number and expiry of a batch-tracked movement', async () => {
     const k = await shopOf();
     const milk = await addMilk(k);
-    await receive(k, milk.variant.id, [{ qty: 5, days: 30, batchNo: 'B-30' }]);
-    const batch = first(await k.svc.batches.list({ variantId: milk.variant.id }), 'batch');
+    await receive(k, milk.item.id, [{ qty: 5, days: 30, batchNo: 'B-30' }]);
+    const batch = first(await k.svc.batches.list({ itemId: milk.item.id }), 'batch');
 
-    const page = await k.svc.catalog.itemHistory({ variantId: milk.variant.id });
+    const page = await k.svc.catalog.itemHistory({ itemId: milk.item.id });
 
     expect(page.entries).toHaveLength(1);
     expect(page.entries[0]).toMatchObject({
@@ -220,36 +211,33 @@ describe('catalog.itemHistory: validation and access', () => {
 
     await expectCode(h({}), 'VALIDATION');
     await expectCode(h(null), 'VALIDATION');
-    await expectCode(h({ variantId: 'not-a-uuid' }), 'VALIDATION');
-    await expectCode(h({ variantId: 42 }), 'VALIDATION');
-    await expectCode(h({ variantId: t.ids.chargerId }, { limit: 'many' }), 'VALIDATION');
-    await expectCode(h({ variantId: t.ids.chargerId }, { limit: 2.5 }), 'VALIDATION');
-    await expectCode(h({ variantId: t.ids.chargerId }, { from: -1 }), 'VALIDATION');
-    await expectCode(h({ variantId: t.ids.chargerId }, { from: 10, to: 5 }), 'VALIDATION');
+    await expectCode(h({ itemId: 'not-a-uuid' }), 'VALIDATION');
+    await expectCode(h({ itemId: 42 }), 'VALIDATION');
+    await expectCode(h({ itemId: t.ids.chargerId }, { limit: 'many' }), 'VALIDATION');
+    await expectCode(h({ itemId: t.ids.chargerId }, { limit: 2.5 }), 'VALIDATION');
+    await expectCode(h({ itemId: t.ids.chargerId }, { from: -1 }), 'VALIDATION');
+    await expectCode(h({ itemId: t.ids.chargerId }, { from: 10, to: 5 }), 'VALIDATION');
     await expectCode(
-      h({ variantId: t.ids.chargerId }, { before: { at: 1, id: 'nope' } }),
+      h({ itemId: t.ids.chargerId }, { before: { at: 1, id: 'nope' } }),
       'VALIDATION',
     );
-    await expectCode(h({ variantId: t.newId() }), 'NOT_FOUND');
+    await expectCode(h({ itemId: t.newId() }), 'NOT_FOUND');
   });
 
   it('needs a session, and a cashier may read it', async () => {
-    await expectCode(
-      t.svc.catalog.itemHistory({ variantId: t.ids.chargerId }),
-      'NOT_AUTHENTICATED',
-    );
+    await expectCode(t.svc.catalog.itemHistory({ itemId: t.ids.chargerId }), 'NOT_AUTHENTICATED');
     await t.loginAs('cash');
-    const page = await t.svc.catalog.itemHistory({ variantId: t.ids.chargerId });
+    const page = await t.svc.catalog.itemHistory({ itemId: t.ids.chargerId });
     // the seeded charger has its opening stock as one adjustment
     expect(kinds(page)).toEqual(['adjustment']);
     expect(page.summary.onHand).toBe(10);
   });
   it('unitCost is hidden from roles without view_cost', async () => {
     await t.loginAs('owner');
-    const owner = await t.svc.catalog.itemHistory({ variantId: t.ids.chargerId });
+    const owner = await t.svc.catalog.itemHistory({ itemId: t.ids.chargerId });
     expect(owner.entries.some((e) => e.unitCost !== null)).toBe(true);
     await t.loginAs('cash');
-    const cashier = await t.svc.catalog.itemHistory({ variantId: t.ids.chargerId });
+    const cashier = await t.svc.catalog.itemHistory({ itemId: t.ids.chargerId });
     expect(cashier.entries.every((e) => e.unitCost === null)).toBe(true);
   });
 });

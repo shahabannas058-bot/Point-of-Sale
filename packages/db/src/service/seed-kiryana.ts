@@ -261,9 +261,9 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
   const suppliers = { mandi, distributor };
 
   // catalogue (stock arrives with the two opening purchases below)
-  const variantIds = new Map<string, string>();
+  const itemIds = new Map<string, string>();
   for (const [i, it] of ITEMS.entries()) {
-    const v = await svc.catalog.createAccessory({
+    const v = await svc.catalog.createItem({
       product: { ...brandAndName(it), category: 'Grocery' },
       sku: `GRO-${String(i + 1).padStart(3, '0')}`,
       // loose goods have no barcode: the cashier weighs them and taps the item
@@ -273,9 +273,9 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
       reorderLevel: baseUnits(it.reorder, it.unit),
       unit: it.unit,
     });
-    variantIds.set(it.name, v.variant.id);
+    itemIds.set(it.name, v.item.id);
   }
-  const id = (name: string): string => variantIds.get(name) ?? '';
+  const id = (name: string): string => itemIds.get(name) ?? '';
 
   // opening purchases on credit: 30 % of the loose goods and half of the packed goods paid in cash
   for (const [key, ref, paidShare] of [
@@ -283,9 +283,9 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
     ['distributor', 'OPEN-002', 0.5],
   ] as const) {
     // one purchase line per delivery: a perishable item has one line per batch
-    const accessories = ITEMS.filter((it) => it.supplier === key).flatMap((it) =>
+    const items = ITEMS.filter((it) => it.supplier === key).flatMap((it) =>
       (it.batches ?? [{ no: null, days: 0, qty: it.qty }]).map((b) => ({
-        variantId: id(it.name),
+        itemId: id(it.name),
         quantity: baseUnits(b.qty, it.unit),
         unitCost: rs(it.cost),
         scale: unitScaleFor(it.unit),
@@ -294,12 +294,12 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
           : { batch: { batchNo: b.no, expiryDate: pktDate(Date.now() + b.days * DAY_MS) } }),
       })),
     );
-    const total = accessories.reduce((s, l) => s + lineGross(l.quantity, l.unitCost, l.scale), 0);
+    const total = items.reduce((s, l) => s + lineGross(l.quantity, l.unitCost, l.scale), 0);
     await svc.purchasing.receive({
       supplierId: suppliers[key].id,
       referenceNo: ref,
       note: 'Opening stock',
-      accessories: accessories.map(({ scale: _scale, ...line }) => line),
+      items: items.map(({ scale: _scale, ...line }) => line),
       paidNow: { method: 'cash', amount: Math.floor(total * paidShare) },
     });
   }
@@ -338,36 +338,36 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
 
   const sale1 = await sellCash({
     lines: [
-      { variantId: id('Chini (sugar)'), quantity: 2_000 },
-      { variantId: id('Lipton Yellow Label 190g'), quantity: 2 },
+      { itemId: id('Chini (sugar)'), quantity: 2_000 },
+      { itemId: id('Lipton Yellow Label 190g'), quantity: 2 },
     ],
   });
   // 1.25 kg atta and 500 g salt: the weighed lines
   await sellCash({
     lines: [
-      { variantId: id('Atta (flour)'), quantity: 1_250 },
-      { variantId: id('Namak (salt)'), quantity: 500 },
+      { itemId: id('Atta (flour)'), quantity: 1_250 },
+      { itemId: id('Namak (salt)'), quantity: 500 },
     ],
   });
   await sellCash({
     lines: [
-      { variantId: id('Cooking Oil (loose)'), quantity: 1_500 },
-      { variantId: id('Surf Excel 1kg'), quantity: 1 },
+      { itemId: id('Cooking Oil (loose)'), quantity: 1_500 },
+      { itemId: id('Surf Excel 1kg'), quantity: 1 },
     ],
   });
   await sellCash({
     lines: [
-      { variantId: id('Lux Soap 100g'), quantity: 3 },
-      { variantId: id('Lifebuoy Soap 100g'), quantity: 2 },
-      { variantId: id('Olpers Milk 1L'), quantity: 2 }, // first-expiry-first-out: comes from batch M-101
+      { itemId: id('Lux Soap 100g'), quantity: 3 },
+      { itemId: id('Lifebuoy Soap 100g'), quantity: 2 },
+      { itemId: id('Olpers Milk 1L'), quantity: 2 }, // first-expiry-first-out: comes from batch M-101
     ],
   });
   // monthly ration to Haji Rafiq: part cash, Rs 1,500 on khata
   const rationDraft: CheckoutDraft = {
     lines: [
-      { variantId: id('Chawal Basmati'), quantity: 5_000 },
-      { variantId: id('Chini (sugar)'), quantity: 3_000 },
-      { variantId: id('Daal Chana'), quantity: 1_500 },
+      { itemId: id('Chawal Basmati'), quantity: 5_000 },
+      { itemId: id('Chini (sugar)'), quantity: 3_000 },
+      { itemId: id('Daal Chana'), quantity: 1_500 },
     ],
     customerId: haji.id,
   };
@@ -394,5 +394,5 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
   });
   svc.auth.logout();
 
-  return { accessories: ITEMS.length, customers: 5, suppliers: 2, sales: 6 };
+  return { items: ITEMS.length, customers: 5, suppliers: 2, sales: 6 };
 }

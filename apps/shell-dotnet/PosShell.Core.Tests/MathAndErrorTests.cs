@@ -124,6 +124,9 @@ public class ErrorMapTests
     [InlineData("SQLite Error 19: 'ledger_entries is append-only: add an adjustment entry instead'.", "IMMUTABLE_RECORD")]
     [InlineData("SQLite Error 19: 'outbox: only attempts, last_error and sent_at may change'.", "IMMUTABLE_RECORD")]
     [InlineData("SQLite Error 19: 'FOREIGN KEY constraint failed'.", "NOT_FOUND")]
+    [InlineData("SQLite Error 19: 'items: unit_scale must match unit_label'.", "DB_CONSTRAINT")]
+    [InlineData("SQLite Error 19: 'items: unit cannot change once stock exists'.", "DB_CONSTRAINT")]
+    [InlineData("SQLite Error 19: 'sale_lines: unit_scale must match the item'.", "DB_CONSTRAINT")]
     [InlineData("SQLite Error 19: 'CHECK constraint failed: quantity <> 0'.", "DB_CONSTRAINT")]
     [InlineData("SQLite Error 19: 'NOT NULL constraint failed: users.pin_hash'.", "DB_CONSTRAINT")]
     [InlineData("something unforeseen", "INTERNAL")]
@@ -133,13 +136,29 @@ public class ErrorMapTests
     [Fact]
     public void Unique_violation_exposes_table_and_field_but_not_the_raw_text()
     {
-        var raw = new InvalidOperationException("SQLite Error 19: 'UNIQUE constraint failed: accessory_variants.sku'.");
+        var raw = new InvalidOperationException("SQLite Error 19: 'UNIQUE constraint failed: items.sku'.");
         var e = ErrorMap.FromDatabaseMessage(raw.Message, raw);
         Assert.Equal("DUPLICATE", e.Code);
         Assert.Equal("A record with the same value already exists", e.Message);
-        Assert.Equal("accessory_variants", e.Details!["table"]);
+        Assert.Equal("items", e.Details!["table"]);
         Assert.Equal("sku", e.Details["field"]);
         Assert.Same(raw, e.InnerException); // the raw text is kept for the log only
+    }
+
+    [Fact]
+    public void Item_unit_triggers_get_the_same_message_as_typescript()
+    {
+        foreach (var raw in new[]
+                 {
+                     "SQLite Error 19: 'items: unit_scale must match unit_label'.",
+                     "SQLite Error 19: 'items: unit cannot change once stock exists'.",
+                     "SQLite Error 19: 'sale_lines: unit_scale must match the item'.",
+                 })
+        {
+            var e = ErrorMap.FromDatabaseMessage(raw);
+            Assert.Equal("DB_CONSTRAINT", e.Code);
+            Assert.Equal("The unit of this item cannot be used or changed this way", e.Message);
+        }
     }
 
     [Fact]

@@ -14,7 +14,7 @@ import {
   parseQuantity,
   unitScaleFor,
   type UnitLabel,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 import { ItemHistoryDialog, type ItemHistoryDialogProps } from '../components/ItemHistoryDialog';
 import { StockImportDialog } from '../components/StockImportDialog';
@@ -27,7 +27,7 @@ import { useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { paisaToInput, parseRupees } from '../lib/money';
 import { useBusyAction } from '../lib/busy-action';
-import { adjustmentDelta, perUnit, qtyWithUnit, unitWord, variantQtyText } from '../lib/qty';
+import { adjustmentDelta, perUnit, qtyWithUnit, unitWord, itemQtyText } from '../lib/qty';
 import { useService } from '../service/context';
 import { useShopModules } from '../service/use-modules';
 import { useServiceQuery } from '../service/use-query';
@@ -40,13 +40,13 @@ import { ReceiveStockDialog } from './ReceiveStockDialog';
 type TabKey = 'items' | 'low' | 'reorder';
 
 // ------------------------------------------------------------------ item add/edit
-function AccessoryDialog({
+function ItemDialog({
   open,
   item,
   onClose,
 }: {
   open: boolean;
-  item: VariantView | null;
+  item: ItemView | null;
   onClose: () => void;
 }): ReactNode {
   const t = useT();
@@ -74,13 +74,13 @@ function AccessoryDialog({
         ? {
             brand: item.product.brand,
             name: item.product.name,
-            sku: item.variant.sku,
-            barcode: item.variant.barcode ?? '',
-            cost: paisaToInput(item.variant.costPrice),
-            price: paisaToInput(item.variant.salePrice),
-            reorder: formatQuantity(item.variant.reorderLevel, item.variant.unitScale),
+            sku: item.item.sku,
+            barcode: item.item.barcode ?? '',
+            cost: paisaToInput(item.item.costPrice),
+            price: paisaToInput(item.item.salePrice),
+            reorder: formatQuantity(item.item.reorderLevel, item.item.unitScale),
             opening: '0',
-            unit: item.variant.unitLabel,
+            unit: item.item.unitLabel,
           }
         : empty,
     );
@@ -88,7 +88,7 @@ function AccessoryDialog({
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
   // an existing item keeps its unit for ever (the database refuses a change once stock exists)
-  const unit: UnitLabel = item ? item.variant.unitLabel : f.unit;
+  const unit: UnitLabel = item ? item.item.unitLabel : f.unit;
   const scale = unitScaleFor(unit);
 
   const { busy, run: save } = useBusyAction(async (): Promise<void> => {
@@ -103,18 +103,18 @@ function AccessoryDialog({
     setError(null);
     try {
       if (item) {
-        await service.catalog.updateVariant(item.variant.id, {
+        await service.catalog.updateItem(item.item.id, {
           costPrice: cost,
           salePrice: price,
           barcode: f.barcode.trim() || null,
           reorderLevel: reorder,
         });
       } else {
-        await service.catalog.createAccessory({
+        await service.catalog.createItem({
           product: {
             brand: f.brand.trim() || 'Generic',
             name: f.name.trim(),
-            category: 'Accessory',
+            category: null,
           },
           sku: f.sku.trim(),
           barcode: f.barcode.trim() || null,
@@ -139,7 +139,7 @@ function AccessoryDialog({
       onClose={onClose}
       width={680}
       dismissable={!busy}
-      title={item ? t('inv.editAccessory') : t('inv.addItem')}
+      title={item ? t('inv.editItem') : t('inv.addItem')}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
@@ -241,7 +241,7 @@ function AdjustDialog({
   item,
   onClose,
 }: {
-  item: VariantView | null;
+  item: ItemView | null;
   onClose: () => void;
 }): ReactNode {
   const t = useT();
@@ -259,8 +259,8 @@ function AdjustDialog({
       setError(null);
     }
   }, [item]);
-  const scale = item?.variant.unitScale ?? 1;
-  const unit = item?.variant.unitLabel ?? 'pcs';
+  const scale = item?.item.unitScale ?? 1;
+  const unit = item?.item.unitLabel ?? 'pcs';
   const piece = t('unit.piece');
   const d = adjustmentDelta(mode, amount, scale);
   const after = item !== null && d !== null ? item.onHand + d : null;
@@ -271,7 +271,7 @@ function AdjustDialog({
     setError(null);
     try {
       await service.catalog.adjustStock({
-        variantId: item.variant.id,
+        itemId: item.item.id,
         delta: d,
         // the reason is optional for the cashier; the stock history always gets one
         reason: reason.trim() || t(mode === 'add' ? 'inv.reasonAdded' : 'inv.reasonRemoved'),
@@ -381,11 +381,11 @@ export function Inventory(): ReactNode {
   const can = useCan();
   const [tab, setTab] = useState<TabKey>('items');
   const [q, setQ] = useState('');
-  const [accEdit, setAccEdit] = useState<{ open: boolean; item: VariantView | null }>({
+  const [itemEdit, setItemEdit] = useState<{ open: boolean; item: ItemView | null }>({
     open: false,
     item: null,
   });
-  const [adjust, setAdjust] = useState<VariantView | null>(null);
+  const [adjust, setAdjust] = useState<ItemView | null>(null);
   const [recvOpen, setRecvOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [history, setHistory] = useState<Pick<
@@ -395,8 +395,8 @@ export function Inventory(): ReactNode {
 
   const canEdit = can('edit_catalog');
   const showCost = can('view_cost');
-  const accessories = useServiceQuery(
-    (s) => s.catalog.listAccessories({ q: q || undefined, lowStockOnly: tab === 'low' }),
+  const items = useServiceQuery(
+    (s) => s.catalog.listItems({ q: q || undefined, lowStockOnly: tab === 'low' }),
     [q, tab],
     tab === 'items' || tab === 'low',
   );
@@ -415,7 +415,7 @@ export function Inventory(): ReactNode {
             ) : null}
             {canEdit ? (
               <>
-                <Button onClick={() => setAccEdit({ open: true, item: null })}>
+                <Button onClick={() => setItemEdit({ open: true, item: null })}>
                   <Plus size={16} aria-hidden="true" />
                   {t('inv.addItem')}
                 </Button>
@@ -466,16 +466,16 @@ export function Inventory(): ReactNode {
 
       {tab === 'reorder' ? (
         <ReorderPanel />
-      ) : accessories.error ? (
-        <ErrorBox error={accessories.error} onRetry={accessories.reload} />
+      ) : items.error ? (
+        <ErrorBox error={items.error} onRetry={items.reload} />
       ) : (
         <div className="tbl-wrap">
-          {accessories.loading && !accessories.data ? (
+          {items.loading && !items.data ? (
             <SkeletonRows />
-          ) : (accessories.data ?? []).length === 0 ? (
+          ) : (items.data ?? []).length === 0 ? (
             <Empty
-              title={tab === 'low' ? t('inv.noLow') : t('inv.noAccessories')}
-              hint={tab === 'low' ? t('inv.noLowHint') : t('inv.noPhonesHint')}
+              title={tab === 'low' ? t('inv.noLow') : t('inv.noItems')}
+              hint={tab === 'low' ? t('inv.noLowHint') : t('inv.noItemsHint')}
             />
           ) : (
             <table className="tbl">
@@ -493,28 +493,28 @@ export function Inventory(): ReactNode {
                 </tr>
               </thead>
               <tbody>
-                {(accessories.data ?? []).map((v) => (
-                  <tr key={v.variant.id}>
+                {(items.data ?? []).map((v) => (
+                  <tr key={v.item.id}>
                     <td className="font-semibold">
                       {v.product.brand} {v.product.name}
                     </td>
-                    <td className="ltr font-mono text-xs">{v.variant.sku}</td>
-                    <td className="ltr font-mono text-xs">{v.variant.barcode ?? '—'}</td>
+                    <td className="ltr font-mono text-xs">{v.item.sku}</td>
+                    <td className="ltr font-mono text-xs">{v.item.barcode ?? '—'}</td>
                     <td className="num">
                       <span className="inline-flex items-center gap-2">
                         {v.lowStock ? <Badge tone="danger">{t('inv.low')}</Badge> : null}
-                        <b>{variantQtyText(v.onHand, v.variant)}</b>
+                        <b>{itemQtyText(v.onHand, v.item)}</b>
                       </span>
                     </td>
                     {showCost ? (
                       <td className="num">
-                        <Money value={v.variant.costPrice} symbol={null} />
+                        <Money value={v.item.costPrice} symbol={null} />
                       </td>
                     ) : null}
                     <td className="num">
-                      <Money value={v.variant.salePrice} symbol={null} className="font-semibold" />
+                      <Money value={v.item.salePrice} symbol={null} className="font-semibold" />
                       <span className="ltr text-xs text-muted">
-                        {perUnit(v.variant.unitScale, v.variant.unitLabel)}
+                        {perUnit(v.item.unitScale, v.item.unitLabel)}
                       </span>
                     </td>
                     <td>
@@ -526,10 +526,10 @@ export function Inventory(): ReactNode {
                           aria-label={t('hist.open')}
                           onClick={() =>
                             setHistory({
-                              item: { variantId: v.variant.id },
+                              item: { itemId: v.item.id },
                               label: v.label,
-                              unitScale: v.variant.unitScale,
-                              unitLabel: v.variant.unitLabel,
+                              unitScale: v.item.unitScale,
+                              unitLabel: v.item.unitLabel,
                             })
                           }
                         >
@@ -552,7 +552,7 @@ export function Inventory(): ReactNode {
                             icon
                             size="sm"
                             aria-label={t('common.edit')}
-                            onClick={() => setAccEdit({ open: true, item: v })}
+                            onClick={() => setItemEdit({ open: true, item: v })}
                           >
                             <Pencil size={15} aria-hidden="true" />
                           </Button>
@@ -567,10 +567,10 @@ export function Inventory(): ReactNode {
         </div>
       )}
 
-      <AccessoryDialog
-        open={accEdit.open}
-        item={accEdit.item}
-        onClose={() => setAccEdit((s) => ({ ...s, open: false }))}
+      <ItemDialog
+        open={itemEdit.open}
+        item={itemEdit.item}
+        onClose={() => setItemEdit((s) => ({ ...s, open: false }))}
       />
       <AdjustDialog item={adjust} onClose={() => setAdjust(null)} />
       <ReceiveStockDialog open={recvOpen} onClose={() => setRecvOpen(false)} />

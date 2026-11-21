@@ -120,9 +120,9 @@ export function historyDateRange(
 }
 
 /** A stable key for a dialog's item, for query dependencies. */
-export const itemRefKey = (ref: ItemRef): string => `v:${ref.variantId}`;
+export const itemRefKey = (ref: ItemRef): string => `v:${ref.itemId}`;
 
 /** Which item a cart line is. */
-export const cartLineItemRef = (line: { variantId: string }): ItemRef => ({
-  variantId: line.variantId,
+export const cartLineItemRef = (line: { itemId: string }): ItemRef => ({
+  itemId: line.itemId,
 });

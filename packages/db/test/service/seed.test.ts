@@ -32,15 +32,15 @@ describe('seedDemoData', () => {
     await seedDemoData({ driver, pinIterations: 1000 });
     const svc = createPosService({ driver, pinIterations: 1000 });
     await svc.auth.login('cashier', '3456');
-    const item = (await svc.catalog.listAccessories()).find(
-      (i) => i.variant.unitScale === 1 && i.onHand > 0,
+    const item = (await svc.catalog.listItems()).find(
+      (i) => i.item.unitScale === 1 && i.onHand > 0,
     );
     expect(item).toBeDefined();
-    const gross = item?.variant.salePrice ?? 0;
+    const gross = item?.item.salePrice ?? 0;
     const preview = await svc.checkout.preview({
       lines: [
         {
-          variantId: item?.variant.id ?? '',
+          itemId: item?.item.id ?? '',
           quantity: 1,
           discountAmount: Math.floor(gross * 0.06),
         },

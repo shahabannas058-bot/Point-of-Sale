@@ -6,7 +6,7 @@ import {
   parseQuantity,
   type BatchInput,
   type PaymentMethod,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -22,9 +22,9 @@ import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { toast } from '../store/toast';
 
-interface AccRow {
+interface ItemRow {
   id: number;
-  variantId: string;
+  itemId: string;
   qty: string;
   cost: string;
   /** Module batch_expiry. A date from <input type="date">, so always YYYY-MM-DD or ''. */
@@ -43,7 +43,7 @@ export function ReceiveStockDialog({
   const service = useService();
   const bump = useDataVersion((s) => s.bump);
   const suppliers = useServiceQuery((s) => s.purchasing.listSuppliers(), [], open);
-  const accessories = useServiceQuery((s) => s.catalog.listAccessories(), [], open);
+  const items = useServiceQuery((s) => s.catalog.listItems(), [], open);
   const shopModules = useShopModules();
   // perishable goods (kiryana): each line may carry a batch number and an expiry date
   const hasBatches = shopModules.has('batch_expiry');
@@ -51,7 +51,7 @@ export function ReceiveStockDialog({
   const [supplierId, setSupplierId] = useState('');
   const [newSupplier, setNewSupplier] = useState<string | null>(null);
   const [reference, setReference] = useState('');
-  const [accs, setAccs] = useState<AccRow[]>([]);
+  const [itemRows, setItemRows] = useState<ItemRow[]>([]);
   const [paid, setPaid] = useState('');
   const [method, setMethod] = useState<Exclude<PaymentMethod, 'khata'>>('cash');
   const [busy, setBusy] = useState(false);
@@ -63,7 +63,7 @@ export function ReceiveStockDialog({
       setSupplierId('');
       setNewSupplier(null);
       setReference('');
-      setAccs([]);
+      setItemRows([]);
       setPaid('');
       setMethod('cash');
       setError(null);
@@ -74,19 +74,19 @@ export function ReceiveStockDialog({
     if (!supplierId && suppliers.data?.[0]) setSupplierId(suppliers.data[0].party.id);
   }, [suppliers.data, supplierId]);
 
-  const variantById = useMemo(
-    () => new Map<string, VariantView>((accessories.data ?? []).map((v) => [v.variant.id, v])),
-    [accessories.data],
+  const itemById = useMemo(
+    () => new Map<string, ItemView>((items.data ?? []).map((v) => [v.item.id, v])),
+    [items.data],
   );
 
   const total = useMemo(() => {
     let sum = 0;
-    for (const a of accs) {
-      const scale = variantById.get(a.variantId)?.variant.unitScale ?? 1;
+    for (const a of itemRows) {
+      const scale = itemById.get(a.itemId)?.item.unitScale ?? 1;
       sum += lineGross(parseQuantity(a.qty, scale) ?? 0, parseRupees(a.cost) ?? 0, scale);
     }
     return sum;
-  }, [accs, variantById]);
+  }, [itemRows, itemById]);
 
   const addSupplier = async (): Promise<void> => {
     if (!newSupplier?.trim()) return;
@@ -103,21 +103,21 @@ export function ReceiveStockDialog({
   const submit = async (): Promise<void> => {
     setError(null);
     if (!supplierId) return setError(t('recv.errSupplier'));
-    const accInputs: {
-      variantId: string;
+    const itemInputs: {
+      itemId: string;
       quantity: number;
       unitCost: number;
       batch?: BatchInput | null;
     }[] = [];
-    for (const a of accs) {
-      const qty = parseQuantity(a.qty, variantById.get(a.variantId)?.variant.unitScale ?? 1);
+    for (const a of itemRows) {
+      const qty = parseQuantity(a.qty, itemById.get(a.itemId)?.item.unitScale ?? 1);
       const cost = parseRupees(a.cost);
-      if (!a.variantId || qty === null || qty <= 0 || cost === null)
-        return setError(t('recv.errAccessory'));
+      if (!a.itemId || qty === null || qty <= 0 || cost === null)
+        return setError(t('recv.errItem'));
       if (hasBatches && a.batchNo.trim() !== '' && a.expiry === '')
         return setError(t('recv.errExpiry'));
-      accInputs.push({
-        variantId: a.variantId,
+      itemInputs.push({
+        itemId: a.itemId,
         quantity: qty,
         unitCost: cost,
         ...(hasBatches && a.expiry !== ''
@@ -125,7 +125,7 @@ export function ReceiveStockDialog({
           : {}),
       });
     }
-    if (accInputs.length === 0) return setError(t('recv.errEmpty'));
+    if (itemInputs.length === 0) return setError(t('recv.errEmpty'));
     const paidP = paid.trim() === '' ? 0 : parseRupees(paid);
     if (paidP === null || paidP > total) return setError(t('recv.errPaid'));
     setBusy(true);
@@ -133,11 +133,11 @@ export function ReceiveStockDialog({
       await service.purchasing.receive({
         supplierId,
         referenceNo: reference.trim() || null,
-        accessories: accInputs,
+        items: itemInputs,
         paidNow: paidP > 0 ? { method, amount: paidP } : null,
       });
       bump();
-      toast.success(t('recv.done', { n: accInputs.length }));
+      toast.success(t('recv.done', { n: itemInputs.length }));
       onClose();
     } catch (e) {
       setError(errorMessage(e, t));
@@ -235,24 +235,24 @@ export function ReceiveStockDialog({
 
       <h3 className="mb-2 mt-5 text-base">{t('inv.tabItems')}</h3>
       <div className="flex flex-col gap-2">
-        {accs.map((a) => {
-          const picked = variantById.get(a.variantId)?.variant;
+        {itemRows.map((a) => {
+          const picked = itemById.get(a.itemId)?.item;
           const scale = picked?.unitScale ?? 1;
           return (
             <div key={a.id} className="flex flex-col gap-2">
               <div className="grid grid-cols-[minmax(0,2fr)_110px_150px_44px] items-end gap-2">
                 <Field label={t('recv.item')}>
                   <Select
-                    value={a.variantId}
+                    value={a.itemId}
                     onChange={(e) => {
-                      const v = variantById.get(e.target.value);
-                      setAccs((rs) =>
+                      const v = itemById.get(e.target.value);
+                      setItemRows((rs) =>
                         rs.map((x) =>
                           x.id === a.id
                             ? {
                                 ...x,
-                                variantId: e.target.value,
-                                cost: v ? paisaToInput(v.variant.costPrice) : x.cost,
+                                itemId: e.target.value,
+                                cost: v ? paisaToInput(v.item.costPrice) : x.cost,
                               }
                             : x,
                         ),
@@ -260,9 +260,9 @@ export function ReceiveStockDialog({
                     }}
                   >
                     <option value="">—</option>
-                    {(accessories.data ?? []).map((v) => (
-                      <option key={v.variant.id} value={v.variant.id}>
-                        {v.label} · {v.variant.sku}
+                    {(items.data ?? []).map((v) => (
+                      <option key={v.item.id} value={v.item.id}>
+                        {v.label} · {v.item.sku}
                       </option>
                     ))}
                   </Select>
@@ -277,7 +277,7 @@ export function ReceiveStockDialog({
                   <Input
                     value={a.qty}
                     onChange={(e) =>
-                      setAccs((rs) =>
+                      setItemRows((rs) =>
                         rs.map((x) =>
                           x.id === a.id
                             ? {
@@ -298,7 +298,7 @@ export function ReceiveStockDialog({
                   <Input
                     value={a.cost}
                     onChange={(e) =>
-                      setAccs((rs) =>
+                      setItemRows((rs) =>
                         rs.map((x) => (x.id === a.id ? { ...x, cost: e.target.value } : x)),
                       )
                     }
@@ -310,7 +310,7 @@ export function ReceiveStockDialog({
                   variant="ghost"
                   icon
                   aria-label={t('common.remove')}
-                  onClick={() => setAccs((rs) => rs.filter((x) => x.id !== a.id))}
+                  onClick={() => setItemRows((rs) => rs.filter((x) => x.id !== a.id))}
                 >
                   <Trash size={16} aria-hidden="true" />
                 </Button>
@@ -321,7 +321,7 @@ export function ReceiveStockDialog({
                     <Input
                       value={a.batchNo}
                       onChange={(e) =>
-                        setAccs((rs) =>
+                        setItemRows((rs) =>
                           rs.map((x) => (x.id === a.id ? { ...x, batchNo: e.target.value } : x)),
                         )
                       }
@@ -334,7 +334,7 @@ export function ReceiveStockDialog({
                       type="date"
                       value={a.expiry}
                       onChange={(e) =>
-                        setAccs((rs) =>
+                        setItemRows((rs) =>
                           rs.map((x) => (x.id === a.id ? { ...x, expiry: e.target.value } : x)),
                         )
                       }
@@ -350,15 +350,15 @@ export function ReceiveStockDialog({
           variant="secondary"
           className="self-start"
           onClick={() => {
-            setAccs((rs) => [
+            setItemRows((rs) => [
               ...rs,
-              { id: seq, variantId: '', qty: '1', cost: '', batchNo: '', expiry: '' },
+              { id: seq, itemId: '', qty: '1', cost: '', batchNo: '', expiry: '' },
             ]);
             setSeq((s) => s + 1);
           }}
         >
           <Plus size={16} aria-hidden="true" />
-          {t('recv.addAccessory')}
+          {t('recv.addItem')}
         </Button>
       </div>
 

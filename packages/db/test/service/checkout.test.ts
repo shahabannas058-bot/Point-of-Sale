@@ -23,15 +23,15 @@ describe('hash chain over three sales (spec 1)', () => {
   it('numbers invoices 1..3, links prev_hash and verifies; tampering is found at seq 1', async () => {
     await t.loginAs('owner');
     const s1 = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
       payments: [{ method: 'cash', amount: 300_000 }],
     });
     const s2 = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
       payments: [{ method: 'cash', amount: 8_000_000 }],
     });
     const s3 = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       payments: [{ method: 'cash', amount: 150_000 }],
     });
 
@@ -62,9 +62,9 @@ describe('hash chain over three sales (spec 1)', () => {
 
   it('sales are never backdated even if the clock steps back', async () => {
     await t.loginAs('owner');
-    const a = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    const a = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     t.clock.advance(-3_600_000);
-    const b = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    const b = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     expect(b.createdAt).toBeGreaterThanOrEqual(a.createdAt);
     expect((await t.svc.integrity.verifyChain()).ok).toBe(true);
   });
@@ -76,7 +76,7 @@ describe('concurrent commits (spec 2)', () => {
     const results = await Promise.all(
       Array.from({ length: 5 }, () =>
         t.svc.checkout.commit({
-          lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+          lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
           payments: [{ method: 'cash', amount: CHARGER_PRICE }],
         }),
       ),
@@ -85,14 +85,14 @@ describe('concurrent commits (spec 2)', () => {
     expect(new Set(results.map((i) => i.invoiceNo)).size).toBe(5);
     const report = await t.svc.integrity.verifyChain();
     expect(report).toMatchObject({ ok: true, count: 5, headSeq: 5 });
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(5);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(5);
   });
 
   it('two parallel sales of 6 chargers (10 on hand) let exactly one through', async () => {
     await t.loginAs('owner');
     const attempt = (): Promise<unknown> =>
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 6 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 6 }],
         payments: [{ method: 'cash', amount: 6 * CHARGER_PRICE }],
       });
     const settled = await Promise.allSettled([attempt(), attempt()]);
@@ -101,12 +101,12 @@ describe('concurrent commits (spec 2)', () => {
     expect(rejected?.status === 'rejected' && (rejected.reason as ServiceError).code).toBe(
       'STOCK_INSUFFICIENT',
     );
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(4);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(4);
   });
 
   it('a raw insert with a duplicate seq is rejected by the DB and maps to CHAIN_CONFLICT', async () => {
     await t.loginAs('owner');
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }]);
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
     const dup = saleRow({
       device_id: t.ids.deviceId,
       branch_id: t.ids.branchId,
@@ -136,7 +136,7 @@ describe('insufficient stock (spec 3)', () => {
     const before = await snapshotCounts(t.driver);
     const e = await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 11 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 11 }],
         payments: [{ method: 'cash', amount: 11 * CHARGER_PRICE }],
       }),
       'STOCK_INSUFFICIENT',
@@ -145,14 +145,14 @@ describe('insufficient stock (spec 3)', () => {
     expect(await snapshotCounts(t.driver)).toEqual(before);
   });
 
-  it('two lines of the same variant (6 + 5) are summed and fail too', async () => {
+  it('two lines of the same item (6 + 5) are summed and fail too', async () => {
     await t.loginAs('owner');
     const before = await snapshotCounts(t.driver);
     const e = await expectCode(
       t.svc.checkout.commit({
         lines: [
-          { variantId: t.ids.chargerId, quantity: 6 },
-          { variantId: t.ids.chargerId, quantity: 5 },
+          { itemId: t.ids.chargerId, quantity: 6 },
+          { itemId: t.ids.chargerId, quantity: 5 },
         ],
         payments: [{ method: 'cash', amount: 11 * CHARGER_PRICE }],
       }),
@@ -164,15 +164,15 @@ describe('insufficient stock (spec 3)', () => {
 
   it('exactly the on-hand quantity is allowed', async () => {
     await t.loginAs('owner');
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 10 }]);
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(0);
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 10 }]);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(0);
   });
 
-  it('allowNegativeStock lets accessories oversell', async () => {
+  it('allowNegativeStock lets items oversell', async () => {
     await t.loginAs('owner');
     await t.svc.settings.update({ allowNegativeStock: true });
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 12 }]);
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(-2);
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 12 }]);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(-2);
   });
 });
 
@@ -183,8 +183,8 @@ describe('an item with one piece in stock cannot be sold twice (spec 4)', () => 
     const e = await expectCode(
       t.svc.checkout.commit({
         lines: [
-          { variantId: t.ids.cartonId, quantity: 1 },
-          { variantId: t.ids.cartonId, quantity: 1 },
+          { itemId: t.ids.cartonId, quantity: 1 },
+          { itemId: t.ids.cartonId, quantity: 1 },
         ],
         payments: [{ method: 'cash', amount: 2 * CARTON_PRICE }],
       }),
@@ -192,39 +192,39 @@ describe('an item with one piece in stock cannot be sold twice (spec 4)', () => 
     );
     expect(e.details).toMatchObject({ onHand: 1, requested: 2, lineNo: 2 });
     expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(1);
+    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(1);
   });
 
   it('after X is sold a second commit throws STOCK_INSUFFICIENT and counts stay unchanged', async () => {
     await t.loginAs('owner');
-    await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
-    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
+    await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }]);
+    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(0);
     const before = await snapshotCounts(t.driver);
     const e = await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+        lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
         payments: [{ method: 'cash', amount: CARTON_PRICE }],
       }),
       'STOCK_INSUFFICIENT',
     );
     expect(e.details).toMatchObject({ onHand: 0, requested: 1, lineNo: 1 });
     expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
+    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(0);
   });
 
   it('a line with quantity 2 of the single carton is STOCK_INSUFFICIENT', async () => {
     await t.loginAs('owner');
     await expectCode(
-      t.svc.checkout.preview({ lines: [{ variantId: t.ids.cartonId, quantity: 2 }] }),
+      t.svc.checkout.preview({ lines: [{ itemId: t.ids.cartonId, quantity: 2 }] }),
       'STOCK_INSUFFICIENT',
     );
   });
 
-  it('a line without a variantId is a VALIDATION error', async () => {
+  it('a line without a itemId is a VALIDATION error', async () => {
     await t.loginAs('owner');
     await expectCode(t.svc.checkout.preview({ lines: [{ quantity: 1 } as never] }), 'VALIDATION');
     await expectCode(
-      t.svc.checkout.preview({ lines: [{ variantId: 42, quantity: 1 } as never] }),
+      t.svc.checkout.preview({ lines: [{ itemId: 42, quantity: 1 } as never] }),
       'VALIDATION',
     );
   });
@@ -236,7 +236,7 @@ describe('khata on a sale (spec 5)', () => {
     const before = await snapshotCounts(t.driver);
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         payments: [{ method: 'khata', amount: CHARGER_PRICE }],
       }),
       'KHATA_NEEDS_CUSTOMER',
@@ -247,7 +247,7 @@ describe('khata on a sale (spec 5)', () => {
   it('a full khata sale books sale_credit +150 000 and the customer balance', async () => {
     await t.loginAs('cash');
     const inv = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       customerId: t.ids.bilalId,
       payments: [{ method: 'khata', amount: CHARGER_PRICE }],
     });
@@ -263,7 +263,7 @@ describe('khata on a sale (spec 5)', () => {
   it('a split sale (cash 100 000 + khata 200 000) books only +200 000', async () => {
     await t.loginAs('cash');
     await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
       customerId: t.ids.bilalId,
       payments: [
         { method: 'cash', amount: 100_000 },
@@ -280,7 +280,7 @@ describe('khata on a sale (spec 5)', () => {
   it('a cashier pushing the balance over the credit limit needs approval (credit_limit)', async () => {
     await t.loginAs('cash');
     const draft = {
-      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
       customerId: t.ids.bilalId,
       payments: [{ method: 'khata' as const, amount: CARTON_PRICE }],
     };
@@ -297,7 +297,7 @@ describe('khata on a sale (spec 5)', () => {
   it('a manager is not subject to the credit limit', async () => {
     await t.loginAs('mgr');
     const inv = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
       customerId: t.ids.bilalId,
       payments: [{ method: 'khata', amount: CARTON_PRICE }],
     });
@@ -309,14 +309,14 @@ describe('cashier discount policy (spec 6)', () => {
   it('425 000 on gross 8 500 000 (500 bps) passes; 425 001 needs approval', async () => {
     await t.loginAs('cash');
     const exact = {
-      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 425_000 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 425_000 }],
     };
     const exactPreview = await t.svc.checkout.preview(exact);
     expect(exactPreview.needsApproval).toEqual([]);
     expect(exactPreview.effectiveDiscountBps).toBe(500);
 
     const over = {
-      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 425_001 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 425_001 }],
     };
     const overPreview = await t.svc.checkout.preview(over);
     expect(overPreview.needsApproval).toEqual(['discount']);
@@ -342,12 +342,12 @@ describe('cashier discount policy (spec 6)', () => {
   it('an invoice-level discount counts toward the threshold too', async () => {
     await t.loginAs('cash');
     const ok = await t.svc.checkout.preview({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
       invoiceDiscount: 425_000,
     });
     expect(ok.needsApproval).toEqual([]);
     const over = await t.svc.checkout.preview({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
       invoiceDiscount: 425_001,
     });
     expect(over.needsApproval).toEqual(['discount']);
@@ -358,7 +358,7 @@ describe('cashier discount policy (spec 6)', () => {
     const grant = await t.svc.auth.requestApproval('2345');
     expect(grant.approverUsername).toBe('mgr');
     const inv = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 425_001 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 425_001 }],
       payments: [{ method: 'cash', amount: CARTON_PRICE - 425_001 }],
       approvalToken: grant.token,
     });
@@ -367,7 +367,7 @@ describe('cashier discount policy (spec 6)', () => {
     // reuse: 7 501 off one 150 000 charger is above 5 %
     const e = await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1, discountAmount: 7_501 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1, discountAmount: 7_501 }],
         payments: [{ method: 'cash', amount: CHARGER_PRICE - 7_501 }],
         approvalToken: grant.token,
       }),
@@ -380,7 +380,7 @@ describe('cashier discount policy (spec 6)', () => {
     await t.loginAs('cash');
     const grant = await t.svc.auth.requestApproval('2345');
     const input = {
-      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
       payments: [{ method: 'cash' as const, amount: CARTON_PRICE - 500_000 }],
       approvalToken: grant.token,
     };
@@ -395,7 +395,7 @@ describe('cashier discount policy (spec 6)', () => {
   it('a manager session needs no token', async () => {
     await t.loginAs('mgr');
     const inv = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 2_000_000 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 2_000_000 }],
       payments: [{ method: 'cash', amount: CARTON_PRICE - 2_000_000 }],
     });
     expect(inv.note).toBeNull();
@@ -410,7 +410,7 @@ describe('cashier discount policy (spec 6)', () => {
   it('an unknown, expired or logged-out token behaves as "no token" (APPROVAL_REQUIRED)', async () => {
     await t.loginAs('cash');
     const input = {
-      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
       payments: [{ method: 'cash' as const, amount: CARTON_PRICE - 500_000 }],
     };
     await expectCode(
@@ -440,7 +440,7 @@ describe('cashier discount policy (spec 6)', () => {
     t.svc.auth.logout();
     await t.loginAs('cash');
     const p = await t.svc.checkout.preview({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1, discountAmount: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1, discountAmount: 1 }],
     });
     expect(p.needsApproval).toEqual(['discount']);
   });
@@ -451,7 +451,7 @@ describe('idempotency (spec 11)', () => {
     await t.loginAs('owner');
     const saleId = t.newId();
     const draft = {
-      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
       payments: [{ method: 'cash' as const, amount: 300_000 }],
       saleId,
     };
@@ -461,7 +461,7 @@ describe('idempotency (spec 11)', () => {
     expect(a.id).toBe(saleId);
     const counts = await snapshotCounts(t.driver);
     expect(counts.sales).toBe(1);
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(8);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(8);
     expect(t.assertCanSell).toHaveBeenCalledTimes(1);
   });
 
@@ -469,14 +469,14 @@ describe('idempotency (spec 11)', () => {
     await t.loginAs('owner');
     const saleId = t.newId();
     const first = await t.svc.checkout.commit({
-      lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
       payments: [{ method: 'cash', amount: 300_000 }],
       saleId,
     });
     const before = await snapshotCounts(t.driver);
     const err = await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         payments: [{ method: 'cash', amount: 150_000 }],
         saleId,
       }),
@@ -486,7 +486,7 @@ describe('idempotency (spec 11)', () => {
     // same lines and payments but a different customer is a different sale too
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 2 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 2 }],
         payments: [{ method: 'cash', amount: 300_000 }],
         customerId: t.ids.bilalId,
         saleId,
@@ -494,14 +494,14 @@ describe('idempotency (spec 11)', () => {
       'SALE_ID_REUSED',
     );
     expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(8);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(8);
   });
 
   it('a double click (two parallel commits with one saleId) creates one invoice', async () => {
     await t.loginAs('owner');
     const saleId = t.newId();
     const draft = {
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
       payments: [{ method: 'cash' as const, amount: CHARGER_PRICE }],
       saleId,
     };
@@ -509,14 +509,14 @@ describe('idempotency (spec 11)', () => {
     expect(a.id).toBe(b.id);
     expect(a.hash).toBe(b.hash);
     expect((await snapshotCounts(t.driver)).sales).toBe(1);
-    expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(9);
+    expect(await stockSum(t.driver, { itemId: t.ids.chargerId })).toBe(9);
   });
 
   it('a saleId that is not a UUID v7 is rejected', async () => {
     await t.loginAs('owner');
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         payments: [{ method: 'cash', amount: CHARGER_PRICE }],
         saleId: 'not-a-uuid',
       }),
@@ -527,7 +527,7 @@ describe('idempotency (spec 11)', () => {
 
 describe('licence hook (spec 13)', () => {
   const draft = () => ({
-    lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+    lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
     payments: [{ method: 'cash' as const, amount: CHARGER_PRICE }],
   });
 
@@ -557,14 +557,14 @@ describe('licence hook (spec 13)', () => {
     await expectCode(t.svc.checkout.commit({ lines: [], payments: [] }), 'EMPTY_CART');
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         payments: [{ method: 'cash', amount: 1 }],
       }),
       'PAYMENT_MISMATCH',
     );
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 99 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 99 }],
         payments: [{ method: 'cash', amount: 1 }],
       }),
       'STOCK_INSUFFICIENT',
@@ -592,7 +592,7 @@ describe('validation (spec 14)', () => {
     await t.loginAs('owner');
     const over = captureError(
       t.svc.checkout.preview({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1, discountAmount: CHARGER_PRICE + 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1, discountAmount: CHARGER_PRICE + 1 }],
       }),
     );
     expect((await over).code).toBe('DISCOUNT_INVALID');
@@ -602,13 +602,13 @@ describe('validation (spec 14)', () => {
     await t.loginAs('owner');
     await expectCode(
       t.svc.checkout.preview({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1, discountAmount: -1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1, discountAmount: -1 }],
       }),
       'DISCOUNT_INVALID',
     );
     await expectCode(
       t.svc.checkout.preview({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         invoiceDiscount: -5,
       }),
       'DISCOUNT_INVALID',
@@ -619,7 +619,7 @@ describe('validation (spec 14)', () => {
     await t.loginAs('owner');
     await expectCode(
       t.svc.checkout.preview({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         invoiceDiscount: CHARGER_PRICE + 1,
       }),
       'DISCOUNT_INVALID',
@@ -628,7 +628,7 @@ describe('validation (spec 14)', () => {
 
   it('payments that do not sum to the total give PAYMENT_MISMATCH, over and under', async () => {
     await t.loginAs('owner');
-    const lines = [{ variantId: t.ids.chargerId, quantity: 1 }];
+    const lines = [{ itemId: t.ids.chargerId, quantity: 1 }];
     await expectCode(
       t.svc.checkout.commit({ lines, payments: [{ method: 'cash', amount: CHARGER_PRICE - 1 }] }),
       'PAYMENT_MISMATCH',
@@ -644,14 +644,14 @@ describe('validation (spec 14)', () => {
     await t.loginAs('owner');
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         payments: [{ method: 'cash', amount: 10.5 }],
       }),
       'MONEY_INVALID',
     );
     await expectCode(
       t.svc.checkout.preview({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1, discountAmount: 10.5 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1, discountAmount: 10.5 }],
       }),
       'MONEY_INVALID',
     );
@@ -661,12 +661,12 @@ describe('validation (spec 14)', () => {
     await t.loginAs('owner');
     await expectCode(t.svc.checkout.preview({ lines: [] }), 'EMPTY_CART');
     await expectCode(
-      t.svc.checkout.preview({ lines: [{ variantId: t.newId(), quantity: 1 }] }),
+      t.svc.checkout.preview({ lines: [{ itemId: t.newId(), quantity: 1 }] }),
       'NOT_FOUND',
     );
     await expectCode(
       t.svc.checkout.preview({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         customerId: t.newId(),
       }),
       'NOT_FOUND',
@@ -677,7 +677,7 @@ describe('validation (spec 14)', () => {
     await t.loginAs('owner');
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+        lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
         payments: [{ method: 'bitcoin' as never, amount: CHARGER_PRICE }],
       }),
       'VALIDATION',
@@ -687,7 +687,7 @@ describe('validation (spec 14)', () => {
 
 describe('access rules', () => {
   it('commit, preview, getInvoice and listInvoices need a session', async () => {
-    const lines = [{ variantId: t.ids.chargerId, quantity: 1 }];
+    const lines = [{ itemId: t.ids.chargerId, quantity: 1 }];
     await expectCode(t.svc.checkout.preview({ lines }), 'NOT_AUTHENTICATED');
     await expectCode(
       t.svc.checkout.commit({ lines, payments: [{ method: 'cash', amount: CHARGER_PRICE }] }),
@@ -699,7 +699,7 @@ describe('access rules', () => {
 
   it('a cashier can sell, look up invoices by id and number, and list them', async () => {
     await t.loginAs('cash');
-    const inv = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }], {
+    const inv = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }], {
       customerId: t.ids.bilalId,
     });
     const byId = await t.svc.checkout.getInvoice(inv.id);
@@ -719,8 +719,8 @@ describe('access rules', () => {
 
   it('listInvoices finds a sale by invoice number and filters by kind and customer', async () => {
     await t.loginAs('owner');
-    await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }], { customerId: t.ids.bilalId });
+    await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }]);
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }], { customerId: t.ids.bilalId });
     expect((await t.svc.checkout.listInvoices({ q: '000001' })).map((s) => s.invoiceNo)).toEqual([
       'A-000001',
     ]);

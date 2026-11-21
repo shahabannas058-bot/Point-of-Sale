@@ -33,7 +33,7 @@ public sealed class SalesService(
     private sealed record Shop(string DeviceId, string BranchId, string Prefix, int MaxDiscountBps, bool AllowNegativeStock);
     private sealed record Cashier(string Id, string Role);
     private sealed record Customer(string Id, long? CreditLimit);
-    private sealed record LineSpec(string ProductId, string VariantId, string Description,
+    private sealed record LineSpec(string ProductId, string ItemId, string Description,
         long Quantity, long UnitPrice, long CostPrice, long Discount);
     private sealed record Pay(string Method, long Amount, string? Reference);
     private sealed record Cart(IReadOnlyList<LineSpec> Items, long[] LineTotals, long Gross, long LineDiscounts,
@@ -112,7 +112,7 @@ public sealed class SalesService(
         // total requested per item across all lines (an item may appear on several lines)
         var requested = new Dictionary<string, long>(StringComparer.Ordinal);
         foreach (var l in lines.EnumerateArray())
-            if (l.ValueKind == JsonValueKind.Object && Prop(l, "variantId") is { ValueKind: JsonValueKind.String } v)
+            if (l.ValueKind == JsonValueKind.Object && Prop(l, "itemId") is { ValueKind: JsonValueKind.String } v)
             {
                 var key = v.GetString()!;
                 requested[key] = requested.GetValueOrDefault(key) + (Validate.TryGetSafeInteger(Prop(l, "quantity"), out var q) ? q : 0);
@@ -128,19 +128,19 @@ public sealed class SalesService(
             idx++;
             if (l.ValueKind != JsonValueKind.Object) throw Validate.Invalid(field, "Each line must be an object");
 
-            var variantId = OptId(l, "variantId", field) ?? throw Validate.Invalid(field, "Each line needs a variantId");
+            var itemId = OptId(l, "itemId", field) ?? throw Validate.Invalid(field, "Each line needs an itemId");
             var quantity = Validate.IntIn(Prop(l, "quantity"), $"{field}.quantity", 1, 1_000_000);
             var discountEl = Prop(l, "discountAmount");
             var discount = Validate.IsNullish(discountEl) ? 0 : Validate.DiscountMoney(discountEl, $"{field}.discountAmount");
 
             var v = db.Query(
-                    @"SELECT av.id, av.product_id, av.model, av.colour, av.sale_price, av.cost_price, av.is_active, p.brand, p.name,
+                    @"SELECT it.id, it.product_id, it.model, it.colour, it.sale_price, it.cost_price, it.is_active, p.brand, p.name,
                              COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm
-                                       WHERE sm.variant_id = av.id AND sm.branch_id = ?), 0) AS on_hand
-                      FROM accessory_variants av JOIN products p ON p.id = av.product_id WHERE av.id = ?",
-                    shop.BranchId, variantId).FirstOrDefault();
+                                       WHERE sm.item_id = it.id AND sm.branch_id = ?), 0) AS on_hand
+                      FROM items it JOIN products p ON p.id = it.product_id WHERE it.id = ?",
+                    shop.BranchId, itemId).FirstOrDefault();
             if (v is null || v.Lng("is_active") == 0)
-                throw new ServiceException("NOT_FOUND", "Accessory not found", new Dictionary<string, object?> { ["lineNo"] = lineNo });
+                throw new ServiceException("NOT_FOUND", "Item not found", new Dictionary<string, object?> { ["lineNo"] = lineNo });
 
             var vid = v.Str("id");
             var cum = cumulative.GetValueOrDefault(vid) + quantity;
@@ -153,7 +153,7 @@ public sealed class SalesService(
                     ["lineNo"] = lineNo,
                 });
             items.Add(new LineSpec(v.Str("product_id"), vid,
-                Slice200(VariantLabel(v.Str("brand"), v.Str("name"), v.StrN("model"), v.StrN("colour"))), quantity,
+                Slice200(ItemLabel(v.Str("brand"), v.Str("name"), v.StrN("model"), v.StrN("colour"))), quantity,
                 v.Lng("sale_price"), v.Lng("cost_price"), discount));
         }
 
@@ -199,7 +199,7 @@ public sealed class SalesService(
                 var createdAt = Math.Max(_clock(), head?.Lng("created_at") ?? 0);   // invoices never go back in time
 
                 var lines = cart.Items.Select((it, i) => new InvoiceLine(ids.Next(), saleId, i + 1, it.ProductId,
-                    it.VariantId, it.Description, it.Quantity, it.UnitPrice, it.CostPrice, it.Discount, cart.LineTotals[i], createdAt)).ToList();
+                    it.ItemId, it.Description, it.Quantity, it.UnitPrice, it.CostPrice, it.Discount, cart.LineTotals[i], createdAt)).ToList();
                 var payments = pays.Select(p => new InvoicePayment(ids.Next(), saleId, p.Method, p.Amount, p.Reference, createdAt)).ToList();
                 var unsealed = new Invoice(saleId, shop.DeviceId, seq, FormatInvoiceNo(shop.Prefix, seq), "sale", null, shop.BranchId,
                     cart.Customer?.Id, cashierId, cart.Subtotal, cart.InvoiceDiscount, cart.Total, note, createdAt, 1,
@@ -221,10 +221,10 @@ public sealed class SalesService(
                 };
                 foreach (var l in lines)
                     batch.Add(new("""
-                        INSERT INTO sale_lines (id, sale_id, line_no, product_id, phone_unit_id, variant_id, description, quantity,
-                          unit_price, cost_price, discount_amount, line_total, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        INSERT INTO sale_lines (id, sale_id, line_no, product_id, item_id, description, quantity,
+                          unit_price, cost_price, discount_amount, line_total, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                         """,
-                        [l.Id, l.SaleId, l.LineNo, l.ProductId, null, l.VariantId, l.Description, l.Quantity,
+                        [l.Id, l.SaleId, l.LineNo, l.ProductId, l.ItemId, l.Description, l.Quantity,
                          l.UnitPrice, l.CostPrice, l.DiscountAmount, l.LineTotal, l.CreatedAt]));
                 foreach (var p in payments)
                     batch.Add(new("INSERT INTO payments (id, sale_id, method, amount, reference, created_at) VALUES (?,?,?,?,?,?)",
@@ -235,15 +235,15 @@ public sealed class SalesService(
                 {
                     var m = new
                     {
-                        id = ids.Next(), branchId = shop.BranchId, type = "sale", variantId = l.VariantId,
+                        id = ids.Next(), branchId = shop.BranchId, type = "sale", itemId = l.ItemId,
                         quantity = -l.Quantity, unitCost = (long?)l.CostPrice, refType = "sale", refId = invoice.Id,
                         reason = (string?)null, createdBy = cashierId, createdAt,
                     };
                     batch.Add(new("""
-                        INSERT INTO stock_movements (id, branch_id, type, phone_unit_id, variant_id, quantity, unit_cost,
-                          ref_type, ref_id, reason, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                        INSERT INTO stock_movements (id, branch_id, type, item_id, quantity, unit_cost,
+                          ref_type, ref_id, reason, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)
                         """,
-                        [m.id, m.branchId, m.type, null, m.variantId, m.quantity, m.unitCost, m.refType, m.refId, m.reason, m.createdBy, m.createdAt]));
+                        [m.id, m.branchId, m.type, m.itemId, m.quantity, m.unitCost, m.refType, m.refId, m.reason, m.createdBy, m.createdAt]));
                     Emit(batch, "stock_movement", m.id, m, createdAt);
                 }
 
@@ -309,7 +309,7 @@ public sealed class SalesService(
         var s = db.Query("SELECT * FROM sales WHERE id = ?", id).FirstOrDefault();
         if (s is null) return null;
         var lines = db.Query("SELECT * FROM sale_lines WHERE sale_id = ? ORDER BY line_no", id).Select(l => new InvoiceLine(
-            l.Str("id"), l.Str("sale_id"), (int)l.Lng("line_no"), l.Str("product_id"), l.Str("variant_id"),
+            l.Str("id"), l.Str("sale_id"), (int)l.Lng("line_no"), l.Str("product_id"), l.Str("item_id"),
             l.Str("description"), l.Lng("quantity"), l.Lng("unit_price"), l.Lng("cost_price"), l.Lng("discount_amount"),
             l.Lng("line_total"), l.Lng("created_at"))).ToList();
         var pays = db.Query("SELECT * FROM payments WHERE sale_id = ? ORDER BY id", id).Select(p => new InvoicePayment(
@@ -340,7 +340,7 @@ public sealed class SalesService(
     private static string Join(string separator, params string?[] parts) =>
         string.Join(separator, parts.Where(p => !string.IsNullOrEmpty(p)));
 
-    private static string VariantLabel(string brand, string name, string? model, string? colour)
+    private static string ItemLabel(string brand, string name, string? model, string? colour)
     {
         var extra = Join(", ", model, colour);
         return Join(" ", $"{brand} {name}", extra == "" ? null : $"({extra})");

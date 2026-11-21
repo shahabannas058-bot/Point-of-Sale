@@ -14,7 +14,7 @@ const settings: ShopSettings = {
 const shop = { branchName: 'Main' };
 
 interface LineIn {
-  variantId: string;
+  itemId: string;
   description: string;
   quantity: number;
   unitScale: 1 | 1000;
@@ -52,7 +52,7 @@ describe('buildReceiptModel with units', () => {
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'pens',
+          itemId: 'pens',
           description: 'Pen',
           quantity: 3,
           unitScale: 1,
@@ -77,7 +77,7 @@ describe('buildReceiptModel with units', () => {
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'chini',
+          itemId: 'chini',
           description: 'Chini loose',
           quantity: 1250,
           unitScale: 1000,
@@ -97,11 +97,11 @@ describe('buildReceiptModel with units', () => {
     });
   });
 
-  it('uses the unit label of the variant when it is known (litres)', () => {
+  it('uses the unit label of the item when it is known (litres)', () => {
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'oil',
+          itemId: 'oil',
           description: 'Cooking oil loose',
           quantity: 500,
           unitScale: 1000,
@@ -120,7 +120,7 @@ describe('buildReceiptModel with units', () => {
     const m = buildReceiptModel(
       view('return', [
         {
-          variantId: 'chini',
+          itemId: 'chini',
           description: 'Chini loose',
           quantity: -500,
           unitScale: 1000,
@@ -142,7 +142,7 @@ describe('buildReceiptModel: a weight round-off is not printed as a discount', (
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'chawal',
+          itemId: 'chawal',
           description: 'Chawal Basmati',
           quantity: 1316,
           unitScale: 1000,
@@ -164,7 +164,7 @@ describe('buildReceiptModel: a weight round-off is not printed as a discount', (
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'chawal',
+          itemId: 'chawal',
           description: 'Chawal Basmati',
           quantity: 2000,
           unitScale: 1000,

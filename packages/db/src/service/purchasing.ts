@@ -26,13 +26,13 @@ import {
   insertMovement,
   insertPurchase,
   insertSupplier,
-  loadVariantRec,
+  loadItemRec,
   requireSupplier,
   supplierBalance,
-  updateVariant,
+  updateItem,
   type PurchaseRec,
   type SupplierRec,
-  type VariantRec,
+  type ItemRec,
 } from './queries';
 
 const NON_KHATA = PaymentMethodSchema.exclude(['khata']);
@@ -84,43 +84,42 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
     async receive(i) {
       const session = requirePermission(ctx, 'receive_stock');
       const shop = await loadShop(ctx.driver);
-      const accessories = i.accessories ?? [];
-      if (accessories.length === 0)
-        throw invalid('items', 'A purchase needs at least one item line');
+      const items = i.items ?? [];
+      if (items.length === 0) throw invalid('items', 'A purchase needs at least one item line');
       const referenceNo = optText(i.referenceNo, 'referenceNo', 60);
       const note = optText(i.note, 'note', 500);
       // validate everything up front and compute the total
       let total = 0;
       const lines: {
-        variantId: string;
+        itemId: string;
         quantity: number;
         unitCost: number;
         batch: { batchNo: string | null; expiryDate: string } | null;
       }[] = [];
-      for (const [idx, a] of accessories.entries()) {
-        if (typeof a.variantId !== 'string')
-          throw invalid(`accessories.${idx}.variantId`, 'variantId is required');
-        const quantity = intIn(a.quantity, `accessories.${idx}.quantity`, 1, MAX_QUANTITY_ANY);
-        const unitCost = money(a.unitCost, `accessories.${idx}.unitCost`);
-        const variant = await loadVariantRec(ctx.driver, a.variantId); // NOT_FOUND
-        if (quantity > maxQuantity(variant.unitScale))
-          throw invalid(`accessories.${idx}.quantity`, 'Quantity is larger than this item allows');
+      for (const [idx, a] of items.entries()) {
+        if (typeof a.itemId !== 'string')
+          throw invalid(`items.${idx}.itemId`, 'itemId is required');
+        const quantity = intIn(a.quantity, `items.${idx}.quantity`, 1, MAX_QUANTITY_ANY);
+        const unitCost = money(a.unitCost, `items.${idx}.unitCost`);
+        const rec = await loadItemRec(ctx.driver, a.itemId); // NOT_FOUND
+        if (quantity > maxQuantity(rec.unitScale))
+          throw invalid(`items.${idx}.quantity`, 'Quantity is larger than this item allows');
         let batch: { batchNo: string | null; expiryDate: string } | null = null;
         if (a.batch !== undefined && a.batch !== null) {
           assertModule(shop.modules, 'batch_expiry');
           if (!isValidYmd(a.batch.expiryDate))
             throw invalid(
-              `accessories.${idx}.batch.expiryDate`,
+              `items.${idx}.batch.expiryDate`,
               'Expiry date must be a real date written as YYYY-MM-DD',
             );
           batch = {
-            batchNo: optText(a.batch.batchNo, `accessories.${idx}.batch.batchNo`, 60),
+            batchNo: optText(a.batch.batchNo, `items.${idx}.batch.batchNo`, 60),
             expiryDate: a.batch.expiryDate,
           };
         }
         // unitCost is per priced unit (per kg for weighted items), quantity is in base units (grams)
-        total += lineGross(quantity, unitCost, variant.unitScale);
-        lines.push({ variantId: a.variantId, quantity, unitCost, batch });
+        total += lineGross(quantity, unitCost, rec.unitScale);
+        lines.push({ itemId: a.itemId, quantity, unitCost, batch });
       }
       const totalPaisa: Paisa = paisa(total);
       let paid = 0;
@@ -151,15 +150,15 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
         };
         insertPurchase(b, purchase);
 
-        const variants = new Map<string, VariantRec>();
+        const itemRecs = new Map<string, ItemRec>();
         for (const l of lines) {
-          const cur = variants.get(l.variantId) ?? (await loadVariantRec(ctx.driver, l.variantId));
-          variants.set(l.variantId, { ...cur, costPrice: l.unitCost, updatedAt: at });
+          const cur = itemRecs.get(l.itemId) ?? (await loadItemRec(ctx.driver, l.itemId));
+          itemRecs.set(l.itemId, { ...cur, costPrice: l.unitCost, updatedAt: at });
           let batchId: string | null = null;
           if (l.batch !== null) {
             const rec: BatchRec = {
               id: ctx.newId(),
-              variantId: l.variantId,
+              itemId: l.itemId,
               branchId: shop.branchId,
               batchNo: l.batch.batchNo,
               expiryDate: l.batch.expiryDate,
@@ -174,7 +173,7 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
             id: ctx.newId(),
             branchId: shop.branchId,
             type: 'purchase',
-            variantId: l.variantId,
+            itemId: l.itemId,
             batchId,
             quantity: l.quantity,
             unitCost: l.unitCost,
@@ -185,7 +184,7 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
             createdAt: at,
           });
         }
-        for (const v of variants.values()) updateVariant(b, v); // latest cost price
+        for (const v of itemRecs.values()) updateItem(b, v); // latest cost price
 
         if (totalPaisa > 0)
           insertLedger(b, {

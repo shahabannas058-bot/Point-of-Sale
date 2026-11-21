@@ -150,12 +150,12 @@ describe('historyDateRange', () => {
 
 describe('itemRefKey / cartLineItemRef / SUMMARY_ROWS', () => {
   it('keys are stable per item', () => {
-    expect(itemRefKey({ variantId: 'a' })).toBe('v:a');
-    expect(itemRefKey({ variantId: 'b' })).not.toBe(itemRefKey({ variantId: 'a' }));
+    expect(itemRefKey({ itemId: 'a' })).toBe('v:a');
+    expect(itemRefKey({ itemId: 'b' })).not.toBe(itemRefKey({ itemId: 'a' }));
   });
 
   it('cart lines map to their item', () => {
-    expect(cartLineItemRef({ variantId: 'v1' })).toEqual({ variantId: 'v1' });
+    expect(cartLineItemRef({ itemId: 'v1' })).toEqual({ itemId: 'v1' });
   });
 
   it('summary chips are in Abuzar order and all labelled', () => {
@@ -229,7 +229,7 @@ describe('ItemHistoryDialog rendering', () => {
       withRuntime(
         fakeService(),
         createElement(ItemHistoryDialog, {
-          item: { variantId: 'v1' },
+          item: { itemId: 'v1' },
           label: 'Shan Masala 50 g',
           unitScale: 1,
           unitLabel: 'pcs',

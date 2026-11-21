@@ -219,7 +219,7 @@ describe('runStockImport', () => {
     expect(failed?.status === 'failed' && failed.error).toBeInstanceOf(ServiceError);
   });
 
-  it('passes the row to the service in the shape createAccessory expects', async () => {
+  it('passes the row to the service in the shape createItem expects', async () => {
     const seen: unknown[] = [];
     await runStockImport(
       (i) => {

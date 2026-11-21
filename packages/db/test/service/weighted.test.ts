@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { verifyChain } from '@pos/core';
-import { MODULE_IDS, type BusinessType, type VariantView } from '@pos/shared';
+import { MODULE_IDS, type BusinessType, type ItemView } from '@pos/shared';
 import {
   PINS,
   expectCode,
@@ -27,8 +27,8 @@ async function shopOf(): Promise<TestService> {
 
 const CHINI = { cost: 25_000, price: 28_550 }; // Rs 250.00 and Rs 285.50 per kg
 
-async function addChini(t: TestService, openingGrams = 50_000): Promise<VariantView> {
-  return t.svc.catalog.createAccessory({
+async function addChini(t: TestService, openingGrams = 50_000): Promise<ItemView> {
+  return t.svc.catalog.createItem({
     product: { brand: 'Loose', name: 'Chini (sugar)', category: 'Grocery' },
     sku: 'CHINI-LOOSE',
     costPrice: CHINI.cost,
@@ -39,8 +39,8 @@ async function addChini(t: TestService, openingGrams = 50_000): Promise<VariantV
   });
 }
 
-async function addPens(t: TestService, qty = 20): Promise<VariantView> {
-  return t.svc.catalog.createAccessory({
+async function addPens(t: TestService, qty = 20): Promise<ItemView> {
+  return t.svc.catalog.createItem({
     product: { brand: 'Reynolds', name: 'Pen' },
     sku: 'PEN-BLUE',
     costPrice: 1_500,
@@ -102,7 +102,7 @@ describe('business type and modules', () => {
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Mandi Traders' });
     const ok = await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      accessories: [{ variantId: chini.variant.id, quantity: 10_000, unitCost: CHINI.cost }],
+      items: [{ itemId: chini.item.id, quantity: 10_000, unitCost: CHINI.cost }],
     });
     expect(ok.purchase.total).toBe(250_000); // 10 kg x Rs 250
   });
@@ -120,7 +120,7 @@ describe('business type and modules', () => {
     await addChini(t);
     await t.driver.exec("update app_meta set value = '' where key = 'modules'");
     await expectCode(
-      t.svc.catalog.createAccessory({
+      t.svc.catalog.createItem({
         product: { brand: 'Loose', name: 'Atta' },
         sku: 'ATTA-LOOSE',
         costPrice: 1,
@@ -134,7 +134,7 @@ describe('business type and modules', () => {
   it('an unknown unit is rejected', async () => {
     const t = await shopOf();
     await expectCode(
-      t.svc.catalog.createAccessory({
+      t.svc.catalog.createItem({
         product: { brand: 'Loose', name: 'Atta' },
         sku: 'ATTA',
         costPrice: 1,
@@ -150,15 +150,15 @@ describe('selling loose goods by weight', () => {
   it('stores the unit and counts stock in grams', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
-    expect(chini.variant).toMatchObject({ unitScale: 1000, unitLabel: 'kg', reorderLevel: 5_000 });
+    expect(chini.item).toMatchObject({ unitScale: 1000, unitLabel: 'kg', reorderLevel: 5_000 });
     expect(chini.onHand).toBe(50_000);
-    expect(await stockSum(t.driver, { variantId: chini.variant.id })).toBe(50_000);
+    expect(await stockSum(t.driver, { itemId: chini.item.id })).toBe(50_000);
   });
 
   it('prices 1.25 kg at Rs 285.50/kg exactly: 35,688 paisa, hash version 2, stock down 1,250 g', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
-    const lines = [{ variantId: chini.variant.id, quantity: 1250 }];
+    const lines = [{ itemId: chini.item.id, quantity: 1250 }];
 
     const preview = await t.svc.checkout.preview({ lines });
     expect(first(preview.lines)).toMatchObject({
@@ -179,7 +179,7 @@ describe('selling loose goods by weight', () => {
       costPrice: CHINI.cost,
       lineTotal: 35_688,
     });
-    expect(await stockSum(t.driver, { variantId: chini.variant.id })).toBe(48_750);
+    expect(await stockSum(t.driver, { itemId: chini.item.id })).toBe(48_750);
 
     const reloaded = await t.svc.checkout.getInvoice(invoice.id);
     expect(reloaded.invoice).toEqual(invoice);
@@ -190,8 +190,8 @@ describe('selling loose goods by weight', () => {
     const chini = await addChini(t);
     const pens = await addPens(t);
     const invoice = await sellCash(t, [
-      { variantId: pens.variant.id, quantity: 3 },
-      { variantId: chini.variant.id, quantity: 1250 },
+      { itemId: pens.item.id, quantity: 3 },
+      { itemId: chini.item.id, quantity: 1250 },
     ]);
     expect(invoice.lines.map((l) => [l.unitScale, l.lineTotal])).toEqual([
       [1, 7_500],
@@ -204,7 +204,7 @@ describe('selling loose goods by weight', () => {
     const t = await shopOf();
     const chini = await addChini(t);
     const invoice = await sellCash(t, [
-      { variantId: chini.variant.id, quantity: 2500, discountAmount: 1_000 },
+      { itemId: chini.item.id, quantity: 2500, discountAmount: 1_000 },
     ]);
     // 2.5 kg x 285.50 = 713.75 -> 71,375 paisa, less Rs 10
     expect(first(invoice.lines)).toMatchObject({ lineTotal: 70_375, discountAmount: 1_000 });
@@ -214,7 +214,7 @@ describe('selling loose goods by weight', () => {
     const t = await shopOf();
     const chini = await addChini(t);
     const e = await expectCode(
-      t.svc.checkout.preview({ lines: [{ variantId: chini.variant.id, quantity: 60_000 }] }),
+      t.svc.checkout.preview({ lines: [{ itemId: chini.item.id, quantity: 60_000 }] }),
       'STOCK_INSUFFICIENT',
     );
     expect(e.details).toMatchObject({ onHand: 50_000 });
@@ -226,11 +226,11 @@ describe('selling loose goods by weight', () => {
     const pens = await addPens(t);
     await t.svc.settings.update({ allowNegativeStock: true });
     await expectCode(
-      t.svc.checkout.preview({ lines: [{ variantId: pens.variant.id, quantity: 1_000_001 }] }),
+      t.svc.checkout.preview({ lines: [{ itemId: pens.item.id, quantity: 1_000_001 }] }),
       'VALIDATION',
     );
     await expectCode(
-      t.svc.checkout.preview({ lines: [{ variantId: chini.variant.id, quantity: 100_000_001 }] }),
+      t.svc.checkout.preview({ lines: [{ itemId: chini.item.id, quantity: 100_000_001 }] }),
       'VALIDATION',
     );
   });
@@ -238,7 +238,7 @@ describe('selling loose goods by weight', () => {
   it('a partial return refunds the rounded share and puts the grams back', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
-    const sale = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
+    const sale = await sellCash(t, [{ itemId: chini.item.id, quantity: 1250 }]);
     const line = first(sale.lines);
 
     const preview = await t.svc.checkout.previewReturn(sale.id, [
@@ -259,7 +259,7 @@ describe('selling loose goods by weight', () => {
     });
     expect(ret).toMatchObject({ kind: 'return', total: -14_275, hashVersion: 2 });
     expect(first(ret.lines)).toMatchObject({ quantity: -500, unitScale: 1000, lineTotal: -14_275 });
-    expect(await stockSum(t.driver, { variantId: chini.variant.id })).toBe(49_250);
+    expect(await stockSum(t.driver, { itemId: chini.item.id })).toBe(49_250);
 
     // the rest: 750 g -> 21,412.5 -> 21,413; the two refunds add up to the original 35,688
     const rest = await t.svc.checkout.previewReturn(sale.id, [{ lineId: line.id, quantity: 750 }]);
@@ -270,7 +270,7 @@ describe('selling loose goods by weight', () => {
   it('cannot return more grams than were sold', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
-    const sale = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
+    const sale = await sellCash(t, [{ itemId: chini.item.id, quantity: 1250 }]);
     await expectCode(
       t.svc.checkout.previewReturn(sale.id, [{ lineId: first(sale.lines).id, quantity: 1251 }]),
       'ALREADY_RETURNED',
@@ -280,20 +280,20 @@ describe('selling loose goods by weight', () => {
   it('voiding a weighted sale mirrors it exactly and restores the stock', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
-    const sale = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
+    const sale = await sellCash(t, [{ itemId: chini.item.id, quantity: 1250 }]);
     const voided = await t.svc.checkout.voidSale({ originalSaleId: sale.id, reason: 'galat bill' });
     expect(voided).toMatchObject({ kind: 'void', total: -35_688 });
-    expect(await stockSum(t.driver, { variantId: chini.variant.id })).toBe(50_000);
+    expect(await stockSum(t.driver, { itemId: chini.item.id })).toBe(50_000);
   });
 
   it('keeps the chain valid and every integrity check at zero', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
     const pens = await addPens(t);
-    const a = await sellCash(t, [{ variantId: chini.variant.id, quantity: 333 }]);
+    const a = await sellCash(t, [{ itemId: chini.item.id, quantity: 333 }]);
     await sellCash(t, [
-      { variantId: pens.variant.id, quantity: 2 },
-      { variantId: chini.variant.id, quantity: 4_150 },
+      { itemId: pens.item.id, quantity: 2 },
+      { itemId: chini.item.id, quantity: 4_150 },
     ]);
     await t.svc.checkout.voidSale({ originalSaleId: a.id, reason: 'test' });
     expect(await t.svc.integrity.verifyChain()).toMatchObject({ ok: true, count: 3 });
@@ -306,7 +306,7 @@ describe('selling loose goods by weight', () => {
   it('reports use the unit scale for gross, cost and profit', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
-    await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
+    await sellCash(t, [{ itemId: chini.item.id, quantity: 1250 }]);
     const s = await t.svc.reports.summary({ fromMs: 0, toMs: Number.MAX_SAFE_INTEGER });
     expect(s.grossSales).toBe(35_688);
     expect(s.netSales).toBe(35_688);
@@ -318,22 +318,22 @@ describe('selling loose goods by weight', () => {
     const t = await shopOf();
     const chini = await addChini(t, 6_000); // 6 kg, reorder at 5 kg
     expect(chini.lowStock).toBe(false);
-    await sellCash(t, [{ variantId: chini.variant.id, quantity: 1_500 }]); // 4.5 kg left
-    const list = await t.svc.catalog.listAccessories({ lowStockOnly: true });
-    expect(list.map((v) => v.variant.sku)).toEqual(['CHINI-LOOSE']);
+    await sellCash(t, [{ itemId: chini.item.id, quantity: 1_500 }]); // 4.5 kg left
+    const list = await t.svc.catalog.listItems({ lowStockOnly: true });
+    expect(list.map((v) => v.item.sku)).toEqual(['CHINI-LOOSE']);
   });
 
   it('adjustments are in grams and capped per unit', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
     const after = await t.svc.catalog.adjustStock({
-      variantId: chini.variant.id,
+      itemId: chini.item.id,
       delta: -250,
       reason: 'sookh gaya',
     });
     expect(after.onHand).toBe(49_750);
     await expectCode(
-      t.svc.catalog.adjustStock({ variantId: chini.variant.id, delta: 100_000_001, reason: 'x' }),
+      t.svc.catalog.adjustStock({ itemId: chini.item.id, delta: 100_000_001, reason: 'x' }),
       'VALIDATION',
     );
   });
@@ -347,13 +347,13 @@ describe('buying loose goods from a supplier', () => {
     // 333 g at Rs 249.99/kg = 8,324.667 paisa -> 8,325
     const result = await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      accessories: [{ variantId: chini.variant.id, quantity: 333, unitCost: 24_999 }],
+      items: [{ itemId: chini.item.id, quantity: 333, unitCost: 24_999 }],
     });
     expect(result.purchase.total).toBe(8_325);
     expect(result.supplierBalance).toBe(8_325);
-    expect(await stockSum(t.driver, { variantId: chini.variant.id })).toBe(333);
-    const [row] = await t.svc.catalog.listAccessories({ q: 'CHINI' });
-    expect(row?.variant.costPrice).toBe(24_999);
+    expect(await stockSum(t.driver, { itemId: chini.item.id })).toBe(333);
+    const [row] = await t.svc.catalog.listItems({ q: 'CHINI' });
+    expect(row?.item.costPrice).toBe(24_999);
   });
 
   it('a 25 kg bag at Rs 250/kg is Rs 6,250', async () => {
@@ -362,7 +362,7 @@ describe('buying loose goods from a supplier', () => {
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Mandi Traders' });
     const result = await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      accessories: [{ variantId: chini.variant.id, quantity: 25_000, unitCost: CHINI.cost }],
+      items: [{ itemId: chini.item.id, quantity: 25_000, unitCost: CHINI.cost }],
       paidNow: { method: 'cash', amount: 500_000 },
     });
     expect(result.purchase.total).toBe(625_000);
@@ -375,7 +375,7 @@ describe('buying loose goods from a supplier', () => {
     await expectCode(
       t.svc.purchasing.receive({
         supplierId: supplier.id,
-        accessories: [{ variantId: t.newId(), quantity: 1, unitCost: 1 }],
+        items: [{ itemId: t.newId(), quantity: 1, unitCost: 1 }],
       }),
       'NOT_FOUND',
     );
@@ -386,8 +386,8 @@ describe('the chain still verifies from raw rows', () => {
   it('re-reading weighted invoices from SQLite gives the same hashes', async () => {
     const t = await shopOf();
     const chini = await addChini(t);
-    const a = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
-    const b = await sellCash(t, [{ variantId: chini.variant.id, quantity: 333 }]);
+    const a = await sellCash(t, [{ itemId: chini.item.id, quantity: 1250 }]);
+    const b = await sellCash(t, [{ itemId: chini.item.id, quantity: 333 }]);
     const { readInvoices } = await import('../helpers');
     const stored = await readInvoices(t.driver);
     expect(stored.map((i) => i.hash)).toEqual([a.hash, b.hash]);

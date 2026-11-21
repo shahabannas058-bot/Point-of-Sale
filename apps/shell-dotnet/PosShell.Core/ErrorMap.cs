@@ -38,6 +38,10 @@ public static class ErrorMap
 
         if (Has(msg, "FOREIGN KEY constraint failed"))
             return new("NOT_FOUND", "A referenced record was not found", null, inner);
+        // triggers of migration 0009: "items: unit_scale must match unit_label", "sale_lines: unit_scale must match the
+        // item", "items: unit cannot change once stock exists"
+        if (Has(msg, "unit_scale must match") || Has(msg, "unit cannot change once stock exists"))
+            return new("DB_CONSTRAINT", "The unit of this item cannot be used or changed this way", null, inner);
         if (Has(msg, "CHECK constraint failed") || Has(msg, "NOT NULL constraint failed"))
             return new("DB_CONSTRAINT", "The data was rejected by a database rule", null, inner);
 

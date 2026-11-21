@@ -4,6 +4,7 @@ import {
   canonicalize,
   computeInvoiceHash,
   formatInvoiceNo,
+  invoiceHashPayload,
   sealInvoice,
   sha256Hex,
   verifyChain,
@@ -84,6 +85,16 @@ describe('invoice hash', () => {
     expect(sealed.hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('keeps the legacy line keys "variantId" (= itemId) and "phoneUnitId": null in the hashed data', () => {
+    const inv = makeInvoice();
+    const text = canonicalize(invoiceHashPayload(inv));
+    const line = inv.lines[0];
+    if (line === undefined) throw new Error('fixture has no line');
+    expect(text).toContain(`"phoneUnitId":null,"productId":"${line.productId}"`);
+    expect(text).toContain(`"variantId":"${line.itemId}"`);
+    expect(text).not.toContain('"itemId"');
+  });
+
   it('matches the golden value for a frozen invoice', () => {
     // Fixed literal ids and numbers: any change to the hashed fields, their names, the sort rule,
     // the domain prefix or the canonical form changes this value and must be a conscious v2 bump.
@@ -109,7 +120,7 @@ describe('invoice hash', () => {
           saleId: '01993a00-0000-7000-8000-000000000001',
           lineNo: 1,
           productId: '01993a00-0000-7000-8000-000000000006',
-          variantId: '01993a00-0000-7000-8000-000000000007',
+          itemId: '01993a00-0000-7000-8000-000000000007',
           description: 'Fast Charger 25W',
           quantity: 2,
           unitPrice: 50000,
@@ -123,7 +134,7 @@ describe('invoice hash', () => {
           saleId: '01993a00-0000-7000-8000-000000000001',
           lineNo: 2,
           productId: '01993a00-0000-7000-8000-000000000006',
-          variantId: '01993a00-0000-7000-8000-000000000008',
+          itemId: '01993a00-0000-7000-8000-000000000008',
           description: 'Braided Cable 2m é',
           quantity: 1,
           unitPrice: 199950,

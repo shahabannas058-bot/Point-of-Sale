@@ -21,9 +21,9 @@ export interface ShopIds {
   customerId: string;
   supplierId: string;
   productId: string; // the cable product
-  accessoryProductId: string; // the charger product
-  variantId: string; // the charger
-  variant2Id: string; // the cable
+  itemProductId: string; // the charger product
+  itemId: string; // the charger
+  item2Id: string; // the cable
 }
 
 export const SHOP: ShopIds = {
@@ -34,9 +34,9 @@ export const SHOP: ShopIds = {
   customerId: FIXTURE_IDS.customerId,
   supplierId: newId(),
   productId: FIXTURE_IDS.productId,
-  accessoryProductId: newId(),
-  variantId: FIXTURE_IDS.variantId,
-  variant2Id: FIXTURE_IDS.variant2Id,
+  itemProductId: newId(),
+  itemId: FIXTURE_IDS.itemId,
+  item2Id: FIXTURE_IDS.item2Id,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ export const movementRow = (over: Row = {}): Row => ({
   id: newId(),
   branch_id: SHOP.branchId,
   type: 'purchase',
-  variant_id: SHOP.variantId,
+  item_id: SHOP.itemId,
   quantity: 1,
   unit_cost: null,
   ref_type: null,
@@ -107,8 +107,8 @@ export const lineRow = (saleId: string, over: Row = {}): Row => ({
   id: newId(),
   sale_id: saleId,
   line_no: 1,
-  product_id: SHOP.accessoryProductId,
-  variant_id: SHOP.variantId,
+  product_id: SHOP.itemProductId,
+  item_id: SHOP.itemId,
   description: 'Fast Charger 25W',
   quantity: 1,
   unit_price: 1000,
@@ -183,7 +183,7 @@ export async function createMigratedDb(filename = ':memory:'): Promise<NodeSqlit
 
 /**
  * Inserts the reference data every test needs: 2 branches, a cashier, a customer, a supplier,
- * two item products with one variant each (a charger and a cable, no stock yet).
+ * two products with one item each (a charger and a cable, no stock yet).
  * The ids match `makeInvoice` / `buildChain` fixtures, so fixture invoices satisfy every foreign key.
  */
 export async function seedShop(db: SqlDriver): Promise<ShopIds> {
@@ -227,7 +227,7 @@ export async function seedShop(db: SqlDriver): Promise<ShopIds> {
       updated_at: now,
     }),
     rowStatement('products', {
-      id: SHOP.accessoryProductId,
+      id: SHOP.itemProductId,
       kind: 'accessory',
       brand: 'Generic',
       name: 'Fast Charger 25W',
@@ -235,9 +235,9 @@ export async function seedShop(db: SqlDriver): Promise<ShopIds> {
       created_at: now,
       updated_at: now,
     }),
-    rowStatement('accessory_variants', {
-      id: SHOP.variantId,
-      product_id: SHOP.accessoryProductId,
+    rowStatement('items', {
+      id: SHOP.itemId,
+      product_id: SHOP.itemProductId,
       sku: 'CHG-25W-BLK',
       barcode: '8961234567890',
       model: 'Universal',
@@ -248,8 +248,8 @@ export async function seedShop(db: SqlDriver): Promise<ShopIds> {
       created_at: now,
       updated_at: now,
     }),
-    rowStatement('accessory_variants', {
-      id: SHOP.variant2Id,
+    rowStatement('items', {
+      id: SHOP.item2Id,
       product_id: SHOP.productId,
       sku: 'CBL-2M',
       barcode: '8961234567906',
@@ -272,12 +272,12 @@ export async function createSeededDb(): Promise<{ db: NodeSqliteDriver; ids: Sho
   return { db, ids };
 }
 
-/** Adds another accessory variant (for multi-item stock tests). */
-export async function addVariant(db: SqlDriver, sku: string): Promise<string> {
+/** Adds another item (for multi-item stock tests). */
+export async function addItem(db: SqlDriver, sku: string): Promise<string> {
   const id = newId();
-  await insertRow(db, 'accessory_variants', {
+  await insertRow(db, 'items', {
     id,
-    product_id: SHOP.accessoryProductId,
+    product_id: SHOP.itemProductId,
     sku,
     cost_price: 100,
     sale_price: 200,
@@ -329,7 +329,7 @@ export function invoiceStatements(inv: Invoice, options: InvoiceInsertOptions = 
         sale_id: l.saleId,
         line_no: l.lineNo,
         product_id: l.productId,
-        variant_id: l.variantId,
+        item_id: l.itemId,
         description: l.description,
         quantity: l.quantity,
         unit_price: l.unitPrice,
@@ -346,7 +346,7 @@ export function invoiceStatements(inv: Invoice, options: InvoiceInsertOptions = 
           movementRow({
             type: inv.kind === 'sale' ? 'sale' : 'return',
             branch_id: inv.branchId,
-            variant_id: l.variantId,
+            item_id: l.itemId,
             quantity: -l.quantity,
             ref_type: 'sale',
             ref_id: inv.id,
