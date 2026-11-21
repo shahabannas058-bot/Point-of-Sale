@@ -15,12 +15,14 @@ import {
 } from '@pos/shared';
 import { negPaisa, paisa } from '@pos/core';
 import { WriteBatch } from './batch';
+import { cashStamp } from './cash-book';
 import { insertBatch, type BatchRec } from './batches';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optPhone, optText, reqText } from './errors';
 import { mapRow, type Raw } from './mappers';
 import { loadShop } from './meta';
 import { assertModule } from './modules';
+import { olderThan } from './page-cursor';
 import {
   insertLedger,
   insertMovement,
@@ -135,7 +137,7 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
 
       const received = await ctx.lock(async () => {
         await requireSupplier(ctx.driver, i.supplierId);
-        const at = ctx.clock();
+        const at = await cashStamp(ctx, shop.branchId);
         const b = new WriteBatch(ctx.newId, at);
         const purchase: PurchaseRec = {
           id: ctx.newId(),
@@ -233,7 +235,7 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
       const note = optText(i.note, 'note', 500);
       await ctx.lock(async () => {
         await requireSupplier(ctx.driver, i.supplierId);
-        const at = ctx.clock();
+        const at = await cashStamp(ctx, (await loadShop(ctx.driver)).branchId);
         const b = new WriteBatch(ctx.newId, at);
         insertLedger(b, {
           id: ctx.newId(),
@@ -257,15 +259,15 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
       requirePermission(ctx, 'receive_stock');
       const supplier = await requireSupplier(ctx.driver, supplierId); // NOT_FOUND
       const limit = o.limit === undefined ? 100 : intIn(o.limit, 'limit', 1, 1000);
-      const before = o.beforeCreatedAt ?? null;
+      const older = olderThan(o);
       const rows = await ctx.driver.query<Raw>(
         `SELECT * FROM (
            SELECT le.*, p.reference_no AS reference_no,
              SUM(le.amount) OVER (ORDER BY le.created_at, le.id) AS running_balance
            FROM ledger_entries le LEFT JOIN purchases p ON p.id = le.purchase_id
            WHERE le.supplier_id = ?
-         ) WHERE (? IS NULL OR created_at < ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
-        [supplierId, before, before, limit],
+         ) WHERE ${older.sql} ORDER BY created_at DESC, id DESC LIMIT ?`,
+        [supplierId, ...older.params, limit],
       );
       const lines = rows.map((r): SupplierLedgerLine => {
         const { running_balance: running, reference_no: referenceNo, ...entry } = r;

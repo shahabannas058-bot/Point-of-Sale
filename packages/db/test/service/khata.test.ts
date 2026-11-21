@@ -191,6 +191,29 @@ describe('ledger and payments', () => {
     await expectCode(t.svc.khata.getLedger(t.newId()), 'NOT_FOUND');
   });
 
+  it('getLedger pages with beforeCreatedAt + beforeId do not drop entries that share a millisecond', async () => {
+    await t.loginAs('cash');
+    const at = t.clock.peek() + 5_000;
+    // three entries in the same ms (two tills, or fast clicks): fixture via SQL
+    for (const amount of [10_000, 20_000, 30_000])
+      await t.driver.exec(
+        `INSERT INTO ledger_entries (id, customer_id, type, amount, created_by, created_at)
+         VALUES ('${t.newId()}', '${t.ids.bilalId}', 'adjustment', ${amount}, '${t.ids.ownerId}', ${at})`,
+      );
+    const all = await t.svc.khata.getLedger(t.ids.bilalId);
+    const page1 = await t.svc.khata.getLedger(t.ids.bilalId, { limit: 2 });
+    const last = first(page1.lines.slice(-1)).entry;
+    const page2 = await t.svc.khata.getLedger(t.ids.bilalId, {
+      limit: 2,
+      beforeCreatedAt: last.createdAt,
+      beforeId: last.id,
+    });
+    expect([...page1.lines, ...page2.lines].map((l) => l.entry.id)).toEqual(
+      all.lines.map((l) => l.entry.id),
+    );
+    expect(first(page2.lines).runningBalance).toBe(10_000);
+  });
+
   it('the ledger table refuses edits and deletes (append-only)', async () => {
     await t.loginAs('cash');
     await bilalOwes(150_000);

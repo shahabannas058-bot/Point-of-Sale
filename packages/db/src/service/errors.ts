@@ -144,6 +144,12 @@ export function guardApi<T extends object>(api: T): T {
 export const invalid = (field: string, message: string): ServiceError =>
   new ServiceError('VALIDATION', message, { field });
 
+/** A nested input object (not null, not an array); a missing one would otherwise surface as INTERNAL. */
+export function assertObject(v: unknown, field: string): asserts v is object {
+  if (typeof v !== 'object' || v === null || Array.isArray(v))
+    throw invalid(field, `${field} is required`);
+}
+
 export function reqText(v: unknown, field: string, min: number, max: number): string {
   if (typeof v !== 'string') throw invalid(field, `${field} is required`);
   const t = v.trim();

@@ -100,6 +100,31 @@ describe('supplier ledger (getLedger)', () => {
     expect(page2.lines.map((l) => l.runningBalance)).toEqual([6_700_000, 8_700_000]);
   });
 
+  it('pages with beforeCreatedAt + beforeId keep both entries of a paid purchase (same timestamp)', async () => {
+    await t.loginAs('mgr');
+    const supplierId = await makeSupplier();
+    await receiveBig(supplierId); // purchase_credit + payment_made share one timestamp
+    const all = await t.svc.purchasing.getLedger(supplierId);
+    expect(all.lines).toHaveLength(2);
+    const page1 = await t.svc.purchasing.getLedger(supplierId, { limit: 1 });
+    const last = first(page1.lines).entry;
+    const page2 = await t.svc.purchasing.getLedger(supplierId, {
+      limit: 1,
+      beforeCreatedAt: last.createdAt,
+      beforeId: last.id,
+    });
+    expect([...page1.lines, ...page2.lines].map((l) => l.entry.id)).toEqual(
+      all.lines.map((l) => l.entry.id),
+    );
+    await expectCode(
+      t.svc.purchasing.getLedger(supplierId, {
+        beforeCreatedAt: last.createdAt,
+        beforeId: 7 as unknown as string,
+      }),
+      'VALIDATION',
+    );
+  });
+
   it('validates the limit, the supplier and the permission', async () => {
     await t.loginAs('mgr');
     const supplierId = await makeSupplier();

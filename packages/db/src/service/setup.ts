@@ -8,7 +8,7 @@ import {
 } from '@pos/shared';
 import { WriteBatch } from './batch';
 import type { Ctx } from './deps';
-import { guardApi, invalid, reqText } from './errors';
+import { assertObject, guardApi, invalid, reqText } from './errors';
 import { DEFAULT_CASHIER_MAX_DISCOUNT_BPS, META, isSetUp, loadShop, upsertMeta } from './meta';
 import { hashPin, validatePinFormat } from './pin';
 import { insertUser, type UserRec } from './queries';
@@ -38,6 +38,8 @@ export function createSetupApi(ctx: Ctx): SetupApi {
     async firstRun(input) {
       if (await isSetUp(ctx.driver))
         throw new ServiceError('ALREADY_SETUP', 'Shop is already set up');
+      assertObject(input, 'input');
+      assertObject(input.owner, 'owner');
       const shopName = reqText(input.shopName, 'shopName', 1, 100);
       const branchName = reqText(input.branchName, 'branchName', 1, 100);
       const prefix = typeof input.invoicePrefix === 'string' ? input.invoicePrefix.trim() : '';

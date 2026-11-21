@@ -125,6 +125,16 @@ export interface Session {
   user: User;
   startedAt: number;
 }
+/**
+ * Newest-first page of a ledger. For the next (older) page pass the last line's entry createdAt as beforeCreatedAt
+ * and its id as beforeId: entries that share a timestamp are then neither skipped nor repeated.
+ * beforeCreatedAt alone (no beforeId) means "strictly older than this time".
+ */
+export interface LedgerPageOptions {
+  limit?: number;
+  beforeCreatedAt?: number;
+  beforeId?: string;
+}
 export interface PartyBalance<T> {
   party: T;
   balance: Paisa;
@@ -375,10 +385,10 @@ export interface PurchasingApi {
     method: Exclude<PaymentMethod, 'khata'>;
     note?: string;
   }): Promise<Paisa>; // returns new balance
-  /** Newest first; running balance is cumulative per supplier. Needs receive_stock. */
+  /** Newest first (created_at, then id); running balance is cumulative per supplier. Needs receive_stock. */
   getLedger(
     supplierId: string,
-    o?: { limit?: number; beforeCreatedAt?: number },
+    o?: LedgerPageOptions,
   ): Promise<{ supplier: Supplier; balance: Paisa; lines: SupplierLedgerLine[] }>;
   /** What the shop owes in total, over suppliers with a positive balance. Needs receive_stock or view_reports. */
   totals(): Promise<{ payable: Paisa; suppliersOwed: number }>;
@@ -476,7 +486,11 @@ export interface CheckoutApi {
     q?: string /* invoiceNo */;
     customerId?: string;
     kind?: SaleKind;
+    /** Default 100, max 500. Newest first (created_at, then id). */
     limit?: number;
+    /** Cursor for "load more": the last row's createdAt and id; rows after it in the list order come next. */
+    beforeCreatedAt?: number;
+    beforeId?: string;
   }): Promise<InvoiceSummary[]>;
   previewReturn(
     originalSaleId: string,
@@ -511,9 +525,10 @@ export interface KhataApi {
     id: string,
     p: Partial<Pick<Customer, 'name' | 'phone' | 'address' | 'creditLimit' | 'notes'>>,
   ): Promise<Customer>;
+  /** Newest first (created_at, then id). */
   getLedger(
     customerId: string,
-    o?: { limit?: number; beforeCreatedAt?: number },
+    o?: LedgerPageOptions,
   ): Promise<{ customer: Customer; balance: Paisa; lines: LedgerLine[] }>;
   receivePayment(i: {
     customerId: string;

@@ -145,20 +145,22 @@ describe('insufficient stock (spec 3)', () => {
     expect(await snapshotCounts(t.driver)).toEqual(before);
   });
 
-  it('two lines of the same item (6 + 5) are summed and fail too', async () => {
+  it('two lines of the same item are refused (VALIDATION on the second line) and write nothing', async () => {
     await t.loginAs('owner');
     const before = await snapshotCounts(t.driver);
-    const e = await expectCode(
+    const lines = [
+      { itemId: t.ids.chargerId, quantity: 1, discountAmount: 50_000 },
+      { itemId: t.ids.chargerId, quantity: 1 },
+    ];
+    const e = await expectCode(t.svc.checkout.preview({ lines }), 'VALIDATION');
+    expect(e.details).toMatchObject({ field: 'lines.1.itemId' });
+    await expectCode(
       t.svc.checkout.commit({
-        lines: [
-          { itemId: t.ids.chargerId, quantity: 6 },
-          { itemId: t.ids.chargerId, quantity: 5 },
-        ],
-        payments: [{ method: 'cash', amount: 11 * CHARGER_PRICE }],
+        lines,
+        payments: [{ method: 'cash', amount: 2 * CHARGER_PRICE - 50_000 }],
       }),
-      'STOCK_INSUFFICIENT',
+      'VALIDATION',
     );
-    expect(e.details).toMatchObject({ onHand: 10, requested: 11, lineNo: 2 });
     expect(await snapshotCounts(t.driver)).toEqual(before);
   });
 
@@ -177,24 +179,6 @@ describe('insufficient stock (spec 3)', () => {
 });
 
 describe('an item with one piece in stock cannot be sold twice (spec 4)', () => {
-  it('a cart with carton X on two lines throws STOCK_INSUFFICIENT and rolls back', async () => {
-    await t.loginAs('owner');
-    const before = await snapshotCounts(t.driver);
-    const e = await expectCode(
-      t.svc.checkout.commit({
-        lines: [
-          { itemId: t.ids.cartonId, quantity: 1 },
-          { itemId: t.ids.cartonId, quantity: 1 },
-        ],
-        payments: [{ method: 'cash', amount: 2 * CARTON_PRICE }],
-      }),
-      'STOCK_INSUFFICIENT',
-    );
-    expect(e.details).toMatchObject({ onHand: 1, requested: 2, lineNo: 2 });
-    expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { itemId: t.ids.cartonId })).toBe(1);
-  });
-
   it('after X is sold a second commit throws STOCK_INSUFFICIENT and counts stay unchanged', async () => {
     await t.loginAs('owner');
     await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }]);

@@ -135,14 +135,15 @@ async function periodEntries(
 const clockBehind = (): ServiceError =>
   invalid('clock', 'The PC clock is behind the last day close; fix the date and time');
 
-/** An entry stamped before the last close would fall into a closed period and never be counted. */
-async function assertClockAfterLastClose(
-  driver: SqlDriver,
-  branchId: string,
-  at: number,
-): Promise<void> {
-  const last = await lastClose(driver, branchId);
-  if (last !== null && at < last.closedAt) throw clockBehind();
+/**
+ * The time to stamp a write that moves cash (sale, refund, udhaar or supplier payment, cash book entry): the PC clock,
+ * but never at or before the last day close. A write stamped inside a closed period would never be counted in any
+ * drawer; after a small clock step back it lands in the open period instead.
+ */
+export async function cashStamp(ctx: Ctx, branchId: string): Promise<number> {
+  const last = await lastClose(ctx.driver, branchId);
+  const now = ctx.clock();
+  return last === null ? now : Math.max(now, last.closedAt + 1);
 }
 
 function insertEntry(b: WriteBatch, e: CashEntry): void {
@@ -203,8 +204,7 @@ export function createCashApi(ctx: Ctx): CashApi {
       const note = optText(i.note, 'note', NOTE_MAX);
       return ctx.lock(async () => {
         const shop = await loadShop(ctx.driver);
-        const at = ctx.clock();
-        await assertClockAfterLastClose(ctx.driver, shop.branchId, at);
+        const at = await cashStamp(ctx, shop.branchId);
         const entry: CashEntry = {
           id: ctx.newId(),
           branchId: shop.branchId,
@@ -244,7 +244,7 @@ export function createCashApi(ctx: Ctx): CashApi {
         const last = await lastClose(ctx.driver, original.branchId);
         if (last !== null && original.createdAt < last.closedAt)
           throw invalid('entryId', 'The day of this entry is already closed');
-        const at = ctx.clock();
+        const at = await cashStamp(ctx, original.branchId);
         const entry: CashEntry = {
           ...original,
           id: ctx.newId(),

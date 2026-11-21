@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { allocate, negPaisa, paisa } from '@pos/core';
+import type { Invoice } from '@pos/shared';
 import {
   CHARGER_PRICE,
   CARTON_PRICE,
@@ -246,6 +247,63 @@ describe('return restores stock (spec 7)', () => {
     expect(b.id).toBe(a.id);
     expect((await snapshotCounts(t.driver)).sales).toBe(2);
     expect(await onHand()).toBe(8);
+  });
+});
+
+describe('a return or void saleId that belongs to another invoice (SALE_ID_REUSED)', () => {
+  const returnOne = (sale: Invoice, saleId: string, amount = CHARGER_PRICE) =>
+    t.svc.checkout.createReturn({
+      originalSaleId: sale.id,
+      lines: [{ lineId: first(sale.lines).id, quantity: 1 }],
+      refund: [{ method: 'cash', amount }],
+      reason: 'x',
+      saleId,
+    });
+
+  it('createReturn with the id of an unrelated sale is refused and writes nothing', async () => {
+    await t.loginAs('mgr');
+    const a = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
+    const b = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
+    const before = await snapshotCounts(t.driver);
+    const e = await expectCode(returnOne(b, a.id), 'SALE_ID_REUSED');
+    expect(e.details).toMatchObject({ invoiceId: a.id });
+    expect(await snapshotCounts(t.driver)).toEqual(before);
+  });
+
+  it('createReturn with the id of a return of another sale is refused', async () => {
+    await t.loginAs('mgr');
+    const a = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
+    const b = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
+    const id = t.newId();
+    await returnOne(a, id);
+    await expectCode(returnOne(b, id), 'SALE_ID_REUSED');
+  });
+
+  it('createReturn with the same id but a different refund is refused', async () => {
+    await t.loginAs('mgr');
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 2 }]);
+    const id = t.newId();
+    await returnOne(sale, id);
+    await expectCode(returnOne(sale, id, 2 * CHARGER_PRICE), 'SALE_ID_REUSED');
+  });
+
+  it('voidSale with the id of an earlier return of the same sale is refused', async () => {
+    await t.loginAs('mgr');
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 2 }]);
+    const id = t.newId();
+    await returnOne(sale, id);
+    await expectCode(
+      t.svc.checkout.voidSale({ originalSaleId: sale.id, reason: 'x', saleId: id }),
+      'SALE_ID_REUSED',
+    );
+  });
+
+  it('voidSale is still idempotent per saleId', async () => {
+    await t.loginAs('mgr');
+    const sale = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 2 }]);
+    const input = { originalSaleId: sale.id, reason: 'x', saleId: t.newId() };
+    const a = await t.svc.checkout.voidSale(input);
+    expect((await t.svc.checkout.voidSale(input)).id).toBe(a.id);
   });
 });
 

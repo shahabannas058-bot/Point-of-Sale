@@ -27,7 +27,7 @@ export const ItemSchema = z
     barcode: z.string().min(1).max(64).nullable(),
     model: z.string().max(80).nullable(),
     colour: z.string().max(40).nullable(),
-    /** Per priced unit (per piece, or per kg / litre when unitScale is 1000). */
+    /** Per priced unit (per piece, or per kg / litre when unitScale is 1000). 0 in service output without view_cost. */
     costPrice: NonNegativePaisaSchema,
     salePrice: NonNegativePaisaSchema,
     /** In base units (pieces, or grams / millilitres when unitScale is 1000). */

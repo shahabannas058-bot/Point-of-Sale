@@ -45,7 +45,8 @@ export const SaleLineSchema = z
       .refine((n) => n !== 0, 'Quantity cannot be zero'),
     /** Per priced unit (per piece, or per kg / litre). */
     unitPrice: NonNegativePaisaSchema,
-    costPrice: NonNegativePaisaSchema, // snapshot for profit reports, per priced unit
+    /** Snapshot for profit reports, per priced unit. 0 in service output without view_cost (the stored row keeps it). */
+    costPrice: NonNegativePaisaSchema,
     discountAmount: PaisaSchema, // same sign as quantity * unitPrice
     lineTotal: PaisaSchema,
     /** Snapshot of the item's unit scale. Part of the hash from hashVersion 2; always 1 on hashVersion 1. */

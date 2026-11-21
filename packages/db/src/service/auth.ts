@@ -165,6 +165,9 @@ export function createAuthApi(ctx: Ctx): AuthApi {
     async changePin(oldPin, newPin) {
       const session = requireSession(ctx);
       validatePinFormat(newPin, 'newPin');
+      // the same counter as login: guessing the current PIN here locks the user like wrong logins do
+      const key = loginKey(session.user.username);
+      assertNotLocked(ctx, key);
       const rows = await ctx.driver.query<UserAuthRow>('SELECT * FROM users WHERE id = ?', [
         session.user.id,
       ]);
@@ -173,8 +176,11 @@ export function createAuthApi(ctx: Ctx): AuthApi {
         row === undefined ||
         typeof oldPin !== 'string' ||
         !(await verifyPin(oldPin, row.pin_hash))
-      )
+      ) {
+        recordFailure(ctx, key);
         throw new ServiceError('INVALID_CREDENTIALS', 'Current PIN is wrong');
+      }
+      ctx.throttles.delete(key);
       const pinHash = await hashPin(newPin, ctx.pinIterations, ctx.randomBytes);
       await ctx.lock(async () => {
         const at = ctx.clock();

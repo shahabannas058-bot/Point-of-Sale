@@ -257,10 +257,9 @@ describe('cash: clock and the legacy repair column', () => {
     const c = await t.svc.cash.closeDay({ counted: 0, carriedForward: 0 });
     t.clock.advance(-10 * 60_000);
     await expectCode(t.svc.cash.closeDay({ counted: 0, carriedForward: 0 }), 'VALIDATION');
-    await expectCode(
-      t.svc.cash.addEntry({ type: 'expense', category: 'rent', amount: 100 }),
-      'VALIDATION',
-    );
+    // an entry is not refused: it is stamped just after the close (see cash-clock.test.ts)
+    const e = await t.svc.cash.addEntry({ type: 'expense', category: 'rent', amount: 100 });
+    expect(e.createdAt).toBe(c.closedAt + 1);
     t.clock.advance(20 * 60_000);
     const c2 = await t.svc.cash.closeDay({ counted: 0, carriedForward: 0 });
     expect(c2.periodStart).toBe(c.closedAt);

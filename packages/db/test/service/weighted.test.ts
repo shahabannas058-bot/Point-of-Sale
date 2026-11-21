@@ -267,6 +267,45 @@ describe('selling loose goods by weight', () => {
     expect(14_275 + 21_413).toBe(sale.total);
   });
 
+  it('returning a weighed line in small parts never refunds more than the line paid', async () => {
+    const t = await shopOf();
+    const chini = await addChini(t);
+    const sale = await sellCash(t, [{ itemId: chini.item.id, quantity: 20 }]); // 20 g = 571 paisa
+    const line = first(sale.lines);
+    const refunds: number[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      const pv = await t.svc.checkout.previewReturn(sale.id, [{ lineId: line.id, quantity: 10 }]);
+      const ret = await t.svc.checkout.createReturn({
+        originalSaleId: sale.id,
+        lines: [{ lineId: line.id, quantity: 10 }],
+        refund: [{ method: 'cash', amount: Math.abs(pv.total) }],
+        reason: 'kharab',
+      });
+      refunds.push(Math.abs(ret.total));
+    }
+    expect(sale.total).toBe(571);
+    // 10 g alone is 285.5 -> 286; the second part gets what is left of the line: 571 - 286
+    expect(refunds).toEqual([286, 285]);
+    expect(await t.svc.integrity.checks()).toMatchObject({ saleLineMismatch: 0 });
+  });
+
+  it('a void after a small weighed return refunds only the rest of the line', async () => {
+    const t = await shopOf();
+    const chini = await addChini(t);
+    const sale = await sellCash(t, [{ itemId: chini.item.id, quantity: 20 }]);
+    const pv = await t.svc.checkout.previewReturn(sale.id, [
+      { lineId: first(sale.lines).id, quantity: 10 },
+    ]);
+    await t.svc.checkout.createReturn({
+      originalSaleId: sale.id,
+      lines: [{ lineId: first(sale.lines).id, quantity: 10 }],
+      refund: [{ method: 'cash', amount: Math.abs(pv.total) }],
+      reason: 'kharab',
+    });
+    const voided = await t.svc.checkout.voidSale({ originalSaleId: sale.id, reason: 'galat bill' });
+    expect(Math.abs(pv.total) + Math.abs(voided.total)).toBe(sale.total);
+  });
+
   it('cannot return more grams than were sold', async () => {
     const t = await shopOf();
     const chini = await addChini(t);

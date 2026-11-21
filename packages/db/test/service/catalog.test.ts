@@ -99,6 +99,43 @@ describe('createItem, updates and stock adjustments', () => {
     expect(barcode.details).toMatchObject({ field: 'barcode' });
   });
 
+  it('a scanner code is unique across SKU and barcode: one code finds one item', async () => {
+    await t.loginAs('mgr');
+    const before = await snapshotCounts(t.driver);
+    // barcode = the charger's SKU
+    const a = await expectCode(
+      t.svc.catalog.createItem(itemInput({ sku: 'CBL-1', barcode: 'CHG-25W' })),
+      'DUPLICATE',
+    );
+    expect(a.details).toMatchObject({ table: 'items', field: 'barcode' });
+    // SKU = the charger's barcode
+    const b = await expectCode(
+      t.svc.catalog.createItem(itemInput({ sku: '8961234567890' })),
+      'DUPLICATE',
+    );
+    expect(b.details).toMatchObject({ table: 'items', field: 'sku' });
+    expect(await snapshotCounts(t.driver)).toEqual(before);
+    const hits = await t.svc.catalog.search('CHG-25W');
+    expect(hits.filter((h) => h.matchedBy !== 'name')).toHaveLength(1);
+  });
+
+  it('updateItem refuses a barcode equal to another item SKU or barcode, but allows its own SKU', async () => {
+    await t.loginAs('mgr');
+    const e = await expectCode(
+      t.svc.catalog.updateItem(t.ids.cartonId, { barcode: 'CHG-25W' }),
+      'DUPLICATE',
+    );
+    expect(e.details).toMatchObject({ field: 'barcode' });
+    await expectCode(
+      t.svc.catalog.updateItem(t.ids.cartonId, { barcode: '8961234567890' }),
+      'DUPLICATE',
+    );
+    const own = await t.svc.catalog.updateItem(t.ids.cartonId, { barcode: 'GHEE-CTN' });
+    expect(own.item.barcode).toBe('GHEE-CTN');
+    const same = await t.svc.catalog.updateItem(t.ids.chargerId, { barcode: '8961234567890' });
+    expect(same.item.barcode).toBe('8961234567890');
+  });
+
   it('adjustStock needs a reason, refuses to go below zero and logs the movement', async () => {
     await t.loginAs('mgr');
     await expectCode(
@@ -266,7 +303,7 @@ describe('search and listing', () => {
   });
 
   it('the seeded charger prices are what the tests assume', async () => {
-    await t.loginAs('cash');
+    await t.loginAs('mgr'); // a cashier gets cost 0 (cost-visibility.test.ts)
     const v = (await t.svc.catalog.listItems()).find((x) => x.item.id === t.ids.chargerId);
     expect(v?.item).toMatchObject({
       costPrice: CHARGER_COST,

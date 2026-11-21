@@ -9,10 +9,13 @@ import {
   type PartyBalance,
 } from '@pos/shared';
 import { WriteBatch } from './batch';
+import { cashStamp } from './cash-book';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optCnic, optPhone, optText, reqText } from './errors';
 import { customerStatement, pendingUdhaar } from './khata-statement';
 import { mapRow, type Raw } from './mappers';
+import { loadShop } from './meta';
+import { olderThan } from './page-cursor';
 import {
   customerBalance,
   insertCustomer,
@@ -131,15 +134,15 @@ export function createKhataApi(ctx: Ctx): KhataApi {
         throw new ServiceError('NOT_FOUND', 'Customer not found', { id: customerId });
       const customer = mapRow<Customer>(customerRow);
       const limit = o.limit === undefined ? 100 : intIn(o.limit, 'limit', 1, 1000);
-      const before = o.beforeCreatedAt ?? null;
+      const older = olderThan(o);
       const rows = await ctx.driver.query<Raw>(
         `SELECT * FROM (
            SELECT le.*, s.invoice_no AS invoice_no,
              SUM(le.amount) OVER (ORDER BY le.created_at, le.id) AS running_balance
            FROM ledger_entries le LEFT JOIN sales s ON s.id = le.sale_id
            WHERE le.customer_id = ?
-         ) WHERE (? IS NULL OR created_at < ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
-        [customerId, before, before, limit],
+         ) WHERE ${older.sql} ORDER BY created_at DESC, id DESC LIMIT ?`,
+        [customerId, ...older.params, limit],
       );
       const lines = rows.map((r): LedgerLine => {
         const { running_balance: running, invoice_no: invoiceNo, ...entry } = r;
@@ -166,7 +169,7 @@ export function createKhataApi(ctx: Ctx): KhataApi {
             field: 'amount',
             balance,
           });
-        const at = ctx.clock();
+        const at = await cashStamp(ctx, (await loadShop(ctx.driver)).branchId);
         const b = new WriteBatch(ctx.newId, at);
         insertLedger(b, {
           id: ctx.newId(),

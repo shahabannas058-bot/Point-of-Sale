@@ -10,6 +10,7 @@ import {
   pktDate,
   roundOffOf,
   type ApprovalReason,
+  type CartLineInput,
   type CartPreview,
   type CheckoutApi,
   type CheckoutDraft,
@@ -45,10 +46,13 @@ import {
   type Allocation,
 } from './batches';
 import { lookupApproval } from './auth';
+import { cashStamp } from './cash-book';
+import { invoiceForSession } from './cost-mask';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, mapError, money, optText } from './errors';
 import type { Raw } from './mappers';
 import { loadShop, type ShopMeta } from './meta';
+import { olderThan } from './page-cursor';
 import {
   customerBalance,
   insertInvoice,
@@ -134,8 +138,8 @@ export async function writeInvoice(
       const head = await loadHead(ctx.driver, shop.deviceId);
       const seq = (head?.seq ?? 0) + 1;
       const prevHash = head?.hash ?? GENESIS_HASH;
-      // invoices never go back in time, even if the system clock does
-      const createdAt = Math.max(ctx.clock(), head?.createdAt ?? 0);
+      // invoices never go back in time, even if the system clock does, and never fall into a closed day
+      const createdAt = Math.max(await cashStamp(ctx, shop.branchId), head?.createdAt ?? 0);
       const unsealed = {
         id: spec.saleId,
         deviceId: shop.deviceId,
@@ -302,6 +306,20 @@ interface PricedCart {
   balance: number;
 }
 
+/**
+ * One line per item: a return is matched to its sale line by item, so a second line of the same item (with another
+ * discount) could be refunded twice. The desktop cart merges a rescan into the existing line.
+ */
+function assertOneLinePerItem(lines: readonly CartLineInput[]): void {
+  const seen = new Set<string>();
+  for (const [idx, l] of lines.entries()) {
+    if (typeof l.itemId !== 'string') throw invalid(`lines.${idx}`, 'Each line needs an itemId');
+    if (seen.has(l.itemId))
+      throw invalid(`lines.${idx}.itemId`, 'This item is already on another line of the bill');
+    seen.add(l.itemId);
+  }
+}
+
 async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promise<PricedCart> {
   if (!Array.isArray(draft.lines) || draft.lines.length === 0)
     throw new ServiceError('EMPTY_CART', 'The cart is empty');
@@ -318,21 +336,11 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
     balance = await customerBalance(ctx.driver, customer.id);
   }
 
-  // total requested per item across all lines (an item may appear on several lines)
-  const requested = new Map<string, number>();
-  for (const l of draft.lines)
-    if (typeof l.itemId === 'string')
-      requested.set(
-        l.itemId,
-        (requested.get(l.itemId) ?? 0) + (Number.isSafeInteger(l.quantity) ? l.quantity : 0),
-      );
-
+  assertOneLinePerItem(draft.lines);
   const items: PricedItem[] = [];
-  const cumulative = new Map<string, number>();
   for (const [idx, l] of draft.lines.entries()) {
     const lineNo = idx + 1;
     const field = `lines.${idx}`;
-    if (typeof l.itemId !== 'string') throw invalid(field, 'Each line needs an itemId');
     const quantity = intIn(l.quantity, `${field}.quantity`, 1, MAX_QUANTITY_ANY);
     const discount = discountMoney(l.discountAmount ?? 0, `${field}.discountAmount`);
 
@@ -341,17 +349,15 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
       throw new ServiceError('NOT_FOUND', 'Item not found', { lineNo });
     if (quantity > maxQuantity(view.item.unitScale))
       throw invalid(`${field}.quantity`, 'Quantity is larger than this item allows');
-    const cum = (cumulative.get(view.item.id) ?? 0) + quantity;
-    cumulative.set(view.item.id, cum);
     // Module batch_expiry: stock in batches past their expiry date cannot be sold
     let expired = 0;
     if (hasModule(shop.modules, 'batch_expiry') && (await hasBatches(ctx.driver, view.item.id)))
       expired = await expiredOnHand(ctx.driver, view.item.id, shop.branchId, pktDate(ctx.clock()));
     const sellable = view.onHand - expired;
-    if (!shop.settings.allowNegativeStock && cum > sellable)
+    if (!shop.settings.allowNegativeStock && quantity > sellable)
       throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
         onHand: sellable,
-        requested: requested.get(view.item.id) ?? cum,
+        requested: quantity,
         lineNo,
         ...(expired > 0 ? { expiredOnHand: expired } : {}),
       });
@@ -471,7 +477,7 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
           const existing = await loadInvoiceBy(ctx.driver, 'id', input.saleId); // 2. idempotency
           if (existing !== null) {
             assertSameSale(existing, input);
-            return existing;
+            return invoiceForSession(ctx, existing);
           }
         }
         const cart = await priceCart(ctx, shop, input); // 1 (empty cart) + 3 stock
@@ -520,13 +526,14 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
         });
         if (approvedBy !== null && input.approvalToken !== undefined)
           ctx.approvals.delete(input.approvalToken); // consumed only after the batch succeeded
-        return invoice;
+        return invoiceForSession(ctx, invoice);
       });
     },
 
     async getInvoice(idOrInvoiceNo: string): Promise<InvoiceView> {
       requireSession(ctx);
-      return toInvoiceView(ctx.driver, await requireInvoice(ctx.driver, idOrInvoiceNo));
+      const invoice = await requireInvoice(ctx.driver, idOrInvoiceNo);
+      return toInvoiceView(ctx.driver, invoiceForSession(ctx, invoice));
     },
 
     async listInvoices(f = {}): Promise<InvoiceSummary[]> {
@@ -553,6 +560,9 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
         conds.push("s.invoice_no LIKE ? ESCAPE '\\'");
         params.push(likePattern(f.q.trim()));
       }
+      const older = olderThan(f, 's.');
+      conds.push(older.sql);
+      params.push(...older.params);
       const limit = Math.min(Math.max(f.limit ?? 100, 1), 500);
       params.push(limit);
       const rows = await ctx.driver.query<Raw>(
@@ -560,8 +570,8 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
            s.total,
            COALESCE((SELECT -SUM(r.total) FROM sales r WHERE r.original_sale_id = s.id), 0) AS returned_total
          FROM sales s LEFT JOIN customers c ON c.id = s.customer_id JOIN users u ON u.id = s.cashier_id
-         ${conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : ''}
-         ORDER BY s.seq DESC LIMIT ?`,
+         WHERE ${conds.join(' AND ')}
+         ORDER BY s.created_at DESC, s.id DESC LIMIT ?`,
         params,
       );
       return rows.map((r): InvoiceSummary => ({
@@ -577,6 +587,10 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
     },
   });
 }
+
+/** Order-free, sign-free fingerprint of a payment list, for comparing a replay with the stored invoice. */
+export const paymentsKey = (ps: readonly { method: string; amount: number }[]): string =>
+  JSON.stringify(ps.map((p) => `${p.method}:${Math.abs(p.amount)}`).sort());
 
 /**
  * A replayed saleId must describe the same sale. A retry after a timeout sends the identical draft and gets the
@@ -602,11 +616,10 @@ function assertSameSale(existing: Invoice, input: CommitSaleInput): void {
     }
     return JSON.stringify([...acc.entries()].sort(([a], [b]) => (a < b ? -1 : 1)));
   };
-  const pay = (ps: readonly { method: string; amount: number }[]): string =>
-    JSON.stringify(ps.map((p) => `${p.method}:${Math.abs(p.amount)}`).sort());
   const sameLines = tally(existing.lines) === tally(Array.isArray(input.lines) ? input.lines : []);
   const samePay =
-    pay(existing.payments) === pay(Array.isArray(input.payments) ? input.payments : []);
+    paymentsKey(existing.payments) ===
+    paymentsKey(Array.isArray(input.payments) ? input.payments : []);
   const sameCustomer = (existing.customerId ?? null) === (input.customerId ?? null);
   if (sameLines && samePay && sameCustomer) return;
   throw new ServiceError('SALE_ID_REUSED', 'This saleId already belongs to a different invoice', {

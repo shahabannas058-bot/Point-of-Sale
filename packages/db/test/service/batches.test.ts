@@ -118,21 +118,6 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
     expect(await stockSum(t.driver, { itemId: milk.item.id })).toBe(8);
   });
 
-  it('two cart lines of the same item consume the batches one after the other', async () => {
-    const t = await shopOf();
-    const milk = await addMilk(t);
-    await receive(t, milk.item.id, [
-      { qty: 4, days: 5, batchNo: 'SOON' },
-      { qty: 10, days: 20, batchNo: 'LATE' },
-    ]);
-    await sellCash(t, [
-      { itemId: milk.item.id, quantity: 3 },
-      { itemId: milk.item.id, quantity: 3 },
-    ]);
-    expect(await batchOnHand(t, 'SOON')).toBe(0);
-    expect(await batchOnHand(t, 'LATE')).toBe(8);
-  });
-
   it('never sells an expired batch: it is skipped, and short stock reports the expired quantity', async () => {
     const t = await shopOf();
     const milk = await addMilk(t);

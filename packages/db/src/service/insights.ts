@@ -8,6 +8,7 @@ import {
 } from '@pos/shared';
 import { canDo, requirePermission, type Ctx } from './deps';
 import { guardApi, invalid, optIntIn } from './errors';
+import { itemViewForSession } from './cost-mask';
 import { toItemView, type Raw } from './mappers';
 import { loadShop } from './meta';
 import { ITEM_VIEW_SQL, customerBalance, requireItemView } from './queries';
@@ -154,7 +155,7 @@ export function createInsightsApi(ctx: Ctx): InsightsApi {
       const { branchId } = await loadShop(ctx.driver);
       const items = (
         await ctx.driver.query<Raw>(`${ITEM_VIEW_SQL} WHERE it.is_active = 1`, [branchId])
-      ).map(toItemView);
+      ).map((r) => itemViewForSession(ctx, toItemView(r)));
       const soldRows = await ctx.driver.query<{ item_id: string; n: number }>(
         `SELECT sl.item_id, SUM(sl.quantity) AS n FROM sale_lines sl JOIN sales s ON s.id = sl.sale_id
          WHERE s.branch_id = ? AND s.created_at >= ?

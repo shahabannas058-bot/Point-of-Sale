@@ -153,6 +153,30 @@ describe('approval requests', () => {
   });
 });
 
+describe('changePin throttle (same lock as login)', () => {
+  it('5 wrong current PINs lock it: the 6th, even correct, is LOGIN_LOCKED; 30 s later it works', async () => {
+    await t.loginAs('cash');
+    for (let i = 0; i < 5; i += 1)
+      await expectCode(t.svc.auth.changePin(String(1000 + i), '9999'), 'INVALID_CREDENTIALS');
+    const locked = await expectCode(t.svc.auth.changePin(PINS.cash, '9999'), 'LOGIN_LOCKED');
+    expect(locked.details.retryAfterMs as number).toBeGreaterThan(0);
+    // the lock is the user's login lock: guessing here also blocks guessing at the login screen
+    await expectCode(t.svc.auth.login('cash', PINS.cash), 'LOGIN_LOCKED');
+    t.clock.advance(30_000);
+    await t.svc.auth.changePin(PINS.cash, '9999');
+    await t.svc.auth.login('cash', '9999');
+  });
+
+  it('a correct current PIN resets the failure counter', async () => {
+    await t.loginAs('cash');
+    for (let i = 0; i < 4; i += 1)
+      await expectCode(t.svc.auth.changePin('0000', '9999'), 'INVALID_CREDENTIALS');
+    await t.svc.auth.changePin(PINS.cash, '9999');
+    await expectCode(t.svc.auth.changePin('0000', '8888'), 'INVALID_CREDENTIALS');
+    await t.svc.auth.changePin('9999', '8888');
+  });
+});
+
 describe('roles and permissions (spec 10)', () => {
   it('without a session everything is NOT_AUTHENTICATED', async () => {
     await expectCode(t.svc.checkout.preview({ lines: [] }), 'NOT_AUTHENTICATED');

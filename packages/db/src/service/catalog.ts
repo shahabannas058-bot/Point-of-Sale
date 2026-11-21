@@ -35,7 +35,8 @@ import {
   type ProductRec,
   type ItemRec,
 } from './queries';
-import type { SqlValue } from '../types';
+import type { SqlDriver, SqlValue } from '../types';
+import { itemViewForSession, itemViewsForSession } from './cost-mask';
 
 // ---------- product find-or-create (batch-scoped) ----------
 const ITEM_KIND = LEGACY_PRODUCT_KIND;
@@ -107,6 +108,35 @@ const textRank = (label: string, q: string): TextRank => {
   return typed.every((w) => words.some((x) => x.startsWith(w))) ? 1 : 2;
 };
 
+const duplicate = (field: 'sku' | 'barcode'): ServiceError =>
+  new ServiceError('DUPLICATE', 'A record with the same value already exists', {
+    table: 'items',
+    field,
+  });
+
+/**
+ * The scanner looks a code up as barcode OR sku, so one code must belong to one item. The database keeps each column
+ * unique on its own; this also refuses a barcode equal to another item's sku or barcode, and a new sku equal to
+ * another item's barcode. `sku` is null when it is not changing (update), `exceptId` is the item being edited.
+ */
+async function assertCodesFree(
+  driver: SqlDriver,
+  exceptId: string | null,
+  sku: string | null,
+  barcode: string | null,
+): Promise<void> {
+  const taken = async (where: string, params: SqlValue[]): Promise<boolean> =>
+    (
+      await driver.query(`SELECT 1 FROM items WHERE (${where}) AND id IS NOT ? LIMIT 1`, [
+        ...params,
+        exceptId,
+      ])
+    ).length > 0;
+  if (barcode !== null && (await taken('sku = ? OR barcode = ?', [barcode, barcode])))
+    throw duplicate('barcode');
+  if (sku !== null && (await taken('barcode = ?', [sku]))) throw duplicate('sku');
+}
+
 export function createCatalogApi(ctx: Ctx): CatalogApi {
   const branch = async (): Promise<string> => (await loadShop(ctx.driver)).branchId;
 
@@ -119,8 +149,10 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
       `${ITEM_VIEW_SQL} ${where} ORDER BY p.brand, p.name, it.model, it.colour, it.sku`,
       [branchId, ...params],
     );
-    return rows.map(toItemView);
+    return itemViewsForSession(ctx, rows.map(toItemView));
   };
+  const sessionView = async (id: string, branchId: string): Promise<ItemView> =>
+    itemViewForSession(ctx, await requireItemView(ctx.driver, id, branchId));
 
   return guardApi<CatalogApi>({
     async search(query, opts = {}) {
@@ -207,6 +239,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
           ? 0
           : intIn(i.openingQty, 'openingQty', 0, maxQuantity(unitScale));
       const itemId = await ctx.lock(async () => {
+        await assertCodesFree(ctx.driver, null, sku, barcode);
         const at = ctx.clock();
         const b = new WriteBatch(ctx.newId, at);
         const productId = await createProductResolver(ctx, b, at)(i.product);
@@ -246,7 +279,7 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         await b.commit(ctx.driver);
         return rec.id;
       });
-      return requireItemView(ctx.driver, itemId, shop.branchId);
+      return sessionView(itemId, shop.branchId);
     },
 
     async updateItem(id, p) {
@@ -263,11 +296,12 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
           next.reorderLevel = intIn(p.reorderLevel, 'reorderLevel', 0, maxQuantity(cur.unitScale));
         if (p.model !== undefined) next.model = optText(p.model, 'model', 80);
         if (p.colour !== undefined) next.colour = optText(p.colour, 'colour', 40);
+        if (p.barcode !== undefined) await assertCodesFree(ctx.driver, cur.id, null, next.barcode);
         const b = new WriteBatch(ctx.newId, at);
         updateItem(b, next);
         await b.commit(ctx.driver);
       });
-      return requireItemView(ctx.driver, id, branchId);
+      return sessionView(id, branchId);
     },
 
     async adjustStock(i) {
@@ -318,19 +352,19 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
         await ctx.assertCanSell({ action: 'stock_entry', branchId: shop.branchId, now: at });
         await b.commit(ctx.driver);
       });
-      return requireItemView(ctx.driver, i.itemId, shop.branchId);
+      return sessionView(i.itemId, shop.branchId);
     },
 
     async quickItems() {
       requireSession(ctx);
-      return loadQuickItems(ctx, await branch());
+      return itemViewsForSession(ctx, await loadQuickItems(ctx, await branch()));
     },
 
     async setQuickItems(itemIds) {
       requirePermission(ctx, 'manage_settings');
       const branchId = await branch();
       await saveQuickItems(ctx, itemIds);
-      return loadQuickItems(ctx, branchId);
+      return itemViewsForSession(ctx, await loadQuickItems(ctx, branchId));
     },
   });
 }
