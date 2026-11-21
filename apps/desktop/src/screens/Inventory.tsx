@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import {
-  Camera,
   History,
   PackagePlus,
   Pencil,
@@ -29,7 +28,6 @@ import {
   emptyPhoneDraft,
   type PhoneDraft,
 } from '../components/PhoneFields';
-import { CameraScanner } from '../components/CameraScanner';
 import { ItemHistoryDialog, type ItemHistoryDialogProps } from '../components/ItemHistoryDialog';
 import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
 import { StockImportDialog } from '../components/StockImportDialog';
@@ -172,11 +170,9 @@ function AccessoryDialog({
   };
   const [f, setF] = useState(empty);
   const [error, setError] = useState<string | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setCameraOpen(false);
     setF(
       item
         ? {
@@ -287,22 +283,12 @@ function AccessoryDialog({
             <Input value={f.sku} onChange={set('sku')} className="ltr" disabled={item !== null} />
           </Field>
           <Field label={t('inv.barcode')}>
-            <span className="flex gap-2">
-              <Input
-                value={f.barcode}
-                onChange={set('barcode')}
-                className="ltr min-w-0 flex-1"
-                inputMode="numeric"
-              />
-              <Button
-                icon
-                aria-label={t('scan.camera')}
-                title={t('scan.camera')}
-                onClick={() => setCameraOpen(true)}
-              >
-                <Camera size={18} aria-hidden="true" />
-              </Button>
-            </span>
+            <Input
+              value={f.barcode}
+              onChange={set('barcode')}
+              className="ltr"
+              inputMode="numeric"
+            />
           </Field>
           {item === null && has('weight_units') ? (
             <Field label={t('inv.soldBy')}>
@@ -366,14 +352,6 @@ function AccessoryDialog({
       <div role="alert" className="mt-3 min-h-5 text-sm font-medium text-[var(--danger-ink)]">
         {error}
       </div>
-      <CameraScanner
-        open={cameraOpen}
-        onClose={() => setCameraOpen(false)}
-        onDetect={(code) => {
-          setF((v) => ({ ...v, barcode: code }));
-          return { ok: true, text: t('scan.filled', { code }) };
-        }}
-      />
     </Dialog>
   );
 }

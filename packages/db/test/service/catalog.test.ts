@@ -315,6 +315,32 @@ describe('search and listing', () => {
     expect(await t.svc.catalog.search('e', { limit: 1 })).toHaveLength(1);
   });
 
+  it('names that start with the typed text come first; prefixOnly drops the rest', async () => {
+    await t.loginAs('mgr');
+    const add = (brand: string, name: string, sku: string): Promise<unknown> =>
+      t.svc.catalog.createAccessory({
+        product: { brand, name },
+        sku,
+        costPrice: 100,
+        salePrice: 150,
+        openingQty: 5,
+      });
+    // inserted in the order that the old brand/name sort would show them: Fizz Cap, Zinc Plate, Zed Cable
+    await add('Generic', 'Fizz Cap', 'FZ-2'); // z only inside a word
+    await add('Generic', 'Zinc Plate', 'ZP-1'); // a word starts with z
+    await add('Zed', 'Cable', 'ZC-1'); // the whole label starts with z
+    const skus = (hits: Awaited<ReturnType<typeof t.svc.catalog.search>>): string[] =>
+      hits.flatMap((h) => (h.kind === 'variant' ? [h.item.variant.sku] : []));
+    expect(skus(await t.svc.catalog.search('z', { inStockOnly: true }))).toEqual([
+      'ZC-1',
+      'ZP-1',
+      'FZ-2',
+    ]);
+    expect(skus(await t.svc.catalog.search('Z', { prefixOnly: true }))).toEqual(['ZC-1', 'ZP-1']);
+    // one more letter still lists the shorter-prefix match first and never drops a word match
+    expect(skus(await t.svc.catalog.search('zi', { prefixOnly: true }))).toEqual(['ZP-1']);
+  });
+
   it('listPhones filters by stock, PTA and condition; listAccessories by low stock', async () => {
     await t.loginAs('mgr');
     await t.svc.catalog.createPhoneUnit(
