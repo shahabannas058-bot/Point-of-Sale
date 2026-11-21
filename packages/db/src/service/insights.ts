@@ -1,6 +1,7 @@
 import { compareReorder, paisa, reorderFigures } from '@pos/core';
 import {
   ServiceError,
+  pktDate,
   type InsightsApi,
   type ItemInsight,
   type Paisa,
@@ -10,7 +11,8 @@ import { canDo, requirePermission, type Ctx } from './deps';
 import { guardApi, invalid, optIntIn } from './errors';
 import { itemViewForSession } from './cost-mask';
 import { toItemView, type Raw } from './mappers';
-import { loadShop } from './meta';
+import { unsellableExpired } from './batches';
+import { loadShop, type ShopMeta } from './meta';
 import { ITEM_VIEW_SQL, customerBalance, requireItemView } from './queries';
 
 const DAY_MS = 86_400_000;
@@ -97,17 +99,21 @@ async function soldSince(
 
 interface ItemFacts {
   onHand: number;
+  expiredOnHand: number;
   lastPurchase: ItemInsight['lastPurchase'];
 }
 
-async function itemFacts(ctx: Ctx, branchId: string, itemId: string): Promise<ItemFacts> {
+async function itemFacts(ctx: Ctx, shop: ShopMeta, itemId: string): Promise<ItemFacts> {
+  const { branchId } = shop;
   const v = await requireItemView(ctx.driver, itemId, branchId);
+  // stock in expired batches can never be sold, so the till shows it apart
+  const expiredOnHand = await unsellableExpired(ctx.driver, shop, itemId, pktDate(ctx.clock()));
   let lastPurchase: ItemInsight['lastPurchase'] = null;
   if (canDo(ctx, 'view_cost')) {
     const c = (await lastCosts(ctx, branchId, itemId)).get(itemId);
     lastPurchase = c ? { unitCost: paisa(c.unitCost), at: c.at } : null;
   }
-  return { onHand: v.onHand, lastPurchase };
+  return { onHand: v.onHand - expiredOnHand, expiredOnHand, lastPurchase };
 }
 
 async function customerFacts(
@@ -131,9 +137,10 @@ export function createInsightsApi(ctx: Ctx): InsightsApi {
       const itemId = optId(input.itemId, 'itemId');
       const customerId = optId(input.customerId, 'customerId');
       if (itemId === null) throw invalid('itemId', 'itemId is required');
-      const { branchId } = await loadShop(ctx.driver);
+      const shop = await loadShop(ctx.driver);
+      const { branchId } = shop;
 
-      const facts = await itemFacts(ctx, branchId, itemId);
+      const facts = await itemFacts(ctx, shop, itemId);
       const sold = await soldSince(ctx, branchId, ctx.clock() - INSIGHT_DAYS * DAY_MS, itemId);
       const party =
         customerId === null
@@ -142,6 +149,7 @@ export function createInsightsApi(ctx: Ctx): InsightsApi {
 
       return {
         onHand: facts.onHand,
+        expiredOnHand: facts.expiredOnHand,
         lastPurchase: facts.lastPurchase,
         ...party,
         soldLast30Days: sold,

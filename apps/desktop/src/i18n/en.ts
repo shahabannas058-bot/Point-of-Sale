@@ -733,6 +733,7 @@ export const en = {
   'sc.newSale': 'New sale (clear bill)',
   'till.title': 'Item info',
   'till.stock': 'In stock',
+  'till.expired': 'Expired (cannot be sold)',
   'till.lastCost': 'Last purchase cost',
   'till.lastRate': 'Last rate to this customer',
   'till.neverSold': 'Not sold to them before',

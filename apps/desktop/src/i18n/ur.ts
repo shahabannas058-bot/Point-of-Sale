@@ -738,6 +738,7 @@ export const ur: Dict = {
   'sc.newSale': 'Nayi sale (bill saaf)',
   'till.title': 'Item ki maloomat',
   'till.stock': 'Stock mein',
+  'till.expired': 'Expire ho chuka (bik nahi sakta)',
   'till.lastCost': 'Pichli khareed',
   'till.lastRate': 'Is gahak ko pichla rate',
   'till.neverSold': 'Pehle kabhi nahi becha',

@@ -716,8 +716,10 @@ export interface ItemInsightInput {
   customerId?: string | null;
 }
 export interface ItemInsight {
-  /** On hand in base units. */
+  /** Stock that can be sold, in base units: on hand minus what sits in expired batches. */
   onHand: number;
+  /** Stock in expired batches (module batch_expiry), in base units; 0 for items without batches. */
+  expiredOnHand: number;
   /** Latest purchase / opening cost per priced unit. Null without view_cost or when never bought. */
   lastPurchase: { unitCost: Paisa; at: number } | null;
   /** Latest sale of this item to customerId, per priced unit after line discount. */

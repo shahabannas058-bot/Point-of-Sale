@@ -11,6 +11,7 @@ import {
   sellCash,
   type TestService,
 } from './helpers';
+import { addMilk, receive, shopOf } from './batch-helpers';
 
 const DAY = 86_400_000;
 
@@ -41,6 +42,7 @@ describe('insights: till info', () => {
     const walkIn = await t.svc.insights.item({ itemId: t.ids.chargerId });
     expect(walkIn).toEqual({
       onHand: 10,
+      expiredOnHand: 0,
       lastPurchase: null, // cashier has no view_cost
       lastSoldToCustomer: null,
       customerBalance: null,
@@ -205,5 +207,25 @@ describe('insights: reorder suggestions', () => {
     expect(rows.every((r) => r.unitCost === null)).toBe(true);
     await expectCode(t.svc.insights.reorder({ days: 0 }), 'VALIDATION');
     await expectCode(t.svc.insights.reorder({ coverDays: 181 }), 'VALIDATION');
+  });
+});
+
+describe('insights: till info for batch-tracked items', () => {
+  it('shows only the stock that can be sold, with expired stock apart', async () => {
+    const shop = await shopOf();
+    const milk = await addMilk(shop);
+    await receive(shop, milk.item.id, [
+      { qty: 3, days: -2, batchNo: 'OLD' },
+      { qty: 8, days: 10, batchNo: 'FRESH' },
+    ]);
+    const info = await shop.svc.insights.item({ itemId: milk.item.id });
+    expect(info.onHand).toBe(8);
+    expect(info.expiredOnHand).toBe(3);
+  });
+
+  it('reports no expired stock for an item without batches', async () => {
+    await t.loginAs('cash');
+    const info = await t.svc.insights.item({ itemId: t.ids.chargerId });
+    expect(info.expiredOnHand).toBe(0);
   });
 });

@@ -56,6 +56,11 @@ export function TillInfo({
               {qty(d.onHand)}
             </span>
           </Row>
+          {d.expiredOnHand > 0 ? (
+            <Row label={t('till.expired')}>
+              <span className="num text-[var(--danger-ink)]">{qty(d.expiredOnHand)}</span>
+            </Row>
+          ) : null}
           {d.lastPurchase ? (
             <Row label={t('till.lastCost')}>
               <Money value={d.lastPurchase.unitCost} />
