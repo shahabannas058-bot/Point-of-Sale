@@ -63,8 +63,8 @@ type Ids = {
   cashierId: UnsealedInvoice['cashierId'];
   customerId: NonNullable<UnsealedInvoice['customerId']>;
   productId: UnsealedInvoice['lines'][number]['productId'];
-  phoneUnitId: NonNullable<UnsealedInvoice['lines'][number]['phoneUnitId']>;
-  variantId: NonNullable<UnsealedInvoice['lines'][number]['variantId']>;
+  variantId: UnsealedInvoice['lines'][number]['variantId'];
+  variant2Id: UnsealedInvoice['lines'][number]['variantId'];
 };
 
 /** Stable ids shared by every fixture invoice (the db helpers seed exactly these rows). */
@@ -74,14 +74,14 @@ export const FIXTURE_IDS: Ids = {
   cashierId: castId(),
   customerId: castId(),
   productId: castId(),
-  phoneUnitId: castId(),
+  variant2Id: castId(),
   variantId: castId(),
 };
 
 const invoiceIdGen = makeIdGenerator(11, BASE_MS + 10_000);
 
 /**
- * A valid sale: 2 accessory units at 50000 plus one phone at 199950 less 19995 discount.
+ * A valid sale: 2 chargers at 50000 plus one cable at 199950 less 19995 discount.
  * subtotal = total = 279955; paid 179955 cash + 100000 khata (customer set).
  * Pass overrides for header fields; lines/payments are rebuilt around the (possibly overridden) id.
  */
@@ -94,7 +94,6 @@ export function makeInvoice(overrides: Partial<UnsealedInvoice> = {}): UnsealedI
       saleId: id,
       lineNo: 1,
       productId: FIXTURE_IDS.productId,
-      phoneUnitId: null,
       variantId: FIXTURE_IDS.variantId,
       description: 'Fast Charger 25W',
       quantity: 2,
@@ -109,9 +108,8 @@ export function makeInvoice(overrides: Partial<UnsealedInvoice> = {}): UnsealedI
       saleId: id,
       lineNo: 2,
       productId: FIXTURE_IDS.productId,
-      phoneUnitId: FIXTURE_IDS.phoneUnitId,
-      variantId: null,
-      description: 'Galaxy A55 8/256',
+      variantId: FIXTURE_IDS.variant2Id,
+      description: 'Braided Cable 2m',
       quantity: 1,
       unitPrice: 199950,
       costPrice: 150000,

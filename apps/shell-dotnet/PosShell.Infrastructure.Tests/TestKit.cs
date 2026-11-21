@@ -23,8 +23,7 @@ internal sealed class TempDb : IDisposable
 
 internal sealed record Seeded(
     string DeviceId, string BranchId, string OwnerId, string ManagerId, string CashierId, string InactiveUserId,
-    string CustomerId, string InactiveCustomerId, string PhoneUnitId, string SecondPhoneUnitId, string VariantId,
-    string InactiveVariantId);
+    string CustomerId, string InactiveCustomerId, string VariantId, string CableVariantId, string InactiveVariantId);
 
 internal sealed class RecordingLicence : ILicenceGuard
 {
@@ -52,7 +51,7 @@ internal sealed class RecordingLicence : ILicenceGuard
 internal sealed class ShopFixture : IDisposable
 {
     public const long Charger = 50_000;     // 500.00
-    public const long PhonePrice = 199_950; // 1999.50
+    public const long CablePrice = 199_950; // 1999.50
     public const long CreditLimit = 100_000;
 
     private readonly TempDb _store = new();
@@ -80,9 +79,9 @@ internal sealed class ShopFixture : IDisposable
     {
         var s = new Seeded(
             DeviceId: Ids.Next(), BranchId: Ids.Next(), OwnerId: Ids.Next(), ManagerId: Ids.Next(), CashierId: Ids.Next(),
-            InactiveUserId: Ids.Next(), CustomerId: Ids.Next(), InactiveCustomerId: Ids.Next(), PhoneUnitId: Ids.Next(),
-            SecondPhoneUnitId: Ids.Next(), VariantId: Ids.Next(), InactiveVariantId: Ids.Next());
-        var phoneProduct = Ids.Next();
+            InactiveUserId: Ids.Next(), CustomerId: Ids.Next(), InactiveCustomerId: Ids.Next(), VariantId: Ids.Next(),
+            CableVariantId: Ids.Next(), InactiveVariantId: Ids.Next());
+        var cableProduct = Ids.Next();
         var accessoryProduct = Ids.Next();
         var t = Now();
 
@@ -104,15 +103,13 @@ internal sealed class ShopFixture : IDisposable
 
         batch.Add(new("""
             INSERT INTO products (id, kind, brand, name, category, is_active, created_at, updated_at)
-            VALUES (?, 'phone', 'Samsung', 'Galaxy A55', NULL, 1, ?, ?), (?, 'accessory', 'Anker', 'Charger', NULL, 1, ?, ?)
-            """, [phoneProduct, t, t, accessoryProduct, t, t]));
+            VALUES (?, 'accessory', 'Generic', 'Braided Cable 2m', NULL, 1, ?, ?), (?, 'accessory', 'Anker', 'Charger', NULL, 1, ?, ?)
+            """, [cableProduct, t, t, accessoryProduct, t, t]));
 
-        foreach (var (unit, imei) in new[] { (s.PhoneUnitId, "356938035643809"), (s.SecondPhoneUnitId, "356938035643817") })
-            batch.Add(new("""
-                INSERT INTO phone_units (id, product_id, imei1, colour, storage_gb, ram_gb, pta_status, condition,
-                  cost_price, sale_price, created_at, updated_at)
-                VALUES (?, ?, ?, 'Blue', 256, 8, 'approved', 'new', 150000, 199950, ?, ?)
-                """, [unit, phoneProduct, imei, t, t]));
+        batch.Add(new("""
+            INSERT INTO accessory_variants (id, product_id, sku, model, colour, cost_price, sale_price, reorder_level,
+              is_active, created_at, updated_at) VALUES (?, ?, 'CBL-2M', 'USB-C', 'Grey', 150000, 199950, 2, 1, ?, ?)
+            """, [s.CableVariantId, cableProduct, t, t]));
 
         foreach (var (variant, sku, active) in new[] { (s.VariantId, "CH-25", 1), (s.InactiveVariantId, "OLD-1", 0) })
             batch.Add(new("""
@@ -128,15 +125,12 @@ internal sealed class ShopFixture : IDisposable
                 INSERT INTO customers (id, name, credit_limit, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
                 """, [id, name, limit, active, t, t]));
 
-        // opening stock: 10 chargers and the two phones, as 'purchase' movements (the ledger, not a counter)
-        foreach (var (unit, variant, qty) in new (string?, string?, int)[]
-                 {
-                     (null, s.VariantId, 10), (s.PhoneUnitId, null, 1), (s.SecondPhoneUnitId, null, 1),
-                 })
+        // opening stock: 10 chargers and the last cable, as 'purchase' movements (the ledger, not a counter)
+        foreach (var (variant, qty) in new[] { (s.VariantId, 10), (s.CableVariantId, 1) })
             batch.Add(new("""
-                INSERT INTO stock_movements (id, branch_id, type, phone_unit_id, variant_id, quantity, created_by, created_at)
-                VALUES (?, ?, 'purchase', ?, ?, ?, ?, ?)
-                """, [Ids.Next(), s.BranchId, unit, variant, qty, s.OwnerId, t]));
+                INSERT INTO stock_movements (id, branch_id, type, variant_id, quantity, created_by, created_at)
+                VALUES (?, ?, 'purchase', ?, ?, ?, ?)
+                """, [Ids.Next(), s.BranchId, variant, qty, s.OwnerId, t]));
 
         Db.Batch(batch);
         return s;
@@ -147,11 +141,10 @@ internal sealed class ShopFixture : IDisposable
 
     public long Count(string table) => Db.Query($"SELECT COUNT(*) AS n FROM {table}")[0].Lng("n");
 
-    public long OnHandVariant() =>
-        Db.Query("SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_movements WHERE variant_id = ?", S.VariantId)[0].Lng("n");
+    public long OnHandVariant() => OnHandOf(S.VariantId);
 
-    public long OnHandPhone(string unitId) =>
-        Db.Query("SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_movements WHERE phone_unit_id = ?", unitId)[0].Lng("n");
+    public long OnHandOf(string variantId) =>
+        Db.Query("SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_movements WHERE variant_id = ?", variantId)[0].Lng("n");
 
     public string CashSaleOfChargers(int quantity, string? saleId = null)
     {

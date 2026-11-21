@@ -299,7 +299,6 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
       supplierId: suppliers[key].id,
       referenceNo: ref,
       note: 'Opening stock',
-      phones: [],
       accessories: accessories.map(({ scale: _scale, ...line }) => line),
       paidNow: { method: 'cash', amount: Math.floor(total * paidShare) },
     });
@@ -395,5 +394,5 @@ export async function seedKiryanaDemo(deps: ServiceDeps): Promise<SeedSummary> {
   });
   svc.auth.logout();
 
-  return { phones: 0, accessories: ITEMS.length, customers: 5, suppliers: 2, sales: 6 };
+  return { accessories: ITEMS.length, customers: 5, suppliers: 2, sales: 6 };
 }

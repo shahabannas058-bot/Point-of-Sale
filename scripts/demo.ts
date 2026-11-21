@@ -40,11 +40,35 @@ const branch = id(),
   user = id(),
   customer = id(),
   supplier = id();
-const phoneProduct = id(),
-  accProduct = id(),
-  unit = id(),
-  variant = id(),
-  device = id();
+const device = id();
+const ITEMS = {
+  rice: {
+    product: id(),
+    variant: id(),
+    brand: 'Guard',
+    name: 'Basmati Rice 5kg',
+    category: 'Rice',
+    sku: 'RICE-5KG',
+    barcode: '8961234500017',
+    cost: 250_000,
+    price: 299_950,
+    bought: 4,
+  },
+  tea: {
+    product: id(),
+    variant: id(),
+    brand: 'Tapal',
+    name: 'Danedar 190g',
+    category: 'Tea',
+    sku: 'TEA-190G',
+    barcode: '8961234500024',
+    cost: 38_000,
+    price: 45_000,
+    bought: 10,
+  },
+} as const;
+type ItemKey = keyof typeof ITEMS;
+const itemList = Object.values(ITEMS);
 await db.batch([
   { sql: 'insert into branches values (?,?,?)', params: [branch, 'Main Counter', now] },
   {
@@ -57,55 +81,25 @@ await db.batch([
   },
   {
     sql: 'insert into suppliers (id,name,phone,created_at,updated_at) values (?,?,?,?,?)',
-    params: [supplier, 'Hafeez Centre Traders', '03211234567', now, now],
+    params: [supplier, 'Mandi Wholesale Traders', '03211234567', now, now],
   },
-  {
-    sql: 'insert into products (id,kind,brand,name,category,created_at,updated_at) values (?,?,?,?,?,?,?)',
-    params: [phoneProduct, 'phone', 'Samsung', 'Galaxy A55 8/256', 'Smartphone', now, now],
-  },
-  {
-    sql: 'insert into products (id,kind,brand,name,category,created_at,updated_at) values (?,?,?,?,?,?,?)',
-    params: [accProduct, 'accessory', 'Generic', 'Fast Charger 25W', 'Charger', now, now],
-  },
-  {
-    sql: `insert into phone_units (id,product_id,imei1,pta_status,condition,cost_price,sale_price,supplier_id,created_at,updated_at)
-          values (?,?,?,?,?,?,?,?,?,?)`,
-    params: [
-      unit,
-      phoneProduct,
-      '356938035643809',
-      'approved',
-      'new',
-      7_800_000,
-      8_500_000,
-      supplier,
-      now,
-      now,
-    ],
-  },
-  {
-    sql: `insert into accessory_variants (id,product_id,sku,barcode,model,colour,cost_price,sale_price,reorder_level,created_at,updated_at)
-          values (?,?,?,?,?,?,?,?,?,?,?)`,
-    params: [
-      variant,
-      accProduct,
-      'CHG-25W-BLK',
-      '8961234567890',
-      'Universal',
-      'Black',
-      90_000,
-      150_000,
-      3,
-      now,
-      now,
-    ],
-  },
+  ...itemList.flatMap((it) => [
+    {
+      sql: 'insert into products (id,kind,brand,name,category,created_at,updated_at) values (?,?,?,?,?,?,?)',
+      params: [it.product, 'accessory', it.brand, it.name, it.category, now, now],
+    },
+    {
+      sql: `insert into accessory_variants (id,product_id,sku,barcode,cost_price,sale_price,reorder_level,created_at,updated_at)
+            values (?,?,?,?,?,?,?,?,?)`,
+      params: [it.variant, it.product, it.sku, it.barcode, it.cost, it.price, 3, now, now],
+    },
+  ]),
 ]);
-console.log(
-  'Phone : Samsung Galaxy A55, IMEI 356938035643809, PTA approved, sale price',
-  rs(8_500_000),
-);
-console.log('Charger: SKU CHG-25W-BLK, sale price', rs(150_000));
+for (const it of itemList)
+  console.log(
+    `${it.brand} ${it.name}: SKU ${it.sku}, barcode ${it.barcode}, sale price`,
+    rs(it.price),
+  );
 
 head('3. Stock purchase (ledger entries, not a counter)');
 const purchase = id();
@@ -118,33 +112,39 @@ await db.batch([
       branch,
       'purchase',
       'INV-9001',
-      7_800_000 + 10 * 90_000,
+      itemList.reduce((sum, it) => sum + it.bought * it.cost, 0),
       null,
       user,
       now,
     ],
   },
-  {
-    sql: `insert into stock_movements (id,branch_id,type,phone_unit_id,quantity,unit_cost,ref_type,ref_id,created_by,created_at)
-          values (?,?,?,?,?,?,?,?,?,?)`,
-    params: [id(), branch, 'purchase', unit, 1, 7_800_000, 'purchase', purchase, user, now],
-  },
-  {
+  ...itemList.map((it) => ({
     sql: `insert into stock_movements (id,branch_id,type,variant_id,quantity,unit_cost,ref_type,ref_id,created_by,created_at)
           values (?,?,?,?,?,?,?,?,?,?)`,
-    params: [id(), branch, 'purchase', variant, 10, 90_000, 'purchase', purchase, user, now],
-  },
+    params: [
+      id(),
+      branch,
+      'purchase',
+      it.variant,
+      it.bought,
+      it.cost,
+      'purchase',
+      purchase,
+      user,
+      now,
+    ],
+  })),
 ]);
 const onHand = async (): Promise<string> => {
-  const v = await db.query<{ on_hand: number }>(
-    'select on_hand from v_variant_on_hand where variant_id=?',
-    [variant],
-  );
-  const p = await db.query<{ on_hand: number }>(
-    'select on_hand from v_phone_unit_on_hand where phone_unit_id=?',
-    [unit],
-  );
-  return `chargers on hand: ${v[0]?.on_hand ?? 0}, phone in stock: ${p.length > 0 ? 'yes' : 'no'}`;
+  const parts: string[] = [];
+  for (const it of itemList) {
+    const v = await db.query<{ on_hand: number }>(
+      'select on_hand from v_variant_on_hand where variant_id=?',
+      [it.variant],
+    );
+    parts.push(`${it.name} on hand: ${v[0]?.on_hand ?? 0}`);
+  }
+  return parts.join(', ');
 };
 console.log(await onHand());
 
@@ -152,14 +152,14 @@ console.log(await onHand());
 let seq = 0;
 let prevHash: string = GENESIS_HASH;
 async function sell(opts: {
-  lines: { phone?: boolean; qty: number; discountBps?: number }[];
+  lines: { item: ItemKey; qty: number; discountBps?: number }[];
   cashPaisa: number;
   khata: boolean;
 }): Promise<Invoice> {
   seq += 1;
   const saleId = id();
   const priced = opts.lines.map((l) => {
-    const unitPrice = paisa(l.phone ? 8_500_000 : 150_000);
+    const unitPrice = paisa(ITEMS[l.item].price);
     const gross = paisa(unitPrice * l.qty);
     const discountAmount = l.discountBps
       ? applyPercentDiscount(gross, l.discountBps).discount
@@ -192,13 +192,12 @@ async function sell(opts: {
       id: id(),
       saleId,
       lineNo: i + 1,
-      productId: l.phone ? phoneProduct : accProduct,
-      phoneUnitId: l.phone ? unit : null,
-      variantId: l.phone ? null : variant,
-      description: l.phone ? 'Samsung Galaxy A55 8/256' : 'Fast Charger 25W',
+      productId: ITEMS[l.item].product,
+      variantId: ITEMS[l.item].variant,
+      description: `${ITEMS[l.item].brand} ${ITEMS[l.item].name}`,
       quantity: l.quantity,
       unitPrice: l.unitPrice,
-      costPrice: paisa(l.phone ? 7_800_000 : 90_000),
+      costPrice: paisa(ITEMS[l.item].cost),
       discountAmount: l.discountAmount,
       lineTotal: paisa(l.unitPrice * l.quantity - l.discountAmount),
       createdAt: now + seq,
@@ -241,14 +240,13 @@ async function sell(opts: {
     },
     ...s.lines.flatMap((l) => [
       {
-        sql: `insert into sale_lines (id,sale_id,line_no,product_id,phone_unit_id,variant_id,description,quantity,
-              unit_price,cost_price,discount_amount,line_total,created_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        sql: `insert into sale_lines (id,sale_id,line_no,product_id,variant_id,description,quantity,
+              unit_price,cost_price,discount_amount,line_total,created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)`,
         params: [
           l.id,
           l.saleId,
           l.lineNo,
           l.productId,
-          l.phoneUnitId,
           l.variantId,
           l.description,
           l.quantity,
@@ -260,20 +258,9 @@ async function sell(opts: {
         ],
       },
       {
-        sql: `insert into stock_movements (id,branch_id,type,phone_unit_id,variant_id,quantity,ref_type,ref_id,created_by,created_at)
-              values (?,?,?,?,?,?,?,?,?,?)`,
-        params: [
-          id(),
-          branch,
-          'sale',
-          l.phoneUnitId,
-          l.variantId,
-          -l.quantity,
-          'sale',
-          s.id,
-          user,
-          l.createdAt,
-        ],
+        sql: `insert into stock_movements (id,branch_id,type,variant_id,quantity,ref_type,ref_id,created_by,created_at)
+              values (?,?,?,?,?,?,?,?,?)`,
+        params: [id(), branch, 'sale', l.variantId, -l.quantity, 'sale', s.id, user, l.createdAt],
       },
     ]),
     ...s.payments.map((p) => ({
@@ -301,25 +288,28 @@ async function sell(opts: {
   return s;
 }
 
-head('4. Sale #1: phone (5% discount) + 2 chargers, part cash / part khata');
+head('4. Sale #1: 2 rice bags (5% discount) + 2 tea packs, part cash / part khata');
 const inv1 = await sell({
-  lines: [{ phone: true, qty: 1, discountBps: 500 }, { qty: 2 }],
-  cashPaisa: 5_000_000,
+  lines: [
+    { item: 'rice', qty: 2, discountBps: 500 },
+    { item: 'tea', qty: 2 },
+  ],
+  cashPaisa: 500_000,
   khata: true,
 });
 console.log(`${inv1.invoiceNo}: subtotal ${rs(inv1.subtotal)}, total ${rs(inv1.total)}`);
 console.log(`  paid: ${inv1.payments.map((p) => `${p.method} ${rs(p.amount)}`).join(' + ')}`);
 console.log(`  hash: ${inv1.hash.slice(0, 16)}...  (prev: ${inv1.prevHash.slice(0, 8)}...)`);
 
-head('5. Sale #2: 3 chargers, cash');
-const inv2 = await sell({ lines: [{ qty: 3 }], cashPaisa: 450_000, khata: false });
+head('5. Sale #2: 3 tea packs, cash');
+const inv2 = await sell({ lines: [{ item: 'tea', qty: 3 }], cashPaisa: 135_000, khata: false });
 console.log(`${inv2.invoiceNo}: total ${rs(inv2.total)}`);
 console.log(
   `  hash: ${inv2.hash.slice(0, 16)}...  (prev: ${inv2.prevHash.slice(0, 16)}... = sale #1's hash)`,
 );
 
 head('6. Stock and khata, derived from the ledgers');
-console.log(await onHand(), '(10 bought - 2 - 3 = 5)');
+console.log(await onHand(), '(rice 4 - 2 = 2, tea 10 - 2 - 3 = 5)');
 const bal = await db.query<{ balance: number }>(
   'select balance from v_customer_balance where customer_id=?',
   [customer],
@@ -341,11 +331,11 @@ await tryIt('edit a finished invoice total', () =>
 );
 await tryIt('delete an invoice', () => db.query('delete from sales where seq = 1'));
 await tryIt('delete a stock movement', () => db.query('delete from stock_movements'));
-await tryIt('sell the same phone again (IMEI already out)', () =>
+await tryIt('a "sale" movement that adds stock instead of removing it', () =>
   db.query(
-    `insert into stock_movements (id,branch_id,type,phone_unit_id,quantity,ref_type,ref_id,created_by,created_at)
+    `insert into stock_movements (id,branch_id,type,variant_id,quantity,ref_type,ref_id,created_by,created_at)
      values (?,?,?,?,?,?,?,?,?)`,
-    [id(), branch, 'sale', unit, -1, 'sale', inv1.id, user, now],
+    [id(), branch, 'sale', ITEMS.rice.variant, 1, 'sale', inv1.id, user, now],
   ),
 );
 await tryIt('khata payment on a walk-in sale', () =>

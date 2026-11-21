@@ -12,15 +12,12 @@ import { Inventory } from './screens/Inventory';
 import { Login } from './screens/Login';
 import { PendingUdhaar } from './screens/PendingUdhaar';
 import { ReceiptPage } from './screens/ReceiptPage';
-import { RepairDetail } from './screens/RepairDetail';
-import { Repairs } from './screens/Repairs';
 import { Reports } from './screens/Reports';
 import { Sales } from './screens/Sales';
 import { StockLog } from './screens/StockLog';
 import { Settings } from './screens/Settings';
 import { SupplierDetail } from './screens/SupplierDetail';
 import { Suppliers } from './screens/Suppliers';
-import { Warranty } from './screens/Warranty';
 
 export const router = createHashRouter([
   { path: '/login', element: <Login /> },
@@ -43,30 +40,6 @@ export const router = createHashRouter([
       { path: 'customers/:id/statement', element: <CustomerStatement /> },
       { path: 'suppliers', element: <Suppliers /> },
       { path: 'suppliers/:id', element: <SupplierDetail /> },
-      {
-        path: 'repairs',
-        element: (
-          <RequireModule module="repair">
-            <Repairs />
-          </RequireModule>
-        ),
-      },
-      {
-        path: 'repairs/:id',
-        element: (
-          <RequireModule module="repair">
-            <RepairDetail />
-          </RequireModule>
-        ),
-      },
-      {
-        path: 'warranty',
-        element: (
-          <RequireModule module="warranty">
-            <Warranty />
-          </RequireModule>
-        ),
-      },
       {
         path: 'expiry',
         element: (

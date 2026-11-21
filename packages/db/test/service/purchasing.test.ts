@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { NewPhoneUnitInput } from '@pos/shared';
 import {
   CHARGER_COST,
-  IMEI_X,
-  IMEI_Y,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_COST,
   expectCode,
-  first,
   makeService,
   snapshotCounts,
   stockSum,
@@ -19,16 +14,6 @@ beforeEach(async () => {
   t = await makeService();
 });
 
-const newPhone = (over: Partial<NewPhoneUnitInput> = {}): NewPhoneUnitInput => ({
-  product: { brand: 'Infinix', name: 'Hot 40 Pro' },
-  imei1: IMEI_Y,
-  ptaStatus: 'approved',
-  condition: 'new',
-  costPrice: PHONE_COST,
-  salePrice: PHONE_PRICE,
-  ...over,
-});
-
 async function makeSupplier(): Promise<string> {
   const s = await t.svc.purchasing.createSupplier({
     name: 'Hafeez Centre Traders',
@@ -38,7 +23,7 @@ async function makeSupplier(): Promise<string> {
 }
 
 describe('purchase receipt (spec 9)', () => {
-  it('books phone + 10 chargers: total 8 700 000, ledger, movements, balance 6 700 000 after paying 2 000 000', async () => {
+  it('books 1 carton + 10 chargers: total 8 700 000, ledger, movements, balance 6 700 000 after paying 2 000 000', async () => {
     await t.loginAs('mgr');
     const supplierId = await makeSupplier();
     const outboxBefore = await snapshotCounts(t.driver);
@@ -52,8 +37,10 @@ describe('purchase receipt (spec 9)', () => {
     const result = await t.svc.purchasing.receive({
       supplierId,
       referenceNo: 'INV-9001',
-      phones: [newPhone()],
-      accessories: [{ variantId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST }],
+      accessories: [
+        { variantId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST },
+        { variantId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST },
+      ],
       paidNow: { method: 'cash', amount: 2_000_000 },
     });
 
@@ -64,7 +51,7 @@ describe('purchase receipt (spec 9)', () => {
       referenceNo: 'INV-9001',
     });
     expect(result.supplierBalance).toBe(6_700_000);
-    expect(result.phoneUnitIds).toHaveLength(1);
+    expect(result).not.toHaveProperty('phoneUnitIds');
 
     const ledger = await t.driver.query<{ type: string; amount: number; method: string | null }>(
       'select type, amount, method from ledger_entries where supplier_id = ? order by created_at, id',
@@ -75,21 +62,21 @@ describe('purchase receipt (spec 9)', () => {
       { type: 'payment_made', amount: -2_000_000, method: 'cash' },
     ]);
 
-    const phoneMoves = await t.driver.query<{
+    const cartonMoves = await t.driver.query<{
       type: string;
       quantity: number;
       unit_cost: number;
       ref_type: string;
       ref_id: string;
     }>(
-      'select type, quantity, unit_cost, ref_type, ref_id from stock_movements where phone_unit_id = ?',
-      [first(result.phoneUnitIds)],
+      "select type, quantity, unit_cost, ref_type, ref_id from stock_movements where variant_id = ? and type = 'purchase'",
+      [t.ids.cartonId],
     );
-    expect(phoneMoves).toEqual([
+    expect(cartonMoves).toEqual([
       {
         type: 'purchase',
         quantity: 1,
-        unit_cost: PHONE_COST,
+        unit_cost: CARTON_COST,
         ref_type: 'purchase',
         ref_id: result.purchase.id,
       },
@@ -101,17 +88,16 @@ describe('purchase receipt (spec 9)', () => {
     expect(variantMoves).toEqual([{ type: 'purchase', quantity: 10 }]);
     expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(20);
 
-    // outbox: purchase, product, phone_unit, 2 stock movements, 2 ledger entries, variant cost update
+    // outbox: purchase, 2 stock movements, 2 ledger entries, 2 variant cost updates
     const after = await snapshotCounts(t.driver);
     expect(after.outbox).toBeGreaterThan(outboxBefore.outbox);
     const typesAfter = await typeCounts();
     const added = (k: string): number => (typesAfter[k] ?? 0) - (typesBefore[k] ?? 0);
     expect(added('purchase')).toBe(1);
-    expect(added('phone_unit')).toBe(1);
-    expect(added('product')).toBe(1);
+    expect(added('product')).toBe(0);
     expect(added('ledger_entry')).toBe(2);
     expect(added('stock_movement')).toBe(2);
-    expect(added('accessory_variant')).toBe(1);
+    expect(added('accessory_variant')).toBe(2);
 
     expect(
       await t.svc.purchasing.paySupplier({ supplierId, amount: 6_700_000, method: 'cash' }),
@@ -125,10 +111,11 @@ describe('purchase receipt (spec 9)', () => {
     const supplierId = await makeSupplier();
     await t.svc.purchasing.receive({
       supplierId,
-      phones: [],
       accessories: [{ variantId: t.ids.chargerId, quantity: 5, unitCost: 95_000 }],
     });
-    const [view] = await t.svc.catalog.listAccessories();
+    const view = (await t.svc.catalog.listAccessories()).find(
+      (v) => v.variant.id === t.ids.chargerId,
+    );
     expect(view?.variant.costPrice).toBe(95_000);
     expect(view?.onHand).toBe(15);
   });
@@ -138,51 +125,37 @@ describe('purchase receipt (spec 9)', () => {
     const supplierId = await makeSupplier();
     const input = {
       supplierId,
-      phones: [newPhone()],
-      accessories: [],
+      accessories: [{ variantId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST }],
     };
     t.assertCanSell.mockClear();
     t.assertCanSell.mockRejectedValueOnce(new Error('locked'));
     const before = await snapshotCounts(t.driver);
     await expectCode(t.svc.purchasing.receive(input), 'INTERNAL');
     expect(await snapshotCounts(t.driver)).toEqual(before);
-    const phones = await t.driver.query<{ n: number }>('select count(*) as n from phone_units');
-    expect(phones[0]?.n).toBe(1);
+    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(1);
     await t.svc.purchasing.receive(input);
     expect(t.assertCanSell).toHaveBeenLastCalledWith(
       expect.objectContaining({ action: 'purchase' }),
     );
   });
 
-  it('is atomic: a duplicate IMEI inside the purchase writes nothing', async () => {
+  it('is atomic: a bad later line writes nothing, not even the good lines before it', async () => {
     await t.loginAs('mgr');
     const supplierId = await makeSupplier();
     const before = await snapshotCounts(t.driver);
     const e = await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [newPhone(), newPhone({ product: { brand: 'Infinix', name: 'Hot 40' } })],
-        accessories: [{ variantId: t.ids.chargerId, quantity: 1, unitCost: CHARGER_COST }],
+        accessories: [
+          { variantId: t.ids.chargerId, quantity: 1, unitCost: CHARGER_COST },
+          { variantId: t.ids.cartonId, quantity: 0, unitCost: CARTON_COST },
+        ],
       }),
-      'DUPLICATE',
+      'VALIDATION',
     );
-    expect(e.details).toMatchObject({ field: 'imei1' });
+    expect(e.details).toMatchObject({ field: 'accessories.1.quantity' });
     expect(await snapshotCounts(t.driver)).toEqual(before);
     expect(await stockSum(t.driver, { variantId: t.ids.chargerId })).toBe(10);
-  });
-
-  it('an IMEI already in the shop is DUPLICATE', async () => {
-    await t.loginAs('mgr');
-    const supplierId = await makeSupplier();
-    const e = await expectCode(
-      t.svc.purchasing.receive({
-        supplierId,
-        phones: [newPhone({ imei1: IMEI_X })],
-        accessories: [],
-      }),
-      'DUPLICATE',
-    );
-    expect(e.details).toMatchObject({ field: 'imei1' });
   });
 });
 
@@ -190,15 +163,11 @@ describe('purchase validation and access', () => {
   it('rejects empty purchases, over-payment, khata pay-now, unknown supplier and variant', async () => {
     await t.loginAs('mgr');
     const supplierId = await makeSupplier();
-    await expectCode(
-      t.svc.purchasing.receive({ supplierId, phones: [], accessories: [] }),
-      'VALIDATION',
-    );
+    await expectCode(t.svc.purchasing.receive({ supplierId, accessories: [] }), 'VALIDATION');
     const acc = [{ variantId: t.ids.chargerId, quantity: 1, unitCost: CHARGER_COST }];
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [],
         accessories: acc,
         paidNow: { method: 'cash', amount: CHARGER_COST + 1 },
       }),
@@ -207,20 +176,18 @@ describe('purchase validation and access', () => {
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [],
         accessories: acc,
         paidNow: { method: 'khata' as never, amount: 1 },
       }),
       'VALIDATION',
     );
     await expectCode(
-      t.svc.purchasing.receive({ supplierId: t.newId(), phones: [], accessories: acc }),
+      t.svc.purchasing.receive({ supplierId: t.newId(), accessories: acc }),
       'NOT_FOUND',
     );
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [],
         accessories: [{ variantId: t.newId(), quantity: 1, unitCost: 1 }],
       }),
       'NOT_FOUND',
@@ -228,7 +195,6 @@ describe('purchase validation and access', () => {
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [],
         accessories: [{ variantId: t.ids.chargerId, quantity: 1, unitCost: 10.5 }],
       }),
       'MONEY_INVALID',
@@ -236,7 +202,6 @@ describe('purchase validation and access', () => {
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [],
         accessories: [{ variantId: t.ids.chargerId, quantity: 0, unitCost: 1 }],
       }),
       'VALIDATION',
@@ -252,7 +217,6 @@ describe('purchase validation and access', () => {
     await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [],
         accessories: [{ variantId: t.ids.chargerId, quantity: 1, unitCost: 1 }],
       }),
       'FORBIDDEN',

@@ -46,7 +46,7 @@ export function ReorderPanel(): ReactNode {
           onChange={setWin}
           items={(['7', '30', '90'] as const).map((d) => ({
             value: d,
-            label: t('warranty.nDays', { n: d }),
+            label: t('common.nDays', { n: d }),
           }))}
         />
         <span className="text-sm text-muted">{t('reorder.rule', { n: COVER_DAYS })}</span>
@@ -113,7 +113,7 @@ export function ReorderPanel(): ReactNode {
                         <Badge
                           tone={r.daysLeft <= 3 ? 'danger' : r.daysLeft <= 7 ? 'warning' : 'muted'}
                         >
-                          {t('warranty.nDays', { n: r.daysLeft })}
+                          {t('common.nDays', { n: r.daysLeft })}
                         </Badge>
                       )}
                     </td>

@@ -76,7 +76,7 @@ export async function loadShop(driver: SqlDriver): Promise<ShopMeta> {
     invoicePrefix,
     setupAt: Number(m.get(META.setupAt) ?? 0),
     isDemo: m.get(META.demoData) === '1',
-    businessType: type.success ? type.data : 'custom',
+    businessType: type.success ? type.data : 'kiryana',
     modules: rawModules === undefined ? [...MODULE_IDS] : parseModuleList(rawModules),
     settings: {
       shopName: m.get(META.shopName) ?? '',

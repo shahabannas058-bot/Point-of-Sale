@@ -8,7 +8,6 @@ import {
   NonNegativePaisaSchema,
   PaisaSchema,
   PaymentIdSchema,
-  PhoneUnitIdSchema,
   ProductIdSchema,
   SaleIdSchema,
   SaleLineIdSchema,
@@ -36,8 +35,7 @@ export const SaleLineSchema = z
     saleId: SaleIdSchema,
     lineNo: z.number().int().positive(),
     productId: ProductIdSchema,
-    phoneUnitId: PhoneUnitIdSchema.nullable(),
-    variantId: VariantIdSchema.nullable(),
+    variantId: VariantIdSchema,
     description: z.string().min(1).max(200), // name snapshot at time of sale
     /** Base units (pieces, or grams / millilitres when unitScale is 1000). */
     quantity: z
@@ -56,12 +54,6 @@ export const SaleLineSchema = z
   })
   .superRefine((l, ctx) => {
     const issue = makeIssue(ctx);
-    if ((l.phoneUnitId === null) === (l.variantId === null))
-      issue(['variantId'], 'Exactly one of phoneUnitId / variantId is required');
-    if (l.phoneUnitId !== null && Math.abs(l.quantity) !== 1)
-      issue(['quantity'], 'Phone units are sold one at a time');
-    if (l.phoneUnitId !== null && l.unitScale !== 1)
-      issue(['unitScale'], 'Phone units are always counted in pieces');
     if (l.lineTotal !== lineGross(l.quantity, l.unitPrice, l.unitScale) - l.discountAmount)
       issue(
         ['lineTotal'],

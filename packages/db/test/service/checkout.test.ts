@@ -4,7 +4,7 @@ import { mapError } from '../../src/service';
 import { saleRow } from '../helpers';
 import {
   CHARGER_PRICE,
-  PHONE_PRICE,
+  CARTON_PRICE,
   captureError,
   expectCode,
   makeService,
@@ -27,7 +27,7 @@ describe('hash chain over three sales (spec 1)', () => {
       payments: [{ method: 'cash', amount: 300_000 }],
     });
     const s2 = await t.svc.checkout.commit({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 500_000 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
       payments: [{ method: 'cash', amount: 8_000_000 }],
     });
     const s3 = await t.svc.checkout.commit({
@@ -176,58 +176,57 @@ describe('insufficient stock (spec 3)', () => {
   });
 });
 
-describe('the same phone cannot be sold twice (spec 4)', () => {
-  it('a cart with phone X on two lines throws UNIT_NOT_IN_STOCK and rolls back', async () => {
+describe('an item with one piece in stock cannot be sold twice (spec 4)', () => {
+  it('a cart with carton X on two lines throws STOCK_INSUFFICIENT and rolls back', async () => {
     await t.loginAs('owner');
-    const before = await snapshotCounts(t.driver);
-    await expectCode(
-      t.svc.checkout.commit({
-        lines: [
-          { phoneUnitId: t.ids.phoneId, quantity: 1 },
-          { phoneUnitId: t.ids.phoneId, quantity: 1 },
-        ],
-        payments: [{ method: 'cash', amount: 2 * PHONE_PRICE }],
-      }),
-      'UNIT_NOT_IN_STOCK',
-    );
-    expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { phoneUnitId: t.ids.phoneId })).toBe(1);
-  });
-
-  it('after X is sold a second commit throws UNIT_NOT_IN_STOCK and counts stay unchanged', async () => {
-    await t.loginAs('owner');
-    await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }]);
-    expect(await stockSum(t.driver, { phoneUnitId: t.ids.phoneId })).toBe(0);
     const before = await snapshotCounts(t.driver);
     const e = await expectCode(
       t.svc.checkout.commit({
-        lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
-        payments: [{ method: 'cash', amount: PHONE_PRICE }],
+        lines: [
+          { variantId: t.ids.cartonId, quantity: 1 },
+          { variantId: t.ids.cartonId, quantity: 1 },
+        ],
+        payments: [{ method: 'cash', amount: 2 * CARTON_PRICE }],
       }),
-      'UNIT_NOT_IN_STOCK',
+      'STOCK_INSUFFICIENT',
     );
-    expect(e.details).toMatchObject({ phoneUnitId: t.ids.phoneId });
+    expect(e.details).toMatchObject({ onHand: 1, requested: 2, lineNo: 2 });
     expect(await snapshotCounts(t.driver)).toEqual(before);
-    expect(await stockSum(t.driver, { phoneUnitId: t.ids.phoneId })).toBe(0);
+    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(1);
   });
 
-  it('a phone line with quantity 2 is a VALIDATION error', async () => {
+  it('after X is sold a second commit throws STOCK_INSUFFICIENT and counts stay unchanged', async () => {
     await t.loginAs('owner');
-    await expectCode(
-      t.svc.checkout.preview({ lines: [{ phoneUnitId: t.ids.phoneId, quantity: 2 }] }),
-      'VALIDATION',
-    );
-  });
-
-  it('a line with both or neither of phoneUnitId/variantId is a VALIDATION error', async () => {
-    await t.loginAs('owner');
-    await expectCode(
-      t.svc.checkout.preview({
-        lines: [{ phoneUnitId: t.ids.phoneId, variantId: t.ids.chargerId, quantity: 1 }],
+    await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
+    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
+    const before = await snapshotCounts(t.driver);
+    const e = await expectCode(
+      t.svc.checkout.commit({
+        lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+        payments: [{ method: 'cash', amount: CARTON_PRICE }],
       }),
+      'STOCK_INSUFFICIENT',
+    );
+    expect(e.details).toMatchObject({ onHand: 0, requested: 1, lineNo: 1 });
+    expect(await snapshotCounts(t.driver)).toEqual(before);
+    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
+  });
+
+  it('a line with quantity 2 of the single carton is STOCK_INSUFFICIENT', async () => {
+    await t.loginAs('owner');
+    await expectCode(
+      t.svc.checkout.preview({ lines: [{ variantId: t.ids.cartonId, quantity: 2 }] }),
+      'STOCK_INSUFFICIENT',
+    );
+  });
+
+  it('a line without a variantId is a VALIDATION error', async () => {
+    await t.loginAs('owner');
+    await expectCode(t.svc.checkout.preview({ lines: [{ quantity: 1 } as never] }), 'VALIDATION');
+    await expectCode(
+      t.svc.checkout.preview({ lines: [{ variantId: 42, quantity: 1 } as never] }),
       'VALIDATION',
     );
-    await expectCode(t.svc.checkout.preview({ lines: [{ quantity: 1 }] }), 'VALIDATION');
   });
 });
 
@@ -281,9 +280,9 @@ describe('khata on a sale (spec 5)', () => {
   it('a cashier pushing the balance over the credit limit needs approval (credit_limit)', async () => {
     await t.loginAs('cash');
     const draft = {
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
       customerId: t.ids.bilalId,
-      payments: [{ method: 'khata' as const, amount: PHONE_PRICE }],
+      payments: [{ method: 'khata' as const, amount: CARTON_PRICE }],
     };
     const before = await snapshotCounts(t.driver);
     const e = await expectCode(t.svc.checkout.commit(draft), 'APPROVAL_REQUIRED');
@@ -298,9 +297,9 @@ describe('khata on a sale (spec 5)', () => {
   it('a manager is not subject to the credit limit', async () => {
     await t.loginAs('mgr');
     const inv = await t.svc.checkout.commit({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
       customerId: t.ids.bilalId,
-      payments: [{ method: 'khata', amount: PHONE_PRICE }],
+      payments: [{ method: 'khata', amount: CARTON_PRICE }],
     });
     expect(inv.payments[0]?.method).toBe('khata');
   });
@@ -310,14 +309,14 @@ describe('cashier discount policy (spec 6)', () => {
   it('425 000 on gross 8 500 000 (500 bps) passes; 425 001 needs approval', async () => {
     await t.loginAs('cash');
     const exact = {
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 425_000 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 425_000 }],
     };
     const exactPreview = await t.svc.checkout.preview(exact);
     expect(exactPreview.needsApproval).toEqual([]);
     expect(exactPreview.effectiveDiscountBps).toBe(500);
 
     const over = {
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 425_001 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 425_001 }],
     };
     const overPreview = await t.svc.checkout.preview(over);
     expect(overPreview.needsApproval).toEqual(['discount']);
@@ -343,12 +342,12 @@ describe('cashier discount policy (spec 6)', () => {
   it('an invoice-level discount counts toward the threshold too', async () => {
     await t.loginAs('cash');
     const ok = await t.svc.checkout.preview({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
       invoiceDiscount: 425_000,
     });
     expect(ok.needsApproval).toEqual([]);
     const over = await t.svc.checkout.preview({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
       invoiceDiscount: 425_001,
     });
     expect(over.needsApproval).toEqual(['discount']);
@@ -359,8 +358,8 @@ describe('cashier discount policy (spec 6)', () => {
     const grant = await t.svc.auth.requestApproval('2345');
     expect(grant.approverUsername).toBe('mgr');
     const inv = await t.svc.checkout.commit({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 425_001 }],
-      payments: [{ method: 'cash', amount: PHONE_PRICE - 425_001 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 425_001 }],
+      payments: [{ method: 'cash', amount: CARTON_PRICE - 425_001 }],
       approvalToken: grant.token,
     });
     expect(inv.note?.endsWith('approved:mgr')).toBe(true);
@@ -381,8 +380,8 @@ describe('cashier discount policy (spec 6)', () => {
     await t.loginAs('cash');
     const grant = await t.svc.auth.requestApproval('2345');
     const input = {
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 500_000 }],
-      payments: [{ method: 'cash' as const, amount: PHONE_PRICE - 500_000 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
+      payments: [{ method: 'cash' as const, amount: CARTON_PRICE - 500_000 }],
       approvalToken: grant.token,
     };
     t.assertCanSell.mockRejectedValueOnce(
@@ -390,14 +389,14 @@ describe('cashier discount policy (spec 6)', () => {
     );
     await expectCode(t.svc.checkout.commit(input), 'LICENCE_BLOCKED');
     const inv = await t.svc.checkout.commit(input);
-    expect(inv.total).toBe(PHONE_PRICE - 500_000);
+    expect(inv.total).toBe(CARTON_PRICE - 500_000);
   });
 
   it('a manager session needs no token', async () => {
     await t.loginAs('mgr');
     const inv = await t.svc.checkout.commit({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 2_000_000 }],
-      payments: [{ method: 'cash', amount: PHONE_PRICE - 2_000_000 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 2_000_000 }],
+      payments: [{ method: 'cash', amount: CARTON_PRICE - 2_000_000 }],
     });
     expect(inv.note).toBeNull();
   });
@@ -411,8 +410,8 @@ describe('cashier discount policy (spec 6)', () => {
   it('an unknown, expired or logged-out token behaves as "no token" (APPROVAL_REQUIRED)', async () => {
     await t.loginAs('cash');
     const input = {
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 500_000 }],
-      payments: [{ method: 'cash' as const, amount: PHONE_PRICE - 500_000 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 500_000 }],
+      payments: [{ method: 'cash' as const, amount: CARTON_PRICE - 500_000 }],
     };
     await expectCode(
       t.svc.checkout.commit({ ...input, approvalToken: 'deadbeef' }),
@@ -666,10 +665,6 @@ describe('validation (spec 14)', () => {
       'NOT_FOUND',
     );
     await expectCode(
-      t.svc.checkout.preview({ lines: [{ phoneUnitId: t.newId(), quantity: 1 }] }),
-      'NOT_FOUND',
-    );
-    await expectCode(
       t.svc.checkout.preview({
         lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
         customerId: t.newId(),
@@ -722,13 +717,13 @@ describe('access rules', () => {
     await expectCode(t.svc.checkout.getInvoice('A-999999'), 'NOT_FOUND');
   });
 
-  it('listInvoices finds a sale by IMEI and filters by kind and customer', async () => {
+  it('listInvoices finds a sale by invoice number and filters by kind and customer', async () => {
     await t.loginAs('owner');
-    await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }]);
+    await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
     await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 1 }], { customerId: t.ids.bilalId });
-    expect(
-      (await t.svc.checkout.listInvoices({ q: '356938035643809' })).map((s) => s.invoiceNo),
-    ).toEqual(['A-000001']);
+    expect((await t.svc.checkout.listInvoices({ q: '000001' })).map((s) => s.invoiceNo)).toEqual([
+      'A-000001',
+    ]);
     expect(
       (await t.svc.checkout.listInvoices({ customerId: t.ids.bilalId })).map((s) => s.invoiceNo),
     ).toEqual(['A-000002']);

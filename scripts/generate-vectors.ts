@@ -66,13 +66,12 @@ const ids = {
   cashier: newId(),
   customer: newId(),
   product: newId(),
-  phone: newId(),
+  item2: newId(),
   variant: newId(),
 };
 
 interface LineIn {
-  phoneUnitId: string | null;
-  variantId: string | null;
+  variantId: string;
   description: string;
   quantity: number;
   /** Omitted = 1 (pieces). Only written into the data of hashVersion 2 invoices. */
@@ -108,7 +107,6 @@ const accessory = (
   unitPrice: number,
   discountAmount = 0,
 ): LineIn => ({
-  phoneUnitId: null,
   variantId: ids.variant,
   description,
   quantity,
@@ -116,14 +114,14 @@ const accessory = (
   costPrice: Math.floor(unitPrice * 0.6),
   discountAmount,
 });
-const phone = (
+/** A second piece item, so one invoice can carry two different items. */
+const secondItem = (
   description: string,
   quantity: number,
   unitPrice: number,
   discountAmount = 0,
 ): LineIn => ({
-  phoneUnitId: ids.phone,
-  variantId: null,
+  variantId: ids.item2,
   description,
   quantity,
   unitPrice,
@@ -138,7 +136,6 @@ const weighted = (
   pricePerKg: number,
   discountAmount = 0,
 ): LineIn => ({
-  phoneUnitId: null,
   variantId: ids.variant,
   description,
   quantity: grams,
@@ -208,7 +205,7 @@ const specs: Spec[] = [
     invoiceDiscount: 0,
     lines: [
       accessory('Fast Charger 25W', 2, 50_000),
-      phone('Galaxy A55 8/256 · IMEI 356938035643809', 1, 199_950, 19_995),
+      secondItem('Basmati Rice 5kg', 1, 199_950, 19_995),
     ],
     payments: [
       { method: 'cash', amount: 179_955, reference: null },
@@ -221,7 +218,7 @@ const specs: Spec[] = [
     customerId: ids.customer,
     note: 'نقد ادائیگی — شکریہ ✓',
     invoiceDiscount: 0,
-    lines: [phone('سیمسنگ گلیکسی A55 (نیلا, 8/256GB) · IMEI 356938035643809', 1, 8_500_000)],
+    lines: [secondItem('باسمتی چاول (سپر کرنل, 5 کلو) · بوری', 1, 8_500_000)],
     payments: [{ method: 'cash', amount: 8_500_000, reference: null }],
   },
   {
@@ -247,9 +244,9 @@ const specs: Spec[] = [
     kind: 'return',
     originalSaleId: 'FIRST', // replaced below with the id of the first invoice
     customerId: ids.customer,
-    note: 'wapsi — screen crack',
+    note: 'wapsi — bori phati hui',
     invoiceDiscount: -500,
-    lines: [phone('Galaxy A55 8/256 · IMEI 356938035643809', -1, 199_950, -19_995)],
+    lines: [secondItem('Basmati Rice 5kg', -1, 199_950, -19_995)],
     payments: [
       { method: 'cash', amount: -79_455, reference: null },
       { method: 'khata', amount: -100_000, reference: null },

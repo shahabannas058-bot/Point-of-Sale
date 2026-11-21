@@ -26,7 +26,6 @@ const ZERO = {
   cashRefunds: 0,
   udhaarCollected: 0,
   supplierPaid: 0,
-  repairCash: 0,
   expenses: 0,
   cashIn: 0,
   cashOut: 0,
@@ -73,7 +72,6 @@ describe('cash.drawer', () => {
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Metro' });
     await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      phones: [],
       accessories: [{ variantId: t.ids.chargerId, quantity: 10, unitCost: 90_000 }],
       paidNow: { method: 'cash', amount: 50_000 },
     }); // -500
@@ -93,7 +91,6 @@ describe('cash.drawer', () => {
       cashRefunds: 150_000,
       udhaarCollected: 100_000,
       supplierPaid: 250_000,
-      repairCash: 0,
       expenses: 30_000,
       cashIn: 500_000,
       cashOut: 100_000,
@@ -255,7 +252,7 @@ describe('cash.closeDay', () => {
   });
 });
 
-describe('cash: clock and repairs', () => {
+describe('cash: clock and the legacy repair column', () => {
   it('refuses to close when the PC clock is behind the last close', async () => {
     const c = await t.svc.cash.closeDay({ counted: 0, carriedForward: 0 });
     t.clock.advance(-10 * 60_000);
@@ -269,16 +266,15 @@ describe('cash: clock and repairs', () => {
     expect(c2.periodStart).toBe(c.closedAt);
   });
 
-  it('counts a cash repair advance', async () => {
-    await t.svc.repairs.create({
-      walkIn: { name: 'Asif' },
-      deviceBrand: 'Samsung',
-      deviceModel: 'A15',
-      problem: 'Screen',
-      estimatedCost: 500_000,
-      advance: { amount: 200_000, method: 'cash' },
-    });
-    expect((await t.svc.cash.drawer()).repairCash).toBe(200_000);
+  it('writes 0 into the legacy repair_cash column and keeps it out of the close', async () => {
+    const c = await t.svc.cash.closeDay({ counted: 0, carriedForward: 0 });
+    expect(c).not.toHaveProperty('repairCash');
+    const rows = await t.driver.query<{ repair_cash: number }>(
+      'SELECT repair_cash FROM day_closes WHERE id = ?',
+      [c.id],
+    );
+    expect(rows).toEqual([{ repair_cash: 0 }]);
+    expect((await t.svc.cash.drawer()).lastClose).not.toHaveProperty('repairCash');
   });
 });
 

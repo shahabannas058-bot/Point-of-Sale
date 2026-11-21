@@ -1,4 +1,4 @@
-import type { AccessoryVariant, PhoneUnit, PhoneUnitView, Product, VariantView } from '@pos/shared';
+import type { AccessoryVariant, Product, VariantView } from '@pos/shared';
 import { camelizeKeys } from '../rows';
 
 export type Raw = Record<string, unknown>;
@@ -26,33 +26,12 @@ function split(row: Raw): { item: Raw; product: Raw; onHand: number } {
 const join = (parts: (string | null | undefined)[], sep: string): string =>
   parts.filter((p): p is string => typeof p === 'string' && p !== '').join(sep);
 
-export function phoneLabel(
-  product: Pick<Product, 'brand' | 'name'>,
-  unit: Pick<PhoneUnit, 'colour' | 'ramGb' | 'storageGb'>,
-): string {
-  const mem =
-    unit.ramGb !== null && unit.storageGb !== null
-      ? `${unit.ramGb}/${unit.storageGb}GB`
-      : unit.storageGb !== null
-        ? `${unit.storageGb}GB`
-        : null;
-  const extra = join([unit.colour, mem], ', ');
-  return join([`${product.brand} ${product.name}`, extra === '' ? null : `(${extra})`], ' ');
-}
-
 export function variantLabel(
   product: Pick<Product, 'brand' | 'name'>,
   variant: Pick<AccessoryVariant, 'model' | 'colour'>,
 ): string {
   const extra = join([variant.model, variant.colour], ', ');
   return join([`${product.brand} ${product.name}`, extra === '' ? null : `(${extra})`], ' ');
-}
-
-export function toPhoneView(row: Raw): PhoneUnitView {
-  const { item, product, onHand } = split(row);
-  const unit = mapRow<PhoneUnit>(item);
-  const prod = mapRow<Product>(product);
-  return { unit, product: prod, inStock: onHand > 0, label: phoneLabel(prod, unit) };
 }
 
 export function toVariantView(row: Raw): VariantView {

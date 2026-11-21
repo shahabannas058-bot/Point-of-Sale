@@ -19,7 +19,6 @@ import {
   outboxRow,
   paymentRow,
   purchaseRow,
-  receivePhone,
   saleRow,
 } from './helpers';
 
@@ -30,15 +29,6 @@ beforeEach(async () => {
 afterEach(() => {
   db.close();
 });
-
-const unitMove = (quantity: 1 | -1, over: Record<string, string | number | null> = {}) =>
-  movementRow({
-    type: quantity === 1 ? 'purchase' : 'sale',
-    phone_unit_id: SHOP.phoneUnitId,
-    variant_id: null,
-    quantity,
-    ...over,
-  });
 
 describe('stock_movements is append-only', () => {
   it('rejects UPDATE and DELETE', async () => {
@@ -118,12 +108,9 @@ describe('stock_movements is append-only', () => {
     await expect(
       insertRow(db, 'stock_movements', movementRow({ type: 'purchase', quantity: 0 })),
     ).rejects.toThrow(/CHECK constraint failed/);
-    // neither target / both targets
+    // no target item
     await expect(
-      insertRow(db, 'stock_movements', movementRow({ variant_id: null, phone_unit_id: null })),
-    ).rejects.toThrow(/CHECK constraint failed/);
-    await expect(
-      insertRow(db, 'stock_movements', movementRow({ phone_unit_id: SHOP.phoneUnitId })),
+      insertRow(db, 'stock_movements', movementRow({ variant_id: null })),
     ).rejects.toThrow(/CHECK constraint failed/);
     // transfer needs ref_type = 'transfer'; ref_type and ref_id come together
     await expect(
@@ -136,14 +123,6 @@ describe('stock_movements is append-only', () => {
     await expect(
       insertRow(db, 'stock_movements', movementRow({ ref_type: 'sale' })),
     ).rejects.toThrow(/CHECK constraint failed/);
-    // phone units move one at a time
-    await expect(
-      insertRow(
-        db,
-        'stock_movements',
-        movementRow({ phone_unit_id: SHOP.phoneUnitId, variant_id: null, quantity: 2 }),
-      ),
-    ).rejects.toThrow(/CHECK constraint failed|within 0\.\.1/); // the guard trigger fires before CHECKs
     expect(await count(db, 'stock_movements')).toBe(1);
   });
 });
@@ -157,115 +136,8 @@ describe('transfer movements require a ref_type', () => {
   });
 });
 
-describe('phone unit guard', () => {
-  it('allows +1 then -1 but aborts a second -1', async () => {
-    await insertRow(db, 'stock_movements', unitMove(1));
-    await insertRow(db, 'stock_movements', unitMove(-1));
-    await expect(insertRow(db, 'stock_movements', unitMove(-1))).rejects.toThrow(/within 0\.\.1/);
-    expect(await count(db, 'stock_movements')).toBe(2);
-  });
-
-  it('aborts a second +1 (the same IMEI cannot be in stock twice)', async () => {
-    await insertRow(db, 'stock_movements', unitMove(1));
-    await expect(insertRow(db, 'stock_movements', unitMove(1))).rejects.toThrow(/within 0\.\.1/);
-  });
-
-  it('aborts selling a unit that was never received', async () => {
-    await expect(insertRow(db, 'stock_movements', unitMove(-1))).rejects.toThrow(/within 0\.\.1/);
-  });
-
-  it('a transfer works when the -1 at the source comes before the +1 at the destination', async () => {
-    await receivePhone(db, SHOP.phoneUnitId, SHOP.branchId);
-    const ref = newId();
-    await insertRow(
-      db,
-      'stock_movements',
-      unitMove(-1, { type: 'transfer', ref_type: 'transfer', ref_id: ref }),
-    );
-    await insertRow(
-      db,
-      'stock_movements',
-      unitMove(1, {
-        type: 'transfer',
-        ref_type: 'transfer',
-        ref_id: ref,
-        branch_id: SHOP.branch2Id,
-      }),
-    );
-    const where = await db.query<{ branch_id: string; on_hand: number }>(
-      'select branch_id, on_hand from v_phone_unit_on_hand where phone_unit_id = ?',
-      [SHOP.phoneUnitId],
-    );
-    expect(where).toEqual([{ branch_id: SHOP.branch2Id, on_hand: 1 }]);
-  });
-
-  it('the reverse transfer order (+1 destination first) aborts', async () => {
-    await receivePhone(db);
-    const ref = newId();
-    await expect(
-      insertRow(
-        db,
-        'stock_movements',
-        unitMove(1, {
-          type: 'transfer',
-          ref_type: 'transfer',
-          ref_id: ref,
-          branch_id: SHOP.branch2Id,
-        }),
-      ),
-    ).rejects.toThrow(/within 0\.\.1/);
-  });
-
-  it('re-acquiring a unit (+1, -1 sale, +1 return) reuses the same unit row', async () => {
-    await insertRow(db, 'stock_movements', unitMove(1));
-    await insertRow(db, 'stock_movements', unitMove(-1));
-    await insertRow(db, 'stock_movements', unitMove(1, { type: 'return' }));
-    const onHand = await db.query<{ on_hand: number }>(
-      'select on_hand from v_phone_unit_on_hand where phone_unit_id = ?',
-      [SHOP.phoneUnitId],
-    );
-    expect(onHand).toEqual([{ on_hand: 1 }]);
-    expect(await count(db, 'phone_units')).toBe(1);
-  });
-
-  it('a duplicate imei1 insert into phone_units fails with a unique violation', async () => {
-    await expect(
-      insertRow(db, 'phone_units', {
-        id: newId(),
-        product_id: SHOP.productId,
-        imei1: '356938035643809',
-        pta_status: 'non_pta',
-        condition: 'used',
-        cost_price: 1,
-        sale_price: 2,
-        created_at: 1,
-        updated_at: 1,
-      }),
-    ).rejects.toThrow(/UNIQUE constraint failed: phone_units\.imei1/);
-  });
-
-  it('a duplicate serial, imei2 or barcode also fails', async () => {
-    const unit = (over: Record<string, string | number | null>) => ({
-      id: newId(),
-      product_id: SHOP.productId,
-      pta_status: 'non_pta',
-      condition: 'used',
-      cost_price: 1,
-      sale_price: 2,
-      created_at: 1,
-      updated_at: 1,
-      ...over,
-    });
-    await insertRow(db, 'phone_units', unit({ serial: 'SN-1' }));
-    await expect(insertRow(db, 'phone_units', unit({ serial: 'SN-1' }))).rejects.toThrow(/UNIQUE/);
-    await insertRow(
-      db,
-      'phone_units',
-      unit({ imei1: '490154203237518', imei2: '490154203237526' }),
-    );
-    await expect(
-      insertRow(db, 'phone_units', unit({ imei1: '490154203237534', imei2: '490154203237526' })),
-    ).rejects.toThrow(/UNIQUE/);
+describe('item barcodes are unique', () => {
+  it('a duplicate barcode fails', async () => {
     await expect(
       insertRow(db, 'accessory_variants', {
         id: newId(),
@@ -278,30 +150,6 @@ describe('phone unit guard', () => {
         updated_at: 1,
       }),
     ).rejects.toThrow(/UNIQUE/);
-  });
-
-  it('phone unit CHECKs: needs imei1 or serial, imei2 needs imei1, imei2 differs', async () => {
-    const unit = (over: Record<string, string | number | null>) => ({
-      id: newId(),
-      product_id: SHOP.productId,
-      pta_status: 'non_pta',
-      condition: 'used',
-      cost_price: 1,
-      sale_price: 2,
-      created_at: 1,
-      updated_at: 1,
-      ...over,
-    });
-    await expect(insertRow(db, 'phone_units', unit({}))).rejects.toThrow(/CHECK/);
-    await expect(
-      insertRow(db, 'phone_units', unit({ serial: 'S', imei2: '490154203237518' })),
-    ).rejects.toThrow(/CHECK/);
-    await expect(
-      insertRow(db, 'phone_units', unit({ imei1: '490154203237518', imei2: '490154203237518' })),
-    ).rejects.toThrow(/CHECK/);
-    await expect(insertRow(db, 'phone_units', unit({ imei1: '1234567890123a5' }))).rejects.toThrow(
-      /CHECK/,
-    );
   });
 });
 
@@ -528,31 +376,18 @@ describe('return and void rules', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('sale_lines CHECKs: zero quantity, both unit and variant, negative price', async () => {
+  it('sale_lines CHECKs: zero quantity, no item, negative price', async () => {
     const sale = saleRow();
     await insertRow(db, 'sales', sale);
     const id = sale.id as string;
     await expect(
       insertRow(db, 'sale_lines', lineRow(id, { quantity: 0, line_total: 0 })),
     ).rejects.toThrow(/CHECK/);
-    await expect(
-      insertRow(db, 'sale_lines', lineRow(id, { phone_unit_id: SHOP.phoneUnitId })),
-    ).rejects.toThrow(/CHECK/);
+    await expect(insertRow(db, 'sale_lines', lineRow(id, { variant_id: null }))).rejects.toThrow(
+      /CHECK/,
+    );
     await expect(
       insertRow(db, 'sale_lines', lineRow(id, { unit_price: -1, line_total: -1 })),
-    ).rejects.toThrow(/CHECK/);
-    await expect(
-      insertRow(
-        db,
-        'sale_lines',
-        lineRow(id, {
-          variant_id: null,
-          phone_unit_id: SHOP.phoneUnitId,
-          quantity: 2,
-          unit_price: 500,
-          line_total: 1000,
-        }),
-      ),
     ).rejects.toThrow(/CHECK/);
   });
 });
@@ -808,7 +643,7 @@ describe('foreign keys and users', () => {
     await expect(
       insertRow(db, 'products', {
         id: newId(),
-        kind: 'phone',
+        kind: 'accessory',
         brand: 'B',
         name: 'N',
         is_active: 2,

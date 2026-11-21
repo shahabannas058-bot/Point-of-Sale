@@ -28,11 +28,10 @@ export function TillInfo({
   const q = useServiceQuery(
     (s) =>
       s.insights.item({
-        variantId: line?.variantId,
-        phoneUnitId: line?.phoneUnitId,
+        variantId: line?.variantId ?? '',
         customerId,
       }),
-    [line?.variantId, line?.phoneUnitId, customerId],
+    [line?.variantId, customerId],
     line !== undefined,
   );
   if (!line) return null;
@@ -56,11 +55,7 @@ export function TillInfo({
         <dl className="m-0">
           <Row label={t('till.stock')}>
             <span className={`num ${d.onHand <= 0 ? 'text-[var(--danger-ink)]' : ''}`}>
-              {line.kind === 'phone'
-                ? d.onHand > 0
-                  ? t('inv.inStock')
-                  : t('inv.sold')
-                : qty(d.onHand)}
+              {qty(d.onHand)}
             </span>
           </Row>
           {d.lastPurchase ? (

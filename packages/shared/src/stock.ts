@@ -5,7 +5,6 @@ import {
   EpochMsSchema,
   NonNegativePaisaSchema,
   PaisaSchema,
-  PhoneUnitIdSchema,
   PurchaseIdSchema,
   QuantitySchema,
   StockMovementIdSchema,
@@ -21,9 +20,8 @@ export const StockMovementSchema = z
     id: StockMovementIdSchema,
     branchId: BranchIdSchema,
     type: StockMovementTypeSchema,
-    phoneUnitId: PhoneUnitIdSchema.nullable(),
-    variantId: VariantIdSchema.nullable(),
-    /** Signed. sale < 0, purchase > 0; return/adjustment/transfer either sign. Phone units are always +1 / -1. */
+    variantId: VariantIdSchema,
+    /** Signed. sale < 0, purchase > 0; return/adjustment/transfer either sign. */
     quantity: QuantitySchema,
     unitCost: NonNegativePaisaSchema.nullable(),
     refType: StockRefTypeSchema.nullable(),
@@ -35,10 +33,6 @@ export const StockMovementSchema = z
   .superRefine((m, ctx) => {
     const issue = makeIssue(ctx);
     if (m.quantity === 0) issue(['quantity'], 'Quantity cannot be zero');
-    if ((m.phoneUnitId === null) === (m.variantId === null))
-      issue(['variantId'], 'Exactly one of phoneUnitId / variantId is required');
-    if (m.phoneUnitId !== null && Math.abs(m.quantity) !== 1)
-      issue(['quantity'], 'Phone units move one at a time (+1 / -1)');
     if (m.type === 'sale' && m.quantity > 0)
       issue(['quantity'], 'A sale movement must be negative');
     if (m.type === 'purchase' && m.quantity < 0)

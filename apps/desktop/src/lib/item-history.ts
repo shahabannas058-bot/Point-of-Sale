@@ -19,7 +19,6 @@ const KIND_KEY: Record<ItemHistoryKind, TKey> = {
   return: 'hist.kind.return',
   purchase: 'hist.kind.purchase',
   adjustment: 'hist.kind.adjustment',
-  repair: 'hist.kind.repair',
   transfer: 'hist.kind.transfer',
 };
 
@@ -33,7 +32,6 @@ export function historyKindTone(kind: ItemHistoryKind): Tone {
     case 'return':
       return 'success';
     case 'sale':
-    case 'repair':
       return 'danger';
     case 'adjustment':
       return 'warning';
@@ -49,13 +47,13 @@ export function signedQtyText(quantity: number, scale: UnitScale, unit: UnitLabe
 }
 
 export interface ReferenceLines {
-  /** What the movement belonged to: invoice + customer, supplier + bill no, ticket no, or the reason. */
+  /** What the movement belonged to: invoice + customer, supplier + bill no, or the reason. */
   main: string;
   /** Batch / expiry and any note that is not already the main line; null when there is nothing more to say. */
   sub: string | null;
 }
 
-/** The main line: "Invoice K-000012 · Haji Rafiq", "Supplier Mandi · ref 123", "Ticket R-0004", or the reason. */
+/** The main line: "Invoice K-000012 · Haji Rafiq", "Supplier Mandi · ref 123", or the reason. */
 export function referenceText(entry: Pick<ItemHistoryEntry, 'ref' | 'reason'>, t: TFn): string {
   const { ref } = entry;
   switch (ref.kind) {
@@ -71,8 +69,6 @@ export function referenceText(entry: Pick<ItemHistoryEntry, 'ref' | 'reason'>, t
       ]
         .filter(Boolean)
         .join(' · ');
-    case 'repair':
-      return `${t('repair.ticket')} ${ref.ticketNo}`;
     case 'adjustment':
       return entry.reason ?? '—';
     case 'transfer':
@@ -124,15 +120,9 @@ export function historyDateRange(
 }
 
 /** A stable key for a dialog's item, for query dependencies. */
-export const itemRefKey = (ref: ItemRef): string =>
-  'variantId' in ref ? `v:${ref.variantId}` : `p:${ref.phoneUnitId}`;
+export const itemRefKey = (ref: ItemRef): string => `v:${ref.variantId}`;
 
-/** Which item a cart line is: a variant or a phone unit; null for a line that has neither (should not happen). */
-export function cartLineItemRef(line: {
-  variantId?: string;
-  phoneUnitId?: string;
-}): ItemRef | null {
-  if (line.variantId) return { variantId: line.variantId };
-  if (line.phoneUnitId) return { phoneUnitId: line.phoneUnitId };
-  return null;
-}
+/** Which item a cart line is. */
+export const cartLineItemRef = (line: { variantId: string }): ItemRef => ({
+  variantId: line.variantId,
+});

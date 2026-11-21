@@ -1,8 +1,8 @@
 import initSqlJs from 'sql.js';
 import { describe, expect, it } from 'vitest';
-import { migrate, migrationsFromFiles } from '@pos/db';
+import { migrate, migrationsFromFiles, type SqlDriver } from '@pos/db';
 import { createPosService } from '@pos/db/service';
-import { isServiceError, pktDate, type BusinessType, type PosService } from '@pos/shared';
+import { isServiceError, pktDate, type PosService } from '@pos/shared';
 import { createSqlJsDriver } from '../src/db/sqljs-driver';
 
 /**
@@ -15,7 +15,7 @@ const files = import.meta.glob<string>('../../../packages/db/migrations/*.sql', 
   eager: true,
 });
 
-async function shopOf(type: BusinessType): Promise<PosService> {
+async function shopOf(): Promise<{ svc: PosService; driver: SqlDriver }> {
   const SQL = await initSqlJs();
   const driver = createSqlJsDriver(new SQL.Database());
   await migrate(driver, migrationsFromFiles(files));
@@ -25,15 +25,15 @@ async function shopOf(type: BusinessType): Promise<PosService> {
     branchName: 'Main',
     invoicePrefix: 'K',
     owner: { username: 'owner', displayName: 'Owner', pin: '1234' },
-    businessType: type,
+    businessType: 'kiryana',
   });
   await svc.auth.login('owner', '1234');
-  return svc;
+  return { svc, driver };
 }
 
 describe('kiryana on sql.js', () => {
   it('migrates to version 6 and sells loose goods by weight with exact, rounded totals', async () => {
-    const svc = await shopOf('kiryana');
+    const { svc } = await shopOf();
     const chini = await svc.catalog.createAccessory({
       product: { brand: 'Loose', name: 'Chini (sugar)' },
       sku: 'CHINI',
@@ -72,7 +72,7 @@ describe('kiryana on sql.js', () => {
   });
 
   it('sells the batch that expires first, skips an expired one, and returns goods to their batch', async () => {
-    const svc = await shopOf('kiryana');
+    const { svc } = await shopOf();
     const milk = await svc.catalog.createAccessory({
       product: { brand: 'Olpers', name: 'Milk 1L' },
       sku: 'MILK',
@@ -89,7 +89,6 @@ describe('kiryana on sql.js', () => {
     });
     await svc.purchasing.receive({
       supplierId: supplier.id,
-      phones: [],
       accessories: [line(5, -2, 'OLD'), line(10, 20, 'LATE'), line(4, 5, 'SOON')],
     });
 
@@ -125,8 +124,9 @@ describe('kiryana on sql.js', () => {
   });
 
   it('refuses modules the shop does not own', async () => {
-    const svc = await shopOf('kiryana');
-    const refused = await svc.repairs.list().then(
+    const { svc, driver } = await shopOf();
+    await driver.exec("update app_meta set value = 'weight_units' where key = 'modules'");
+    const refused = await svc.batches.list().then(
       () => null,
       (e: unknown) => e,
     );

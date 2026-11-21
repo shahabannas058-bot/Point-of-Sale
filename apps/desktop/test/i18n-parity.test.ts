@@ -32,8 +32,6 @@ describe('i18n dictionaries', () => {
 
   it('dynamic key families are complete', () => {
     const families: [string, string[]][] = [
-      ['pta', ['approved', 'non_pta', 'jv']],
-      ['condition', ['new', 'used', 'open_box']],
       ['method', ['cash', 'khata', 'jazzcash', 'easypaisa', 'bank_transfer', 'card']],
       ['kind', ['sale', 'return', 'void']],
       ['role', ['owner', 'manager', 'cashier']],
@@ -69,6 +67,6 @@ describe('translate', () => {
 
   it('dynKey falls back for unknown values', () => {
     expect(dynKey('err', 'NOT_A_REAL_CODE')).toBe('err.generic');
-    expect(dynKey('pta', 'approved')).toBe('pta.approved');
+    expect(dynKey('method', 'cash')).toBe('method.cash');
   });
 });

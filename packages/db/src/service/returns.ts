@@ -55,7 +55,7 @@ interface ComputedReturn {
 
 /*
  * sale_lines has no "original line" column, so earlier returns are matched to original lines by item
- * (phone unit or variant) and handed out first-in-first-out by line number. For the common case (one line
+ * and handed out first-in-first-out by line number. For the common case (one line
  * per item) this is exact; stock quantities are always exact because they are ledger sums per item.
  */
 async function loadReturnContext(
@@ -67,30 +67,20 @@ async function loadReturnContext(
     throw new ServiceError('RETURN_NOT_ALLOWED', 'Only a sale invoice can be returned', {
       kind: original.kind,
     });
-  const prior = await driver.query<{
-    phone_unit_id: string | null;
-    variant_id: string | null;
-    qty: number;
-  }>(
-    `SELECT l.phone_unit_id, l.variant_id, -SUM(l.quantity) AS qty
+  const prior = await driver.query<{ variant_id: string; qty: number }>(
+    `SELECT l.variant_id, -SUM(l.quantity) AS qty
      FROM sale_lines l JOIN sales s ON s.id = l.sale_id
      WHERE s.original_sale_id = ? AND s.kind IN ('return', 'void')
-     GROUP BY l.phone_unit_id, l.variant_id`,
+     GROUP BY l.variant_id`,
     [original.id],
   );
-  const pool = new Map(
-    prior.map((r) => [
-      r.phone_unit_id !== null ? `u:${r.phone_unit_id}` : `v:${r.variant_id ?? ''}`,
-      r.qty,
-    ]),
-  );
+  const pool = new Map(prior.map((r) => [r.variant_id, r.qty]));
   const states = [...original.lines]
     .sort((a, b) => a.lineNo - b.lineNo)
     .map((line): LineState => {
-      const key = line.phoneUnitId !== null ? `u:${line.phoneUnitId}` : `v:${line.variantId ?? ''}`;
-      const available = pool.get(key) ?? 0;
+      const available = pool.get(line.variantId) ?? 0;
       const returnedQty = Math.min(available, line.quantity);
-      pool.set(key, available - returnedQty);
+      pool.set(line.variantId, available - returnedQty);
       return { line, returnedQty, remainingQty: line.quantity - returnedQty };
     });
   const disc = await driver.query<{ d: number }>(
@@ -135,7 +125,6 @@ function computeReturn(
       lineDiscountShare(d, st.returnedQty + q, n) - lineDiscountShare(d, st.returnedQty, n);
     specs.push({
       productId: st.line.productId,
-      phoneUnitId: st.line.phoneUnitId,
       variantId: st.line.variantId,
       description: st.line.description,
       quantity: -q,

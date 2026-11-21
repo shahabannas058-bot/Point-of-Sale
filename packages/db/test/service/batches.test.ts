@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { VariantView } from '@pos/shared';
-import { addMilk, addSupplier, batchOnHand, inDays, receive, shopOf } from './batch-helpers';
+import {
+  addMilk,
+  addSupplier,
+  batchOnHand,
+  inDays,
+  receive,
+  setModules,
+  shopOf,
+} from './batch-helpers';
 import { expectCode, first, sellCash, snapshotCounts, stockSum, type TestService } from './helpers';
 
 describe('receiving stock with a batch and expiry date', () => {
   it('creates a batch whose on-hand and days left are readable', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [{ qty: 10, days: 10, batchNo: 'L-01' }]);
 
@@ -24,20 +32,19 @@ describe('receiving stock with a batch and expiry date', () => {
   });
 
   it('a batch number is optional', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [{ qty: 3, days: 4 }]);
     expect((await t.svc.batches.list())[0]).toMatchObject({ batchNo: null, onHand: 3 });
   });
 
   it('rejects a bad or missing expiry date and writes nothing', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     const supplierId = await addSupplier(t);
     const before = await snapshotCounts(t.driver);
     const line = (batch: unknown) => ({
       supplierId,
-      phones: [],
       accessories: [
         {
           variantId: milk.variant.id,
@@ -55,7 +62,7 @@ describe('receiving stock with a batch and expiry date', () => {
   });
 
   it('works for loose goods: a 10 kg batch is held in grams', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const atta = await t.svc.catalog.createAccessory({
       product: { brand: 'Loose', name: 'Atta' },
       sku: 'ATTA',
@@ -71,7 +78,7 @@ describe('receiving stock with a batch and expiry date', () => {
   });
 
   it('writes a stock_batch row and a batch-carrying movement to the outbox', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [{ qty: 6, days: 9, batchNo: 'L-02' }]);
     const rows = await t.driver.query<{ entity_type: string; payload: string }>(
@@ -94,7 +101,7 @@ describe('receiving stock with a batch and expiry date', () => {
 
 describe('selling batch-tracked stock (first expiry, first out)', () => {
   it('takes from the batch that expires first, even if it was received last', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [
       { qty: 10, days: 20, batchNo: 'LATE' },
@@ -112,7 +119,7 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
   });
 
   it('two cart lines of the same item consume the batches one after the other', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [
       { qty: 4, days: 5, batchNo: 'SOON' },
@@ -127,7 +134,7 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
   });
 
   it('never sells an expired batch: it is skipped, and short stock reports the expired quantity', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [
       { qty: 5, days: -2, batchNo: 'OLD' },
@@ -145,7 +152,7 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
   });
 
   it('sells batches first and stock without a batch last', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await t.svc.catalog.createAccessory({
       product: { brand: 'Olpers', name: 'Milk 1L' },
       sku: 'MILK-1L',
@@ -166,7 +173,7 @@ describe('selling batch-tracked stock (first expiry, first out)', () => {
   });
 
   it('with negative stock allowed, the shortfall goes to the no-batch bucket', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [{ qty: 3, days: 10, batchNo: 'B1' }]);
     await t.svc.settings.update({ allowNegativeStock: true });
@@ -198,7 +205,7 @@ describe('returning batch-tracked goods', () => {
   }
 
   it('puts the goods back into the batches they came from, in the order they left', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     const sale = await soldSix(t, milk);
     const line = first(sale.lines, 'sale line');
@@ -209,7 +216,7 @@ describe('returning batch-tracked goods', () => {
   });
 
   it('a second partial return does not overfill a batch', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     const sale = await soldSix(t, milk);
     const line = first(sale.lines, 'sale line');
@@ -224,7 +231,7 @@ describe('returning batch-tracked goods', () => {
 
 describe('the expiry list and writing off expired goods', () => {
   it('lists batches that still have stock, earliest expiry first, and filters by days left', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [
       { qty: 4, days: 20, batchNo: 'D20' },
@@ -246,7 +253,7 @@ describe('the expiry list and writing off expired goods', () => {
   });
 
   it('writeOff removes the whole batch from stock with a reason and keeps the ledger intact', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [
       { qty: 5, days: -2, batchNo: 'OLD' },
@@ -268,7 +275,7 @@ describe('the expiry list and writing off expired goods', () => {
   });
 
   it('writeOff needs a reason, a real batch with stock, and the adjust-stock permission', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [{ qty: 5, days: -2, batchNo: 'OLD' }]);
     const old = first(await t.svc.batches.list(), 'batch');
@@ -289,8 +296,9 @@ describe('the expiry list and writing off expired goods', () => {
 });
 
 describe('the batch_expiry module', () => {
-  it('a mobile shop cannot receive batches or read the expiry list', async () => {
-    const t = await shopOf('mobile');
+  it('a shop without the module cannot receive batches or read the expiry list', async () => {
+    const t = await shopOf();
+    await setModules(t, ['weight_units']);
     const pens = await t.svc.catalog.createAccessory({
       product: { brand: 'Reynolds', name: 'Pen' },
       sku: 'PEN',
@@ -302,7 +310,6 @@ describe('the batch_expiry module', () => {
     const e = await expectCode(
       t.svc.purchasing.receive({
         supplierId,
-        phones: [],
         accessories: [
           {
             variantId: pens.variant.id,
@@ -320,11 +327,10 @@ describe('the batch_expiry module', () => {
   });
 
   it('a plain receive (no batch) still works in a kiryana shop and sells as before', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await t.svc.purchasing.receive({
       supplierId: await addSupplier(t),
-      phones: [],
       accessories: [{ variantId: milk.variant.id, quantity: 5, unitCost: 29_000 }],
     });
     await sellCash(t, [{ variantId: milk.variant.id, quantity: 2 }]);

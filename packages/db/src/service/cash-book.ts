@@ -23,7 +23,7 @@ const NOTE_MAX = 500;
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 
 /**
- * Cash totals of one branch over [from, to). Sales and repairs carry their own payment rows; udhaar and supplier
+ * Cash totals of one branch over [from, to). Sales carry their own payment rows; udhaar and supplier
  * payments are ledger entries; everything else is in cash_entries. Only method = 'cash' moves the drawer.
  */
 async function breakdown(
@@ -51,15 +51,13 @@ async function breakdown(
            (SELECT COALESCE(-SUM(amount), 0) FROM ledger_entries
              WHERE supplier_id IS NOT NULL AND type = 'payment_made' AND method = 'cash'
                AND created_at >= ? AND created_at < ?) AS supplier_paid,
-           (SELECT COALESCE(SUM(amount), 0) FROM repair_payments
-             WHERE method = 'cash' AND created_at >= ? AND created_at < ?) AS repair_cash,
            (SELECT COALESCE(SUM(CASE WHEN type = 'expense' THEN amount END), 0) FROM cash_entries
              WHERE branch_id = ? AND created_at >= ? AND created_at < ?) AS expenses,
            (SELECT COALESCE(SUM(CASE WHEN type = 'cash_in' THEN amount END), 0) FROM cash_entries
              WHERE branch_id = ? AND created_at >= ? AND created_at < ?) AS cash_in,
            (SELECT COALESCE(SUM(CASE WHEN type = 'cash_out' THEN amount END), 0) FROM cash_entries
              WHERE branch_id = ? AND created_at >= ? AND created_at < ?) AS cash_out`,
-        [...bft, ...bft, ...ft, ...ft, ...ft, ...bft, ...bft, ...bft],
+        [...bft, ...bft, ...ft, ...ft, ...bft, ...bft, ...bft],
       )
     )[0] ?? {};
   const b = {
@@ -67,7 +65,6 @@ async function breakdown(
     cashRefunds: num(r.cash_refunds),
     udhaarCollected: num(r.udhaar_collected),
     supplierPaid: num(r.supplier_paid),
-    repairCash: num(r.repair_cash),
     expenses: num(r.expenses),
     cashIn: num(r.cash_in),
     cashOut: num(r.cash_out),
@@ -77,8 +74,7 @@ async function breakdown(
     b.cashSales -
     b.cashRefunds +
     b.udhaarCollected -
-    b.supplierPaid +
-    b.repairCash -
+    b.supplierPaid -
     b.expenses +
     b.cashIn -
     b.cashOut;
@@ -88,7 +84,6 @@ async function breakdown(
     cashRefunds: paisa(b.cashRefunds),
     udhaarCollected: paisa(b.udhaarCollected),
     supplierPaid: paisa(b.supplierPaid),
-    repairCash: paisa(b.repairCash),
     expenses: paisa(b.expenses),
     cashIn: paisa(b.cashIn),
     cashOut: paisa(b.cashOut),
@@ -100,7 +95,10 @@ const CLOSE_SQL = `SELECT dc.*, u.display_name AS closed_by_name
   FROM day_closes dc JOIN users u ON u.id = dc.closed_by`;
 
 function toDayClose(row: Raw): DayClose {
-  const c = mapRow<Omit<DayClose, 'difference'>>(row);
+  // day_closes.repair_cash is a legacy column from the mobile-shop era, always 0 now: not part of the contract
+  const { repairCash: _legacy, ...c } = mapRow<
+    Omit<DayClose, 'difference'> & { repairCash: number }
+  >(row);
   return { ...c, difference: paisa(c.counted - c.expected) };
 }
 
@@ -314,7 +312,7 @@ export function createCashApi(ctx: Ctx): CashApi {
             rec.cashRefunds,
             rec.udhaarCollected,
             rec.supplierPaid,
-            rec.repairCash,
+            0, // legacy repair_cash column
             rec.expenses,
             rec.cashIn,
             rec.cashOut,

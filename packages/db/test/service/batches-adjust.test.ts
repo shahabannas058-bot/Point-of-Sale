@@ -22,7 +22,7 @@ async function expectInvariant(t: TestService, variantId: string, unbatched = 0)
 
 describe('stock adjustments on a batch-tracked item', () => {
   it('takes a negative adjustment from the batches, nearest expiry first, one movement per batch', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [
       { qty: 10, days: 20, batchNo: 'LATE' },
@@ -45,7 +45,7 @@ describe('stock adjustments on a batch-tracked item', () => {
   });
 
   it('may remove expired stock, so the fresh batch becomes sellable again', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [
       { qty: 5, days: -2, batchNo: 'OLD' },
@@ -66,7 +66,7 @@ describe('stock adjustments on a batch-tracked item', () => {
   });
 
   it('spills what the batches cannot cover into stock without a batch', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await t.svc.catalog.createAccessory({
       product: { brand: 'Olpers', name: 'Milk 1L' },
       sku: 'MILK-1L',
@@ -87,7 +87,7 @@ describe('stock adjustments on a batch-tracked item', () => {
   });
 
   it('still refuses to go below zero and writes nothing', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [{ qty: 3, days: 10, batchNo: 'B1' }]);
     const before = await snapshotCounts(t.driver);
@@ -100,7 +100,7 @@ describe('stock adjustments on a batch-tracked item', () => {
   });
 
   it('a positive adjustment has no expiry date: it is stock without a batch, sold after the batches', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const milk = await addMilk(t);
     await receive(t, milk.variant.id, [{ qty: 3, days: 10, batchNo: 'B1' }]);
 
@@ -121,7 +121,7 @@ describe('stock adjustments on a batch-tracked item', () => {
   });
 
   it('an item without batches still gets exactly one movement without a batch', async () => {
-    const t = await makeService(); // seeded mobile shop: no batch_expiry module, no batches
+    const t = await makeService(); // seeded shop: the charger never had a batch
     await t.loginAs('owner');
     await t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: -2, reason: 'Broken' });
     await t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: 1, reason: 'Found' });
@@ -129,86 +129,5 @@ describe('stock adjustments on a batch-tracked item', () => {
       { batch_id: null, quantity: -2 },
       { batch_id: null, quantity: 1 },
     ]);
-  });
-});
-
-describe('repair spare parts from a batch-tracked item', () => {
-  const DEVICE = {
-    deviceBrand: 'Samsung',
-    deviceModel: 'Galaxy A55',
-    problem: 'Screen cracked',
-    walkIn: { name: 'Ali' },
-    estimatedCost: 100_000,
-  };
-  /** A 'custom' shop owns every module, so it has both `repair` and `batch_expiry`. */
-  async function screenShop(): Promise<{ t: TestService; variantId: string; ticketId: string }> {
-    const t = await shopOf('custom');
-    const screen = await t.svc.catalog.createAccessory({
-      product: { brand: 'Generic', name: 'A55 screen glue' },
-      sku: 'GLUE-A55',
-      costPrice: 50_000,
-      salePrice: 80_000,
-    });
-    const { ticket } = await t.svc.repairs.create(DEVICE);
-    return { t, variantId: screen.variant.id, ticketId: ticket.id };
-  }
-
-  it('consumes the batches nearest expiry first, one part row per batch, each linked to its movement', async () => {
-    const { t, variantId, ticketId } = await screenShop();
-    await receive(t, variantId, [
-      { qty: 5, days: 30, batchNo: 'LATE' },
-      { qty: 2, days: 7, batchNo: 'SOON' },
-    ]);
-
-    const v = await t.svc.repairs.addPart({ ticketId, variantId, quantity: 3 });
-
-    expect(v.parts.map((p) => p.quantity)).toEqual([2, 1]);
-    expect(await batchOnHand(t, 'SOON')).toBe(0);
-    expect(await batchOnHand(t, 'LATE')).toBe(4);
-    const moves = await adjustments(t, variantId);
-    expect(moves.map((m) => m.quantity)).toEqual([-2, -1]);
-    expect(moves.every((m) => m.batch_id !== null)).toBe(true);
-    const links = await t.driver.query<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM repair_parts rp JOIN stock_movements sm ON sm.id = rp.stock_movement_id
-       WHERE rp.ticket_id = ? AND sm.quantity = -rp.quantity AND sm.batch_id IS NOT NULL`,
-      [ticketId],
-    );
-    expect(links[0]?.n).toBe(2);
-    await expectInvariant(t, variantId);
-  });
-
-  it('never fits an expired part: short stock names the expired quantity and writes nothing', async () => {
-    const { t, variantId, ticketId } = await screenShop();
-    await receive(t, variantId, [
-      { qty: 5, days: -1, batchNo: 'OLD' },
-      { qty: 1, days: 30, batchNo: 'FRESH' },
-    ]);
-    const before = await snapshotCounts(t.driver);
-
-    const e = await expectCode(
-      t.svc.repairs.addPart({ ticketId, variantId, quantity: 2 }),
-      'STOCK_INSUFFICIENT',
-    );
-    expect(e.details).toMatchObject({ onHand: 1, requested: 2, expiredOnHand: 5 });
-    expect(await snapshotCounts(t.driver)).toEqual(before);
-
-    const v = await t.svc.repairs.addPart({ ticketId, variantId, quantity: 1 });
-    expect(v.parts.map((p) => p.quantity)).toEqual([1]);
-    expect(await batchOnHand(t, 'FRESH')).toBe(0);
-    expect(await batchOnHand(t, 'OLD')).toBe(5);
-    await expectInvariant(t, variantId);
-  });
-
-  it('a part without batches still gets one part row and one movement without a batch', async () => {
-    const t = await makeService();
-    await t.loginAs('owner');
-    const { ticket } = await t.svc.repairs.create(DEVICE);
-    const v = await t.svc.repairs.addPart({
-      ticketId: ticket.id,
-      variantId: t.ids.chargerId,
-      quantity: 2,
-    });
-    expect(v.parts).toHaveLength(1);
-    expect(await adjustments(t, t.ids.chargerId)).toEqual([{ batch_id: null, quantity: -2 }]);
   });
 });

@@ -8,7 +8,6 @@ import {
   assertPaymentsMatchTotal,
   formatInvoiceNo,
   paisa,
-  phoneUnitState,
   saleTotals,
   sealInvoice,
   stockOnHand,
@@ -35,7 +34,6 @@ import {
   outboxRow,
   paymentRow,
   readInvoices,
-  receivePhone,
   rowStatement,
   saleRow,
   seedShop,
@@ -101,35 +99,6 @@ describe('core stockOnHand and SQL views agree', () => {
         .reduce((sum, r) => sum + r.on_hand, 0);
       expect(sqlTotal).toBe(stockOnHand(movements, { variantId }));
     }
-  });
-
-  it('agrees on phone unit state through a sell and re-acquire cycle', async () => {
-    await receivePhone(db);
-    expect(phoneUnitState(await allMovements(), SHOP.phoneUnitId)).toBe('in_stock');
-    await insertRow(
-      db,
-      'stock_movements',
-      movementRow({
-        type: 'sale',
-        phone_unit_id: SHOP.phoneUnitId,
-        variant_id: null,
-        quantity: -1,
-      }),
-    );
-    expect(phoneUnitState(await allMovements(), SHOP.phoneUnitId)).toBe('out');
-    expect(await db.query('select * from v_phone_unit_on_hand')).toEqual([]);
-    await insertRow(
-      db,
-      'stock_movements',
-      movementRow({
-        type: 'return',
-        phone_unit_id: SHOP.phoneUnitId,
-        variant_id: null,
-        quantity: 1,
-      }),
-    );
-    expect(phoneUnitState(await allMovements(), SHOP.phoneUnitId)).toBe('in_stock');
-    expect(await db.query('select on_hand from v_phone_unit_on_hand')).toEqual([{ on_hand: 1 }]);
   });
 });
 
@@ -279,8 +248,14 @@ describe('read-back and tamper detection', () => {
 describe('atomic commit', () => {
   const stockUp = async (): Promise<void> => {
     await insertRow(db, 'stock_movements', movementRow({ type: 'purchase', quantity: 10 }));
-    await receivePhone(db);
+    await insertRow(
+      db,
+      'stock_movements',
+      movementRow({ type: 'purchase', variant_id: SHOP.variant2Id, quantity: 5 }),
+    );
   };
+  const onHand = (variantId: string): Promise<unknown[]> =>
+    db.query('select on_hand from v_variant_on_hand where variant_id = ?', [variantId]);
   const tables = ['sales', 'sale_lines', 'payments', 'ledger_entries', 'outbox'] as const;
 
   it('rolls back every table when the last statement of the batch violates a CHECK', async () => {
@@ -305,16 +280,19 @@ describe('atomic commit', () => {
     ).toEqual([{ on_hand: 10 }]);
   });
 
-  it('rolls back when a guard trigger aborts mid-batch (selling the same phone twice)', async () => {
+  it('rolls back when a guard trigger aborts mid-batch (an edit of a stored invoice)', async () => {
     await stockUp();
     const chain = buildChain(2);
-    // both invoices contain the same phone unit; the second sale must fail and take its sibling rows with it
+    // the second sale is followed by an edit of the first; the immutability trigger must take its sibling rows with it
     await insertInvoice(db, chain[0]!, { movements: true });
     const salesBefore = await count(db, 'sales');
     const movementsBefore = await count(db, 'stock_movements');
-    await expect(insertInvoice(db, chain[1]!, { movements: true })).rejects.toThrow(
-      /within 0\.\.1/,
-    );
+    await expect(
+      db.batch([
+        ...invoiceStatements(chain[1]!, { movements: true }),
+        { sql: 'update sales set note = ? where id = ?', params: ['edited', chain[0]!.id] },
+      ]),
+    ).rejects.toThrow(/immutable/);
     expect(await count(db, 'sales')).toBe(salesBefore);
     expect(await count(db, 'stock_movements')).toBe(movementsBefore);
   });
@@ -334,13 +312,9 @@ describe('atomic commit', () => {
     expect(await count(db, 'payments')).toBe(2);
     expect(await count(db, 'ledger_entries')).toBe(1);
     expect(await count(db, 'outbox')).toBe(1);
-    // stock: 10 chargers - 2 sold = 8; the phone is out
-    expect(
-      await db.query('select on_hand from v_variant_on_hand where variant_id = ?', [
-        SHOP.variantId,
-      ]),
-    ).toEqual([{ on_hand: 8 }]);
-    expect(await db.query('select * from v_phone_unit_on_hand')).toEqual([]);
+    // stock: 10 chargers - 2 sold = 8; 5 cables - 1 sold = 4
+    expect(await onHand(SHOP.variantId)).toEqual([{ on_hand: 8 }]);
+    expect(await onHand(SHOP.variant2Id)).toEqual([{ on_hand: 4 }]);
     const [queued] = await db.query<{ payload: string }>('select payload from outbox');
     expect(InvoiceSchema.parse(JSON.parse(queued!.payload)).id).toBe(invoice!.id);
   });
@@ -384,23 +358,27 @@ describe('offline durability on a file database', () => {
 });
 
 describe('end to end: price, split, seal, store, verify', () => {
-  it('sells a phone with 5% off plus two chargers, part cash and part khata', async () => {
-    await receivePhone(db);
+  it('sells a cable with 5% off plus two chargers, part cash and part khata', async () => {
+    await insertRow(
+      db,
+      'stock_movements',
+      movementRow({ type: 'purchase', variant_id: SHOP.variant2Id, quantity: 1 }),
+    );
     await insertRow(db, 'stock_movements', movementRow({ type: 'purchase', quantity: 10 }));
 
-    const phonePrice = paisa(8_500_000);
-    const phoneDiscount = applyPercentDiscount(phonePrice, 500).discount; // 425000
+    const cablePrice = paisa(850_000);
+    const cableDiscount = applyPercentDiscount(cablePrice, 500).discount; // 42500
     const totals = saleTotals(
       [
-        { quantity: 1, unitPrice: phonePrice, discountAmount: phoneDiscount },
+        { quantity: 1, unitPrice: cablePrice, discountAmount: cableDiscount },
         { quantity: 2, unitPrice: paisa(150_000), discountAmount: paisa(0) },
       ],
       paisa(0),
     );
-    expect(totals.subtotal).toBe(8_375_000);
+    expect(totals.subtotal).toBe(1_107_500);
     const payments = [
-      { method: 'cash' as const, amount: paisa(5_000_000) },
-      { method: 'khata' as const, amount: paisa(totals.total - 5_000_000) },
+      { method: 'cash' as const, amount: paisa(500_000) },
+      { method: 'khata' as const, amount: paisa(totals.total - 500_000) },
     ];
     assertPaymentsMatchTotal(totals.total, payments);
 
@@ -414,9 +392,9 @@ describe('end to end: price, split, seal, store, verify', () => {
       lines: [
         {
           ...base.lines[1]!,
-          unitPrice: phonePrice,
-          costPrice: paisa(7_800_000),
-          discountAmount: phoneDiscount,
+          unitPrice: cablePrice,
+          costPrice: paisa(780_000),
+          discountAmount: cableDiscount,
           lineTotal: totals.lineTotals[0]!,
         },
         {
@@ -434,13 +412,17 @@ describe('end to end: price, split, seal, store, verify', () => {
 
     expect(verifyChain(await readInvoices(db)).ok).toBe(true);
     expect(await db.query('select balance from v_customer_balance')).toEqual([
-      { balance: totals.total - 5_000_000 },
+      { balance: totals.total - 500_000 },
     ]);
     expect(
       await db.query('select on_hand from v_variant_on_hand where variant_id = ?', [
         SHOP.variantId,
       ]),
     ).toEqual([{ on_hand: 8 }]);
-    expect(await db.query('select * from v_phone_unit_on_hand')).toEqual([]);
+    expect(
+      await db.query('select on_hand from v_variant_on_hand where variant_id = ?', [
+        SHOP.variant2Id,
+      ]),
+    ).toEqual([{ on_hand: 0 }]);
   });
 });

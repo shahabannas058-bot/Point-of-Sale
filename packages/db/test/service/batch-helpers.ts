@@ -1,4 +1,5 @@
-import type { BusinessType, VariantView } from '@pos/shared';
+import { formatModuleList, type ModuleId, type VariantView } from '@pos/shared';
+import { META, upsertMeta } from '../../src/service/meta';
 import { PINS, makeService, type TestService } from './helpers';
 
 const DAY = 86_400_000;
@@ -8,15 +9,14 @@ export const ymd = (ms: number): string => new Date(ms + PKT_OFFSET).toISOString
 /** The date `n` days from the test clock's now (negative = in the past). */
 export const inDays = (t: TestService, n: number): string => ymd(t.clock.peek() + n * DAY);
 
-/** An empty shop of the given business type with an owner and a cashier; the owner is logged in. */
-export async function shopOf(type: BusinessType): Promise<TestService> {
+/** An empty kiryana shop with an owner and a cashier; the owner is logged in. */
+export async function shopOf(): Promise<TestService> {
   const t = await makeService({ seed: false });
   await t.svc.setup.firstRun({
     shopName: 'Test Store',
     branchName: 'Main',
     invoicePrefix: 'K',
     owner: { username: 'owner', displayName: 'Owner', pin: PINS.owner },
-    businessType: type,
   });
   await t.loginAs('owner');
   await t.svc.auth.createUser({
@@ -26,6 +26,11 @@ export async function shopOf(type: BusinessType): Promise<TestService> {
     pin: PINS.cash,
   });
   return t;
+}
+
+/** Replaces the shop's module list, as a licence that grants fewer modules would. */
+export async function setModules(t: TestService, modules: readonly ModuleId[]): Promise<void> {
+  await t.driver.batch([upsertMeta(META.modules, formatModuleList(modules))]);
 }
 
 export async function addMilk(t: TestService): Promise<VariantView> {
@@ -56,7 +61,6 @@ export async function receive(
   const supplierId = await addSupplier(t);
   await t.svc.purchasing.receive({
     supplierId,
-    phones: [],
     accessories: deliveries.map((d) => ({
       variantId,
       quantity: d.qty,

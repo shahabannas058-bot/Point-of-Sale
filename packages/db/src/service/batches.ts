@@ -110,7 +110,7 @@ function addTo(out: Allocation[], batchId: string | null, quantity: number): voi
 
 export interface TakeOutOptions {
   /**
-   * Whether batches past their expiry date may give stock. A sale or a repair part never takes expired goods; an
+   * Whether batches past their expiry date may give stock. A sale never takes expired goods; an
    * adjustment may, because throwing expired stock away is exactly what an adjustment is for.
    */
   includeExpired: boolean;
@@ -121,7 +121,7 @@ export interface TakeOutOptions {
 /**
  * First expiry, first out. Takes `quantity` from the item's batches, nearest expiry first (skipping expired ones unless
  * `includeExpired`); whatever they cannot cover comes from stock without a batch. Every stock-out of a batch-tracked
- * item (sale, adjustment, repair part) must go through here, so that the sum of the batches' stock keeps matching
+ * item (sale, adjustment) must go through here, so that the sum of the batches' stock keeps matching
  * the item's stock.
  */
 export async function allocateTakeOut(
@@ -329,7 +329,6 @@ export function createBatchesApi(ctx: Ctx): BatchesApi {
           id: ctx.newId(),
           branchId: shop.branchId,
           type: 'adjustment',
-          phoneUnitId: null,
           variantId,
           batchId: i.batchId,
           quantity: -onHand,

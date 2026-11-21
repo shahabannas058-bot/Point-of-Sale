@@ -1,20 +1,11 @@
 import type { CashEntry, CashEntryType, DrawerBreakdown, ExpenseCategory } from './cash';
-import type { AccessoryVariant, PhoneUnit, Product } from './catalog';
-import type { PaymentMethod, PhoneCondition, PtaStatus, Role, SaleKind } from './enums';
+import type { AccessoryVariant, Product } from './catalog';
+import type { PaymentMethod, Role, SaleKind } from './enums';
 import type { LedgerEntry } from './ledger';
 import type { BusinessType, ModuleId } from './modules';
 import type { Customer, Supplier, User } from './people';
 import type { Paisa } from './primitives';
 import type { UnitLabel, UnitScale } from './units';
-import type {
-  RepairStatus,
-  RepairTicket,
-  RepairTicketView,
-  Warranty,
-  WarrantyKind,
-  WarrantySaleInfo,
-  WarrantyStatus,
-} from './repairs';
 import type { Invoice } from './sales';
 import type { Purchase } from './stock';
 
@@ -35,7 +26,6 @@ export const SERVICE_ERROR_CODES = [
   'DUPLICATE',
   'EMPTY_CART',
   'STOCK_INSUFFICIENT',
-  'UNIT_NOT_IN_STOCK',
   'PAYMENT_MISMATCH',
   'KHATA_NEEDS_CUSTOMER',
   'DISCOUNT_INVALID',
@@ -50,7 +40,7 @@ export const SERVICE_ERROR_CODES = [
   'INTERNAL',
 ] as const;
 export type ServiceErrorCode = (typeof SERVICE_ERROR_CODES)[number];
-/** details examples: DUPLICATE {field:'imei1'}, STOCK_INSUFFICIENT {onHand,requested,lineNo},
+/** details examples: DUPLICATE {field:'sku'}, STOCK_INSUFFICIENT {onHand,requested,lineNo},
  *  APPROVAL_REQUIRED {reason: ApprovalReason}, LOGIN_LOCKED {retryAfterMs}, LICENCE_BLOCKED {state}. UI maps code -> i18n key `err.<CODE>`. */
 export class ServiceError extends Error {
   override name = 'ServiceError';
@@ -110,8 +100,6 @@ export type GuardAction =
   | 'report'
   | 'ledger_entry'
   | 'catalog_edit'
-  | 'repair'
-  | 'warranty'
   | 'cash';
 export interface SellGuardContext {
   action: GuardAction;
@@ -149,7 +137,7 @@ export interface SetupInput {
   branchName: string;
   invoicePrefix: string /* ^[A-Z0-9]{1,4}$ */;
   owner: { username: string; displayName: string; pin: string /* exactly 4 digits */ };
-  /** Picks the starting module set (MODULE_PRESETS). Default 'custom' = every module. The licence token overrides it later. */
+  /** Picks the starting module set (MODULE_PRESETS). Default 'kiryana'. The licence token overrides it later. */
   businessType?: BusinessType;
 }
 export interface ShopInfo {
@@ -172,7 +160,7 @@ export interface ShopSettings {
   receiptFooter: string | null;
   receiptFooterUr: string | null;
   cashierMaxDiscountBps: number /* default 500 = 5% of gross; above it a cashier needs approval */;
-  allowNegativeStock: boolean /* accessories only; default false. Phone units are always guarded by the DB trigger */;
+  allowNegativeStock: boolean /* default false */;
 }
 export interface SetupApi {
   isSetUp(): Promise<boolean>;
@@ -201,12 +189,6 @@ export interface AuthApi {
 // ---------- catalog ----------
 export type ProductRef =
   { productId: string } | { brand: string; name: string; category?: string | null }; // find-or-create by brand+name
-export interface PhoneUnitView {
-  unit: PhoneUnit;
-  product: Product;
-  inStock: boolean;
-  label: string;
-}
 export interface VariantView {
   variant: AccessoryVariant;
   product: Product;
@@ -214,24 +196,10 @@ export interface VariantView {
   lowStock: boolean /* onHand <= reorderLevel */;
   label: string;
 }
-export type CatalogHit =
-  | { kind: 'phone_unit'; matchedBy: 'imei' | 'serial' | 'name'; item: PhoneUnitView }
-  | { kind: 'variant'; matchedBy: 'barcode' | 'sku' | 'name'; item: VariantView };
-export interface NewPhoneUnitInput {
-  product: ProductRef;
-  imei1?: string | null;
-  imei2?: string | null;
-  serial?: string | null;
-  colour?: string | null;
-  storageGb?: number | null;
-  ramGb?: number | null;
-  batteryHealthPct?: number | null;
-  ptaStatus: PtaStatus;
-  condition: PhoneCondition;
-  costPrice: number;
-  salePrice: number;
-  supplierId?: string | null;
-  note?: string | null;
+export interface CatalogHit {
+  kind: 'variant';
+  matchedBy: 'barcode' | 'sku' | 'name';
+  item: VariantView;
 }
 export interface NewAccessoryInput {
   product: ProductRef;
@@ -251,14 +219,15 @@ export interface NewAccessoryInput {
 }
 
 /* ---------- item history (one item's full stock story, like Abuzar's Ctrl+H) ---------- */
-export type ItemRef = { variantId: string } | { phoneUnitId: string };
-export type ItemHistoryKind = 'sale' | 'return' | 'purchase' | 'adjustment' | 'repair' | 'transfer';
+export interface ItemRef {
+  variantId: string;
+}
+export type ItemHistoryKind = 'sale' | 'return' | 'purchase' | 'adjustment' | 'transfer';
 /** What a stock movement belongs to, resolved for display. */
 export type ItemHistoryRef =
   | { kind: 'sale'; saleId: string; invoiceNo: string; customerName: string | null }
   | { kind: 'return'; saleId: string; invoiceNo: string; customerName: string | null }
   | { kind: 'purchase'; purchaseId: string; supplierName: string; referenceNo: string | null }
-  | { kind: 'repair'; ticketId: string; ticketNo: string }
   | { kind: 'adjustment' }
   | { kind: 'transfer'; transferId: string };
 export interface ItemHistoryEntry {
@@ -311,7 +280,7 @@ export interface StockLogEntry {
   at: number;
   item: ItemRef;
   label: string;
-  /** 1 for pieces and phone units, 1000 for kg / litre: quantities are in base units. */
+  /** 1 for pieces, 1000 for kg / litre: quantities are in base units. */
   unitScale: UnitScale;
   unitLabel: UnitLabel;
   /** Signed, in base units. */
@@ -320,8 +289,6 @@ export interface StockLogEntry {
   balanceBefore: number;
   balanceAfter: number;
   reason: string | null;
-  /** Set when the stock went into a repair as a spare part. */
-  repair: { ticketId: string; ticketNo: string } | null;
   batch: { id: string; batchNo: string | null; expiryDate: string } | null;
   by: { id: string; displayName: string };
 }
@@ -338,7 +305,7 @@ export const MAX_QUICK_ITEMS = 24;
 
 export interface CatalogApi {
   /**
-   * Exact barcode/sku/imei/serial first (scanner: UI auto-adds if exactly 1 exact hit), then LIKE on brand/name/model/colour.
+   * Exact barcode/sku first (scanner: UI auto-adds if exactly 1 exact hit), then LIKE on brand/name/model/colour.
    * Text hits whose name starts with the query come before names that only contain it; `prefixOnly` drops the latter
    * (type-ahead after the first letter: "a" lists the items that start with a, not every SKU with an a inside).
    */
@@ -346,34 +313,10 @@ export interface CatalogApi {
     query: string,
     opts?: { limit?: number; inStockOnly?: boolean; prefixOnly?: boolean },
   ): Promise<CatalogHit[]>;
-  listPhones(f?: {
-    q?: string;
-    inStock?: boolean;
-    pta?: PtaStatus;
-    condition?: PhoneCondition;
-  }): Promise<PhoneUnitView[]>;
   listAccessories(f?: { q?: string; lowStockOnly?: boolean }): Promise<VariantView[]>;
   /** Every stock movement of one item with running balance, newest first; needs `view_catalog` (unitCost is null without `view_cost`). */
   itemHistory(ref: ItemRef, q?: ItemHistoryQuery): Promise<ItemHistoryPage>;
-  createPhoneUnit(
-    i: NewPhoneUnitInput & { openingStock?: boolean /* default true: +1 adjustment */ },
-  ): Promise<PhoneUnitView>; // DUPLICATE {field}
   createAccessory(i: NewAccessoryInput): Promise<VariantView>;
-  updatePhoneUnit(
-    id: string,
-    p: Partial<
-      Pick<
-        NewPhoneUnitInput,
-        | 'salePrice'
-        | 'costPrice'
-        | 'colour'
-        | 'note'
-        | 'ptaStatus'
-        | 'condition'
-        | 'batteryHealthPct'
-      >
-    >,
-  ): Promise<PhoneUnitView>;
   updateVariant(
     id: string,
     p: Partial<
@@ -395,7 +338,6 @@ export interface ReceivePurchaseInput {
   supplierId: string;
   referenceNo?: string | null;
   note?: string | null;
-  phones: NewPhoneUnitInput[]; // each creates unit + 'purchase' +1 movement (unit_cost = costPrice)
   accessories: {
     variantId: string;
     quantity: number;
@@ -412,7 +354,6 @@ export interface BatchInput {
 }
 export interface PurchaseResult {
   purchase: Purchase;
-  phoneUnitIds: string[];
   supplierBalance: Paisa;
 }
 export interface SupplierLedgerLine {
@@ -445,9 +386,8 @@ export interface PurchasingApi {
 
 // ---------- checkout / returns ----------
 export interface CartLineInput {
-  phoneUnitId?: string;
-  variantId?: string;
-  quantity: number /* phone = 1 */;
+  variantId: string;
+  quantity: number;
   discountAmount?: number /* paisa, >=0 */;
 }
 export interface CheckoutDraft {
@@ -533,7 +473,7 @@ export interface CheckoutApi {
   listInvoices(f?: {
     fromMs?: number;
     toMs?: number;
-    q?: string /* invoiceNo or IMEI */;
+    q?: string /* invoiceNo */;
     customerId?: string;
     kind?: SaleKind;
     limit?: number;
@@ -654,7 +594,7 @@ export interface ReportsApi {
   ): Promise<PeriodSummary> /* view_reports; calls assertCanSell({action:'report'}) */;
   /** Chart data for the dashboard. view_reports; calls assertCanSell({action:'report'}). */
   dashboard(i: DashboardInput): Promise<DashboardData>;
-  /** Every stock adjustment in the shop (opening stock, corrections, write-offs, repair parts), newest first. view_reports; calls assertCanSell({action:'report'}). */
+  /** Every stock adjustment in the shop (opening stock, corrections, write-offs), newest first. view_reports; calls assertCanSell({action:'report'}). */
   adjustments(q?: StockLogQuery): Promise<StockLogPage>;
 }
 
@@ -735,126 +675,8 @@ export interface IntegrityApi {
   checks(): Promise<{
     salePaymentMismatch: number;
     saleLineMismatch: number;
-    badPhoneUnits: number;
     unsentOutbox: number;
-  }>; // v_sale_* views, units outside 0..1
-}
-
-// ---------- repair job tickets ----------
-export interface NewRepairTicketInput {
-  /** An existing customer, OR a walk-in name (+ phone). */
-  customerId?: string | null;
-  walkIn?: { name: string; phone?: string | null } | null;
-  deviceBrand: string;
-  deviceModel: string;
-  /** Luhn-checked when given. */
-  imei?: string | null;
-  serial?: string | null;
-  problem: string;
-  conditionNotes?: string | null;
-  accessories?: string | null;
-  estimatedCost: number;
-  advance?: {
-    amount: number;
-    method: Exclude<PaymentMethod, 'khata'>;
-    reference?: string | null;
-  } | null;
-  technicianId?: string | null;
-  promisedAt?: number | null;
-}
-export interface RepairTicketPatch {
-  problem?: string;
-  conditionNotes?: string | null;
-  accessories?: string | null;
-  estimatedCost?: number;
-  finalCharge?: number | null;
-  technicianId?: string | null;
-  promisedAt?: number | null;
-}
-export interface RepairStatusInput {
-  ticketId: string;
-  /** Delivery and cancellation have their own methods (they move money). */
-  status: Exclude<RepairStatus, 'delivered' | 'cancelled'>;
-  note?: string | null;
-}
-export interface AddRepairPartInput {
-  ticketId: string;
-  variantId: string;
-  quantity: number;
-}
-export interface DeliverRepairInput {
-  ticketId: string;
-  /** Defaults to the ticket's finalCharge, else its estimate. */
-  finalCharge?: number;
-  /**
-   * Positive amounts that add up to |finalCharge - paid so far|: collected when positive, refunded when the
-   * advance was larger (refunds cannot be khata). Empty when nothing is due.
-   */
-  payments: PaymentInput[];
-  note?: string | null;
-  /** Needed when finalCharge is below the estimate by more than cashierMaxDiscountBps (no discount_unlimited). */
-  approvalToken?: string;
-}
-export interface CancelRepairInput {
-  ticketId: string;
-  reason: string;
-  /** How the advance is given back (default cash). */
-  refundMethod?: Exclude<PaymentMethod, 'khata'>;
-  /** Needed when money is refunded and the user lacks return_void. */
-  approvalToken?: string;
-}
-export interface RepairFilter {
-  q?: string;
-  status?: RepairStatus;
-  customerId?: string;
-  /** Only tickets that are not delivered / cancelled. */
-  openOnly?: boolean;
-  limit?: number;
-}
-/** Spare parts are consumed from accessory stock as 'adjustment' movements (see migration 0005). */
-export interface RepairsApi {
-  create(input: NewRepairTicketInput): Promise<RepairTicketView>;
-  get(idOrNo: string): Promise<RepairTicketView>;
-  list(filter?: RepairFilter): Promise<RepairTicket[]>;
-  update(id: string, patch: RepairTicketPatch): Promise<RepairTicketView>;
-  setStatus(input: RepairStatusInput): Promise<RepairTicketView>;
-  addPart(input: AddRepairPartInput): Promise<RepairTicketView>;
-  deliver(input: DeliverRepairInput): Promise<RepairTicketView>;
-  cancel(input: CancelRepairInput): Promise<RepairTicketView>;
-}
-
-// ---------- warranty by IMEI ----------
-export interface RegisterWarrantyInput {
-  saleId: string;
-  phoneUnitId: string;
-  kind: WarrantyKind;
-  /** Exactly one of `days` (from the sale date) or `endsAt`. */
-  days?: number;
-  endsAt?: number;
-  note?: string | null;
-}
-export interface WarrantyLookup {
-  unit: PhoneUnitView;
-  /** The latest sale of this unit, or null if it was never sold. */
-  sale: WarrantySaleInfo | null;
-  /** Warranties registered on that sale. */
-  warranties: WarrantyStatus[];
-}
-export interface ExpiringWarranty {
-  status: WarrantyStatus;
-  unitLabel: string;
-  imei: string | null;
-  serial: string | null;
-  invoiceNo: string;
-  customerName: string | null;
-  customerPhone: string | null;
-}
-export interface WarrantyApi {
-  register(input: RegisterWarrantyInput): Promise<Warranty>;
-  /** NOT_FOUND when no phone unit has this IMEI / serial. */
-  lookup(imeiOrSerial: string): Promise<WarrantyLookup>;
-  /** Active warranties ending within the next `days` days, soonest first. */
-  listExpiring(days: number): Promise<ExpiringWarranty[]>;
+  }>; // v_sale_* views
 }
 
 export interface PosService {
@@ -869,25 +691,21 @@ export interface PosService {
   readonly cash: CashApi;
   readonly batches: BatchesApi;
   readonly integrity: IntegrityApi;
-  readonly repairs: RepairsApi;
-  readonly warranty: WarrantyApi;
   readonly insights: InsightsApi;
 }
 
 // ---------- till insights + reorder suggestions ----------
 export interface ItemInsightInput {
-  /** Exactly one of variantId / phoneUnitId. */
-  variantId?: string;
-  phoneUnitId?: string;
+  variantId: string;
   /** The bill's customer, for "last rate to this customer" and the khata balance. */
   customerId?: string | null;
 }
 export interface ItemInsight {
-  /** Accessories: on hand in base units. Phones: 1 when the unit is in stock, else 0. */
+  /** On hand in base units. */
   onHand: number;
   /** Latest purchase / opening cost per priced unit. Null without view_cost or when never bought. */
   lastPurchase: { unitCost: Paisa; at: number } | null;
-  /** Latest sale of this item (the same model for phones) to customerId, per priced unit after line discount. */
+  /** Latest sale of this item to customerId, per priced unit after line discount. */
   lastSoldToCustomer: { unitPrice: Paisa; at: number; invoiceNo: string } | null;
   /** Khata balance of customerId (positive = customer owes); null for walk-in. */
   customerBalance: Paisa | null;

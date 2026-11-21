@@ -9,8 +9,6 @@ import { Field, Input, Select } from '../components/ui/Field';
 import { MorphPill } from '../components/ui/MorphPill';
 import { ErrorBox, PageHeader } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
-import { nicheKey } from '../i18n/niche';
-import { useShopModules } from '../service/use-modules';
 import { errorMessage } from '../i18n/errors';
 import { downloadFile } from '../lib/download';
 import { useRuntime } from '../service/context';
@@ -71,7 +69,6 @@ function Segmented<T extends string>({
 
 function ShopForm({ initial }: { initial: ShopSettings }): ReactNode {
   const t = useT();
-  const hasImei = useShopModules().has('imei');
   const rt = useRuntime();
   const bump = useDataVersion((s) => s.bump);
   const [f, setF] = useState({
@@ -147,7 +144,7 @@ function ShopForm({ initial }: { initial: ShopSettings }): ReactNode {
           checked={f.negative}
           onChange={(e) => setF((s) => ({ ...s, negative: e.target.checked }))}
         />
-        {t(nicheKey(hasImei, 'settings.allowNegative'))}
+        {t('settings.allowNegative')}
       </label>
       <div className="flex items-center gap-3 sm:col-span-2">
         <Button type="submit" variant="primary" disabled={bad} loading={busy}>
@@ -169,7 +166,6 @@ function IntegritySection(): ReactNode {
   const [checks, setChecks] = useState<{
     salePaymentMismatch: number;
     saleLineMismatch: number;
-    badPhoneUnits: number;
     unsentOutbox: number;
   } | null>(null);
   const [error, setError] = useState<unknown>(null);

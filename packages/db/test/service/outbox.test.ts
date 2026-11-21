@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { InvoiceSchema } from '@pos/shared';
 import {
   CHARGER_PRICE,
-  IMEI_Y,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_COST,
+  CARTON_PRICE,
   expectCode,
   makeService,
   type TestService,
@@ -40,12 +39,12 @@ describe('outbox (spec 12)', () => {
     const inv = await t.svc.checkout.commit({
       lines: [
         { variantId: t.ids.chargerId, quantity: 2 },
-        { phoneUnitId: t.ids.phoneId, quantity: 1 },
+        { variantId: t.ids.cartonId, quantity: 1 },
       ],
       customerId: t.ids.bilalId,
       payments: [
         { method: 'cash', amount: 3_000_000 },
-        { method: 'khata', amount: 300_000 + PHONE_PRICE - 3_000_000 },
+        { method: 'khata', amount: 300_000 + CARTON_PRICE - 3_000_000 },
       ],
     });
     const rows = await rowsAfter(skip);
@@ -131,20 +130,19 @@ describe('outbox (spec 12)', () => {
     });
   });
 
-  it('catalog writes emit product, phone_unit, accessory_variant and stock_movement rows', async () => {
+  it('catalog writes emit product, accessory_variant and stock_movement rows', async () => {
     await t.loginAs('mgr');
     const skip = await outboxCount();
-    await t.svc.catalog.createPhoneUnit({
-      product: { brand: 'Infinix', name: 'Hot 40' },
-      imei1: IMEI_Y,
-      ptaStatus: 'approved',
-      condition: 'new',
-      costPrice: PHONE_COST,
-      salePrice: PHONE_PRICE,
+    await t.svc.catalog.createAccessory({
+      product: { brand: 'Dalda', name: 'Cooking Oil 5L' },
+      sku: 'OIL-5L',
+      costPrice: CARTON_COST,
+      salePrice: CARTON_PRICE,
+      openingQty: 2,
     });
     const rows = await rowsAfter(skip);
     expect(rows.map((r) => r.entity_type).sort()).toEqual([
-      'phone_unit',
+      'accessory_variant',
       'product',
       'stock_movement',
     ]);

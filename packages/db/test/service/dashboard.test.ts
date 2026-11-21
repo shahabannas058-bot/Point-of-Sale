@@ -3,8 +3,8 @@ import { BASE_MS } from '../../../core/test/fixtures';
 import {
   CHARGER_COST,
   CHARGER_PRICE,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_COST,
+  CARTON_PRICE,
   expectCode,
   first,
   makeService,
@@ -30,10 +30,10 @@ describe('reports.dashboard', () => {
     await expectCode(t.svc.reports.dashboard({ buckets: [BASE_MS, 1.5] }), 'VALIDATION');
   });
 
-  it('values stock on hand at cost: the seeded phone plus 10 chargers', async () => {
+  it('values stock on hand at cost: the seeded carton plus 10 chargers', async () => {
     await t.loginAs('owner');
     const d = await t.svc.reports.dashboard({ buckets: BUCKETS });
-    expect(d.inventoryValue).toBe(PHONE_COST + 10 * CHARGER_COST);
+    expect(d.inventoryValue).toBe(CARTON_COST + 10 * CHARGER_COST);
   });
 
   it('buckets revenue and profit, nets returns, and ranks categories', async () => {
@@ -44,8 +44,8 @@ describe('reports.dashboard', () => {
     }); // bucket 0
     t.clock.advance(HOUR);
     await t.svc.checkout.commit({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
-      payments: [{ method: 'cash', amount: PHONE_PRICE }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
+      payments: [{ method: 'cash', amount: CARTON_PRICE }],
     }); // bucket 1
     await t.svc.checkout.createReturn({
       originalSaleId: a.id,
@@ -66,17 +66,17 @@ describe('reports.dashboard', () => {
       {
         fromMs: BUCKETS[1],
         toMs: BUCKETS[2],
-        revenue: PHONE_PRICE - CHARGER_PRICE,
-        profit: PHONE_PRICE - PHONE_COST - (CHARGER_PRICE - CHARGER_COST),
+        revenue: CARTON_PRICE - CHARGER_PRICE,
+        profit: CARTON_PRICE - CARTON_COST - (CHARGER_PRICE - CHARGER_COST),
         salesCount: 1,
       },
       { fromMs: BUCKETS[2], toMs: BUCKETS[3], revenue: 0, profit: 0, salesCount: 0 },
     ]);
     expect(d.topCategories).toEqual([
-      { category: 'Smartphone', revenue: PHONE_PRICE },
+      { category: 'Ghee', revenue: CARTON_PRICE },
       { category: 'Charger', revenue: CHARGER_PRICE },
     ]);
-    // stock moved: phone sold, 1 charger out net
+    // stock moved: carton sold, 1 charger out net
     expect(d.inventoryValue).toBe(9 * CHARGER_COST);
   });
 

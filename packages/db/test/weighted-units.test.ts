@@ -200,26 +200,6 @@ describe('weighted variants and lines (database rules)', () => {
     ).rejects.toThrow(/unit_scale must match the variant/);
   });
 
-  it('a phone unit can never be sold by weight', async () => {
-    const db = await seedWeighted();
-    const sale = saleRow({ subtotal: 8, total: 8 });
-    await insertRow(db, 'sales', sale);
-    await expect(
-      insertRow(
-        db,
-        'sale_lines',
-        lineRow(sale.id as string, {
-          phone_unit_id: SHOP.phoneUnitId,
-          variant_id: null,
-          quantity: 1,
-          unit_price: 8_500,
-          unit_scale: 1000,
-          line_total: 9,
-        }),
-      ),
-    ).rejects.toThrow(/CHECK constraint failed/);
-  });
-
   it('unit_label and unit_scale must agree on a variant', async () => {
     const { db } = await createSeededDb();
     track(db);
@@ -272,7 +252,6 @@ describe('weighted variants and lines (database rules)', () => {
       id: newId(),
       branch_id: SHOP.branchId,
       type: 'purchase',
-      phone_unit_id: null,
       variant_id: WEIGHTED,
       quantity: 50_000,
       unit_cost: null,

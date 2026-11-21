@@ -7,20 +7,19 @@ import {
   first,
   makeService,
   sellCash,
-  snapshotCounts,
   stockSum,
   type TestService,
 } from './helpers';
 
-/** A migrated, empty database with the shop set up as `type` and the owner logged in. */
-async function shopOf(type: BusinessType): Promise<TestService> {
+/** A migrated, empty database with the shop set up as a kiryana shop and the owner logged in. */
+async function shopOf(): Promise<TestService> {
   const t = await makeService({ seed: false });
   await t.svc.setup.firstRun({
     shopName: 'Test Store',
     branchName: 'Main',
     invoicePrefix: 'K',
     owner: { username: 'owner', displayName: 'Owner', pin: PINS.owner },
-    businessType: type,
+    businessType: 'kiryana',
   });
   await t.loginAs('owner');
   return t;
@@ -52,101 +51,72 @@ async function addPens(t: TestService, qty = 20): Promise<VariantView> {
 
 describe('business type and modules', () => {
   it('a kiryana shop gets the kiryana preset', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     expect(await t.svc.setup.getShop()).toMatchObject({
       businessType: 'kiryana',
       modules: ['weight_units', 'batch_expiry'],
     });
   });
 
-  it('a shop set up without a business type is custom and owns every module', async () => {
+  it('a shop set up without a business type is kiryana and owns every module', async () => {
     const t = await makeService();
     const shop = await t.svc.setup.getShop();
-    expect(shop.businessType).toBe('custom');
+    expect(shop.businessType).toBe('kiryana');
     expect(shop.modules).toEqual([...MODULE_IDS]);
   });
 
   it('a shop that has no module rows at all (created before modules existed) keeps everything', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     await t.driver.exec("delete from app_meta where key in ('business_type', 'modules')");
     const shop = await t.svc.setup.getShop();
-    expect(shop.businessType).toBe('custom');
+    expect(shop.businessType).toBe('kiryana');
     expect(shop.modules).toEqual([...MODULE_IDS]);
     await addChini(t); // so weighted items work again
   });
 
-  it('rejects an unknown business type', async () => {
-    const t = await makeService({ seed: false });
-    await expectCode(
-      t.svc.setup.firstRun({
-        shopName: 'X',
-        branchName: 'Y',
-        invoicePrefix: 'A',
-        owner: { username: 'owner', displayName: 'Owner', pin: PINS.owner },
-        businessType: 'bakery' as BusinessType,
-      }),
-      'VALIDATION',
-    );
+  it('rejects an unknown business type, including the retired mobile shop type', async () => {
+    for (const businessType of ['bakery', 'mobile', 'laptop', 'custom']) {
+      const t = await makeService({ seed: false });
+      await expectCode(
+        t.svc.setup.firstRun({
+          shopName: 'X',
+          branchName: 'Y',
+          invoicePrefix: 'A',
+          owner: { username: 'owner', displayName: 'Owner', pin: PINS.owner },
+          businessType: businessType as BusinessType,
+        }),
+        'VALIDATION',
+      );
+    }
   });
 
-  it('a kiryana shop is refused phones, repairs and warranty with MODULE_DISABLED', async () => {
-    const t = await shopOf('kiryana');
-    const before = await snapshotCounts(t.driver);
-    const e = await expectCode(
-      t.svc.catalog.createPhoneUnit({
-        product: { brand: 'Samsung', name: 'A55' },
-        imei1: '356938035643809',
-        ptaStatus: 'approved',
-        condition: 'new',
-        costPrice: 1,
-        salePrice: 2,
-      }),
-      'MODULE_DISABLED',
-    );
-    expect(e.details).toMatchObject({ module: 'imei' });
-    await expectCode(t.svc.repairs.list(), 'MODULE_DISABLED');
-    await expectCode(t.svc.warranty.listExpiring(30), 'MODULE_DISABLED');
-    expect(await snapshotCounts(t.driver)).toEqual(before);
+  it('a shop stored with a retired business type reads back as kiryana', async () => {
+    const t = await shopOf();
+    await t.driver.exec("update app_meta set value = 'mobile' where key = 'business_type'");
+    expect((await t.svc.setup.getShop()).businessType).toBe('kiryana');
   });
 
-  it('a kiryana shop cannot receive phones in a purchase, but can receive loose goods', async () => {
-    const t = await shopOf('kiryana');
+  it('a kiryana shop can receive loose goods in a purchase', async () => {
+    const t = await shopOf();
     const chini = await addChini(t, 0);
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Mandi Traders' });
-    await expectCode(
-      t.svc.purchasing.receive({
-        supplierId: supplier.id,
-        phones: [
-          {
-            product: { brand: 'Samsung', name: 'A55' },
-            imei1: '356938035643809',
-            ptaStatus: 'approved',
-            condition: 'new',
-            costPrice: 1,
-            salePrice: 2,
-          },
-        ],
-        accessories: [],
-      }),
-      'MODULE_DISABLED',
-    );
     const ok = await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      phones: [],
       accessories: [{ variantId: chini.variant.id, quantity: 10_000, unitCost: CHINI.cost }],
     });
     expect(ok.purchase.total).toBe(250_000); // 10 kg x Rs 250
   });
 
-  it('a mobile shop is refused loose goods sold by weight', async () => {
-    const t = await shopOf('mobile');
+  it('a shop without weight_units is refused loose goods sold by weight', async () => {
+    const t = await shopOf();
+    await t.driver.exec("update app_meta set value = 'batch_expiry' where key = 'modules'");
     const e = await expectCode(addChini(t), 'MODULE_DISABLED');
     expect(e.details).toMatchObject({ module: 'weight_units' });
     await addPens(t); // pieces are core
   });
 
   it('removing a module takes effect immediately, without restarting the service', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     await addChini(t);
     await t.driver.exec("update app_meta set value = '' where key = 'modules'");
     await expectCode(
@@ -162,7 +132,7 @@ describe('business type and modules', () => {
   });
 
   it('an unknown unit is rejected', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     await expectCode(
       t.svc.catalog.createAccessory({
         product: { brand: 'Loose', name: 'Atta' },
@@ -178,7 +148,7 @@ describe('business type and modules', () => {
 
 describe('selling loose goods by weight', () => {
   it('stores the unit and counts stock in grams', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     expect(chini.variant).toMatchObject({ unitScale: 1000, unitLabel: 'kg', reorderLevel: 5_000 });
     expect(chini.onHand).toBe(50_000);
@@ -186,7 +156,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('prices 1.25 kg at Rs 285.50/kg exactly: 35,688 paisa, hash version 2, stock down 1,250 g', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const lines = [{ variantId: chini.variant.id, quantity: 1250 }];
 
@@ -216,7 +186,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('prices piece and weighted lines together on one invoice', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const pens = await addPens(t);
     const invoice = await sellCash(t, [
@@ -231,7 +201,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('applies a line discount to the rounded gross', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const invoice = await sellCash(t, [
       { variantId: chini.variant.id, quantity: 2500, discountAmount: 1_000 },
@@ -241,7 +211,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('refuses to sell more grams than are on hand', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const e = await expectCode(
       t.svc.checkout.preview({ lines: [{ variantId: chini.variant.id, quantity: 60_000 }] }),
@@ -251,7 +221,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('rejects a quantity above the cap for the unit', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const pens = await addPens(t);
     await t.svc.settings.update({ allowNegativeStock: true });
@@ -266,7 +236,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('a partial return refunds the rounded share and puts the grams back', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const sale = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
     const line = first(sale.lines);
@@ -298,7 +268,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('cannot return more grams than were sold', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const sale = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
     await expectCode(
@@ -308,7 +278,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('voiding a weighted sale mirrors it exactly and restores the stock', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const sale = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
     const voided = await t.svc.checkout.voidSale({ originalSaleId: sale.id, reason: 'galat bill' });
@@ -317,7 +287,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('keeps the chain valid and every integrity check at zero', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const pens = await addPens(t);
     const a = await sellCash(t, [{ variantId: chini.variant.id, quantity: 333 }]);
@@ -334,7 +304,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('reports use the unit scale for gross, cost and profit', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
     const s = await t.svc.reports.summary({ fromMs: 0, toMs: Number.MAX_SAFE_INTEGER });
@@ -345,7 +315,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('low-stock alerts compare grams with a gram reorder level', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t, 6_000); // 6 kg, reorder at 5 kg
     expect(chini.lowStock).toBe(false);
     await sellCash(t, [{ variantId: chini.variant.id, quantity: 1_500 }]); // 4.5 kg left
@@ -354,7 +324,7 @@ describe('selling loose goods by weight', () => {
   });
 
   it('adjustments are in grams and capped per unit', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const after = await t.svc.catalog.adjustStock({
       variantId: chini.variant.id,
@@ -371,13 +341,12 @@ describe('selling loose goods by weight', () => {
 
 describe('buying loose goods from a supplier', () => {
   it('books the total with the same rounding and keeps the latest cost per kg', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t, 0);
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Mandi Traders' });
     // 333 g at Rs 249.99/kg = 8,324.667 paisa -> 8,325
     const result = await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      phones: [],
       accessories: [{ variantId: chini.variant.id, quantity: 333, unitCost: 24_999 }],
     });
     expect(result.purchase.total).toBe(8_325);
@@ -388,12 +357,11 @@ describe('buying loose goods from a supplier', () => {
   });
 
   it('a 25 kg bag at Rs 250/kg is Rs 6,250', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t, 0);
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Mandi Traders' });
     const result = await t.svc.purchasing.receive({
       supplierId: supplier.id,
-      phones: [],
       accessories: [{ variantId: chini.variant.id, quantity: 25_000, unitCost: CHINI.cost }],
       paidNow: { method: 'cash', amount: 500_000 },
     });
@@ -402,12 +370,11 @@ describe('buying loose goods from a supplier', () => {
   });
 
   it('refuses a purchase line for an item that does not exist', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const supplier = await t.svc.purchasing.createSupplier({ name: 'Mandi Traders' });
     await expectCode(
       t.svc.purchasing.receive({
         supplierId: supplier.id,
-        phones: [],
         accessories: [{ variantId: t.newId(), quantity: 1, unitCost: 1 }],
       }),
       'NOT_FOUND',
@@ -417,7 +384,7 @@ describe('buying loose goods from a supplier', () => {
 
 describe('the chain still verifies from raw rows', () => {
   it('re-reading weighted invoices from SQLite gives the same hashes', async () => {
-    const t = await shopOf('kiryana');
+    const t = await shopOf();
     const chini = await addChini(t);
     const a = await sellCash(t, [{ variantId: chini.variant.id, quantity: 1250 }]);
     const b = await sellCash(t, [{ variantId: chini.variant.id, quantity: 333 }]);

@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/target/**',
       '**/src-tauri/**',
+      'qa-bug-hunt/**',
       'eslint.config.js',
     ],
   },

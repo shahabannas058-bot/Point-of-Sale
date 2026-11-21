@@ -22,7 +22,7 @@ import {
 import { RuntimeProvider } from '../src/service/context';
 
 const t: TFn = (key, params) => translate('en', key, params);
-const KINDS: ItemHistoryKind[] = ['sale', 'return', 'purchase', 'adjustment', 'repair', 'transfer'];
+const KINDS: ItemHistoryKind[] = ['sale', 'return', 'purchase', 'adjustment', 'transfer'];
 
 const entry = (over: Partial<ItemHistoryEntry> = {}): ItemHistoryEntry => ({
   id: 'm1',
@@ -51,7 +51,6 @@ describe('historyKindKey / historyKindTone', () => {
     expect(historyKindTone('purchase')).toBe('success');
     expect(historyKindTone('return')).toBe('success');
     expect(historyKindTone('sale')).toBe('danger');
-    expect(historyKindTone('repair')).toBe('danger');
     expect(historyKindTone('adjustment')).toBe('warning');
     expect(historyKindTone('transfer')).toBe('muted');
   });
@@ -90,12 +89,6 @@ describe('referenceText', () => {
       'Supplier Mandi · ref 123',
     );
     expect(referenceText(entry({ ref: { ...ref, referenceNo: null } }), t)).toBe('Supplier Mandi');
-  });
-
-  it('repair: ticket number', () => {
-    expect(
-      referenceText(entry({ ref: { kind: 'repair', ticketId: 'r1', ticketNo: 'R-0004' } }), t),
-    ).toBe('Ticket R-0004');
   });
 
   it('adjustment: the reason, or a dash', () => {
@@ -156,15 +149,13 @@ describe('historyDateRange', () => {
 });
 
 describe('itemRefKey / cartLineItemRef / SUMMARY_ROWS', () => {
-  it('keys tell variants from phone units', () => {
+  it('keys are stable per item', () => {
     expect(itemRefKey({ variantId: 'a' })).toBe('v:a');
-    expect(itemRefKey({ phoneUnitId: 'a' })).toBe('p:a');
+    expect(itemRefKey({ variantId: 'b' })).not.toBe(itemRefKey({ variantId: 'a' }));
   });
 
   it('cart lines map to their item', () => {
     expect(cartLineItemRef({ variantId: 'v1' })).toEqual({ variantId: 'v1' });
-    expect(cartLineItemRef({ phoneUnitId: 'p1' })).toEqual({ phoneUnitId: 'p1' });
-    expect(cartLineItemRef({})).toBeNull();
   });
 
   it('summary chips are in Abuzar order and all labelled', () => {

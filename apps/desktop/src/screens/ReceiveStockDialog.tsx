@@ -5,16 +5,9 @@ import {
   lineGross,
   parseQuantity,
   type BatchInput,
-  type NewPhoneUnitInput,
   type PaymentMethod,
   type VariantView,
 } from '@pos/shared';
-import {
-  PhoneFields,
-  draftToInput,
-  emptyPhoneDraft,
-  type PhoneDraft,
-} from '../components/PhoneFields';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { Field, Input, Select } from '../components/ui/Field';
@@ -25,7 +18,6 @@ import { paisaToInput, parseRupees } from '../lib/money';
 import { perUnit } from '../lib/qty';
 import { useService } from '../service/context';
 import { useShopModules } from '../service/use-modules';
-import { nicheKey } from '../i18n/niche';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { toast } from '../store/toast';
@@ -52,16 +44,13 @@ export function ReceiveStockDialog({
   const bump = useDataVersion((s) => s.bump);
   const suppliers = useServiceQuery((s) => s.purchasing.listSuppliers(), [], open);
   const accessories = useServiceQuery((s) => s.catalog.listAccessories(), [], open);
-  // a shop without the imei module (kiryana) receives only items, never phones
   const shopModules = useShopModules();
-  const hasPhones = shopModules.modules === undefined || shopModules.has('imei');
   // perishable goods (kiryana): each line may carry a batch number and an expiry date
   const hasBatches = shopModules.has('batch_expiry');
 
   const [supplierId, setSupplierId] = useState('');
   const [newSupplier, setNewSupplier] = useState<string | null>(null);
   const [reference, setReference] = useState('');
-  const [phones, setPhones] = useState<{ id: number; draft: PhoneDraft }[]>([]);
   const [accs, setAccs] = useState<AccRow[]>([]);
   const [paid, setPaid] = useState('');
   const [method, setMethod] = useState<Exclude<PaymentMethod, 'khata'>>('cash');
@@ -74,7 +63,6 @@ export function ReceiveStockDialog({
       setSupplierId('');
       setNewSupplier(null);
       setReference('');
-      setPhones([]);
       setAccs([]);
       setPaid('');
       setMethod('cash');
@@ -93,13 +81,12 @@ export function ReceiveStockDialog({
 
   const total = useMemo(() => {
     let sum = 0;
-    for (const p of phones) sum += parseRupees(p.draft.cost) ?? 0;
     for (const a of accs) {
       const scale = variantById.get(a.variantId)?.variant.unitScale ?? 1;
       sum += lineGross(parseQuantity(a.qty, scale) ?? 0, parseRupees(a.cost) ?? 0, scale);
     }
     return sum;
-  }, [phones, accs, variantById]);
+  }, [accs, variantById]);
 
   const addSupplier = async (): Promise<void> => {
     if (!newSupplier?.trim()) return;
@@ -116,12 +103,6 @@ export function ReceiveStockDialog({
   const submit = async (): Promise<void> => {
     setError(null);
     if (!supplierId) return setError(t('recv.errSupplier'));
-    const phoneInputs: NewPhoneUnitInput[] = [];
-    for (const p of phones) {
-      const r = draftToInput(p.draft);
-      if ('error' in r) return setError(t(r.error));
-      phoneInputs.push(r.input);
-    }
     const accInputs: {
       variantId: string;
       quantity: number;
@@ -132,7 +113,7 @@ export function ReceiveStockDialog({
       const qty = parseQuantity(a.qty, variantById.get(a.variantId)?.variant.unitScale ?? 1);
       const cost = parseRupees(a.cost);
       if (!a.variantId || qty === null || qty <= 0 || cost === null)
-        return setError(t(nicheKey(hasPhones, 'recv.errAccessory')));
+        return setError(t('recv.errAccessory'));
       if (hasBatches && a.batchNo.trim() !== '' && a.expiry === '')
         return setError(t('recv.errExpiry'));
       accInputs.push({
@@ -144,22 +125,19 @@ export function ReceiveStockDialog({
           : {}),
       });
     }
-    if (phoneInputs.length + accInputs.length === 0)
-      return setError(t(nicheKey(hasPhones, 'recv.errEmpty')));
+    if (accInputs.length === 0) return setError(t('recv.errEmpty'));
     const paidP = paid.trim() === '' ? 0 : parseRupees(paid);
     if (paidP === null || paidP > total) return setError(t('recv.errPaid'));
     setBusy(true);
     try {
-      const r = await service.purchasing.receive({
+      await service.purchasing.receive({
         supplierId,
         referenceNo: reference.trim() || null,
-        phones: phoneInputs,
         accessories: accInputs,
         paidNow: paidP > 0 ? { method, amount: paidP } : null,
       });
       bump();
-      toast.success(t('recv.done', { n: phoneInputs.length + accInputs.length }));
-      void r;
+      toast.success(t('recv.done', { n: accInputs.length }));
       onClose();
     } catch (e) {
       setError(errorMessage(e, t));
@@ -255,64 +233,7 @@ export function ReceiveStockDialog({
         </div>
       </div>
 
-      {hasPhones ? <h3 className="mb-2 mt-5 text-base">{t('recv.phones')}</h3> : null}
-      <div className={hasPhones ? 'flex flex-col gap-3' : 'hidden'}>
-        {phones.map((p, i) => (
-          <div key={p.id} className="relative rounded-xl border border-line bg-surface-2 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-muted">#{i + 1}</span>
-              <Button
-                variant="ghost"
-                icon
-                size="sm"
-                aria-label={t('common.remove')}
-                onClick={() => setPhones((rs) => rs.filter((x) => x.id !== p.id))}
-              >
-                <Trash size={16} aria-hidden="true" />
-              </Button>
-            </div>
-            <PhoneFields
-              compact
-              draft={p.draft}
-              onChange={(d) =>
-                setPhones((rs) => rs.map((x) => (x.id === p.id ? { ...x, draft: d } : x)))
-              }
-            />
-          </div>
-        ))}
-        <Button
-          variant="secondary"
-          className="self-start"
-          onClick={() => {
-            const last = phones.at(-1)?.draft;
-            setPhones((rs) => [
-              ...rs,
-              {
-                id: seq,
-                draft: last
-                  ? {
-                      ...emptyPhoneDraft(),
-                      brand: last.brand,
-                      name: last.name,
-                      pta: last.pta,
-                      condition: last.condition,
-                      cost: last.cost,
-                      price: last.price,
-                    }
-                  : emptyPhoneDraft(),
-              },
-            ]);
-            setSeq((s) => s + 1);
-          }}
-        >
-          <Plus size={16} aria-hidden="true" />
-          {t('recv.addPhone')}
-        </Button>
-      </div>
-
-      <h3 className="mb-2 mt-5 text-base">
-        {hasPhones ? t('recv.accessories') : t('inv.tabItems')}
-      </h3>
+      <h3 className="mb-2 mt-5 text-base">{t('inv.tabItems')}</h3>
       <div className="flex flex-col gap-2">
         {accs.map((a) => {
           const picked = variantById.get(a.variantId)?.variant;
@@ -437,7 +358,7 @@ export function ReceiveStockDialog({
           }}
         >
           <Plus size={16} aria-hidden="true" />
-          {t(nicheKey(hasPhones, 'recv.addAccessory'))}
+          {t('recv.addAccessory')}
         </Button>
       </div>
 

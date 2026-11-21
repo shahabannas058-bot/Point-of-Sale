@@ -54,7 +54,7 @@ public class PaisaMathTests
     [Fact]
     public void Sale_totals_are_exact_for_the_reference_cart()
     {
-        // 2 chargers at 500.00 plus a phone at 1999.50 less 199.95 (same numbers as the TS fixtures)
+        // 2 chargers at 500.00 plus a cable at 1999.50 less 199.95 (same numbers as the TS fixtures)
         var t = PaisaMath.ComputeSaleTotals(
             [new PricedLine(2, 50_000, 0), new PricedLine(1, 199_950, 19_995)], 0);
         Assert.Equal(new long[] { 100_000, 179_955 }, t.LineTotals);
@@ -116,7 +116,6 @@ public class PaisaMathTests
 public class ErrorMapTests
 {
     [Theory]
-    [InlineData("SQLite Error 19: 'stock_movements: phone unit on-hand must stay within 0..1'.", "UNIT_NOT_IN_STOCK")]
     [InlineData("SQLite Error 19: 'sales: seq must be previous seq + 1 for this device'.", "CHAIN_CONFLICT")]
     [InlineData("SQLite Error 19: 'sales: prev_hash must equal the hash of the previous invoice'.", "CHAIN_CONFLICT")]
     [InlineData("SQLite Error 19: 'payments: khata requires a sale with a customer'.", "KHATA_NEEDS_CUSTOMER")]
@@ -134,12 +133,12 @@ public class ErrorMapTests
     [Fact]
     public void Unique_violation_exposes_table_and_field_but_not_the_raw_text()
     {
-        var raw = new InvalidOperationException("SQLite Error 19: 'UNIQUE constraint failed: phone_units.imei1'.");
+        var raw = new InvalidOperationException("SQLite Error 19: 'UNIQUE constraint failed: accessory_variants.sku'.");
         var e = ErrorMap.FromDatabaseMessage(raw.Message, raw);
         Assert.Equal("DUPLICATE", e.Code);
         Assert.Equal("A record with the same value already exists", e.Message);
-        Assert.Equal("phone_units", e.Details!["table"]);
-        Assert.Equal("imei1", e.Details["field"]);
+        Assert.Equal("accessory_variants", e.Details!["table"]);
+        Assert.Equal("sku", e.Details["field"]);
         Assert.Same(raw, e.InnerException); // the raw text is kept for the log only
     }
 

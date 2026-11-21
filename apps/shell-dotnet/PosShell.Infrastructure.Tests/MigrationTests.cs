@@ -202,16 +202,10 @@ public class MigrationTests
         var delete = Assert.Throws<ServiceException>(() => fx.Db.Batch([new SqlStatement("DELETE FROM stock_movements")]));
         Assert.Equal("IMMUTABLE_RECORD", delete.Code);
 
-        Assert.Equal("UNIT_NOT_IN_STOCK", Assert.Throws<ServiceException>(() => fx.Db.Batch([
-            new SqlStatement("""
-                INSERT INTO stock_movements (id, branch_id, type, phone_unit_id, quantity, created_by, created_at)
-                VALUES (?, ?, 'purchase', ?, 1, ?, 1)
-                """, [fx.Ids.Next(), fx.S.BranchId, fx.S.PhoneUnitId, fx.S.OwnerId])])).Code); // already on hand 1
-
         var dup = Assert.Throws<ServiceException>(() => fx.Db.Batch([
-            new SqlStatement("UPDATE phone_units SET imei1 = (SELECT imei1 FROM phone_units WHERE id = ?) WHERE id = ?",
-                [fx.S.PhoneUnitId, fx.S.SecondPhoneUnitId])]));
+            new SqlStatement("UPDATE accessory_variants SET sku = (SELECT sku FROM accessory_variants WHERE id = ?) WHERE id = ?",
+                [fx.S.VariantId, fx.S.CableVariantId])]));
         Assert.Equal("DUPLICATE", dup.Code);
-        Assert.Equal("imei1", dup.Details!["field"]);
+        Assert.Equal("sku", dup.Details!["field"]);
     }
 }

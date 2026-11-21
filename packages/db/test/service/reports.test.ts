@@ -12,7 +12,7 @@ const WIDE = { fromMs: 0, toMs: 2 * BASE_MS };
 describe('daily report arithmetic (spec 8)', () => {
   /**
    * A = 2 chargers, line discount 10 000 (gross 300 000, total 290 000, cash)
-   * B = phone X, invoice discount 100 000 (total 8 400 000: cash 5 000 000 + khata 3 400 000 to Bilal)
+   * B = carton X, invoice discount 100 000 (total 8 400 000: cash 5 000 000 + khata 3 400 000 to Bilal)
    * return 1 charger from A (-145 000), Bilal pays 1 000 000 cash.
    */
   async function scenario(): Promise<void> {
@@ -22,7 +22,7 @@ describe('daily report arithmetic (spec 8)', () => {
       payments: [{ method: 'cash', amount: 290_000 }],
     });
     await t.svc.checkout.commit({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
+      lines: [{ variantId: t.ids.cartonId, quantity: 1 }],
       customerId: t.ids.bilalId,
       invoiceDiscount: 100_000,
       payments: [
@@ -68,14 +68,19 @@ describe('daily report arithmetic (spec 8)', () => {
     expect(s.estimatedProfit).toBe(110_000 + 600_000 - 55_000);
   });
 
-  it('low stock lists the charger only when on hand <= reorder level (3)', async () => {
+  it('low stock lists an item only when on hand <= its reorder level', async () => {
     await scenario();
-    expect((await t.svc.reports.summary(WIDE)).lowStock).toEqual([]); // 10 - 2 + 1 = 9
+    const ids = async (): Promise<string[]> =>
+      (await t.svc.reports.summary(WIDE)).lowStock.map((v) => v.variant.id);
+    // the carton sold out (0 <= 0); the charger has 10 - 2 + 1 = 9 > 3
+    expect(await ids()).toEqual([t.ids.cartonId]);
     await t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: -6, reason: 'Damaged' });
     const low = (await t.svc.reports.summary(WIDE)).lowStock;
-    expect(low.map((v) => [v.variant.id, v.onHand, v.lowStock])).toEqual([
-      [t.ids.chargerId, 3, true],
-    ]);
+    expect(low.find((v) => v.variant.id === t.ids.chargerId)).toMatchObject({
+      onHand: 3,
+      lowStock: true,
+    });
+    expect((await ids()).sort()).toEqual([t.ids.cartonId, t.ids.chargerId].sort());
   });
 
   it('a range before the first sale returns all zeros', async () => {

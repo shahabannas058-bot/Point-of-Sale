@@ -9,13 +9,11 @@ import {
   Moon,
   Receipt,
   Settings as SettingsIcon,
-  ShieldCheck,
   ShoppingCart,
   Sun,
   Truck,
   Users,
   Wallet,
-  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import { hasModule, type ModuleId, type Permission } from '@pos/shared';
@@ -52,8 +50,6 @@ const NAV: NavItem[] = [
   },
   { to: '/sales', key: 'nav.sales', icon: Receipt, perm: 'sell' },
   { to: '/cash', key: 'nav.cash', icon: Wallet, perm: 'sell' },
-  { to: '/repairs', key: 'nav.repairs', icon: Wrench, perm: 'sell', module: 'repair' },
-  { to: '/warranty', key: 'nav.warranty', icon: ShieldCheck, perm: 'sell', module: 'warranty' },
   { to: '/customers', key: 'nav.customers', icon: Users, perm: 'receive_khata' },
   { to: '/suppliers', key: 'nav.suppliers', icon: Truck, perm: 'receive_stock' },
   { to: '/reports', key: 'nav.reports', icon: ChartColumn, perm: 'view_reports' },

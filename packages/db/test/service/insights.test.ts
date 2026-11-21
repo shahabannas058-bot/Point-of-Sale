@@ -3,8 +3,8 @@ import type { VariantView } from '@pos/shared';
 import {
   CHARGER_COST,
   CHARGER_PRICE,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_COST,
+  CARTON_PRICE,
   expectCode,
   first,
   makeService,
@@ -91,7 +91,6 @@ describe('insights: till info', () => {
 
     await t.svc.purchasing.receive({
       supplierId: await addSupplier(),
-      phones: [],
       accessories: [{ variantId: t.ids.chargerId, quantity: 5, unitCost: 95_000 }],
     });
     const bought = await t.svc.insights.item({ variantId: t.ids.chargerId });
@@ -99,23 +98,23 @@ describe('insights: till info', () => {
     expect(bought.onHand).toBe(15);
   });
 
-  it('works for a phone unit: in stock is 1 or 0, cost falls back to the unit cost', async () => {
+  it('a single-piece item: on hand goes 1 -> 0, opening stock gives the last cost', async () => {
     await t.loginAs('owner');
-    const before = await t.svc.insights.item({ phoneUnitId: t.ids.phoneId });
+    const before = await t.svc.insights.item({ variantId: t.ids.cartonId });
     expect(before.onHand).toBe(1);
-    expect(before.lastPurchase?.unitCost).toBe(PHONE_COST);
+    expect(before.lastPurchase?.unitCost).toBe(CARTON_COST);
 
-    const inv = await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }], {
+    const inv = await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }], {
       customerId: t.ids.bilalId,
     });
     const sold = await t.svc.insights.item({
-      phoneUnitId: t.ids.phoneId,
+      variantId: t.ids.cartonId,
       customerId: t.ids.bilalId,
     });
     expect(sold).toMatchObject({
       onHand: 0,
       soldLast30Days: 1,
-      lastSoldToCustomer: { unitPrice: PHONE_PRICE, invoiceNo: inv.invoiceNo },
+      lastSoldToCustomer: { unitPrice: CARTON_PRICE, invoiceNo: inv.invoiceNo },
     });
   });
 
@@ -138,13 +137,9 @@ describe('insights: till info', () => {
   it('rejects bad input and needs a session', async () => {
     await expectCode(t.svc.insights.item({ variantId: t.ids.chargerId }), 'NOT_AUTHENTICATED');
     await t.loginAs('cash');
-    await expectCode(t.svc.insights.item({}), 'VALIDATION');
-    await expectCode(
-      t.svc.insights.item({ variantId: t.ids.chargerId, phoneUnitId: t.ids.phoneId }),
-      'VALIDATION',
-    );
+    await expectCode(t.svc.insights.item({} as never), 'VALIDATION');
+    await expectCode(t.svc.insights.item({ variantId: 42 } as never), 'VALIDATION');
     await expectCode(t.svc.insights.item({ variantId: 'missing' }), 'NOT_FOUND');
-    await expectCode(t.svc.insights.item({ phoneUnitId: 'missing' }), 'NOT_FOUND');
     await expectCode(
       t.svc.insights.item({ variantId: t.ids.chargerId, customerId: 'missing' }),
       'NOT_FOUND',
@@ -177,7 +172,6 @@ describe('insights: reorder suggestions', () => {
     await t.loginAs('mgr');
     await t.svc.purchasing.receive({
       supplierId: await addSupplier(),
-      phones: [],
       accessories: [{ variantId: t.ids.chargerId, quantity: 40, unitCost: 95_000 }],
     });
     await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 44 }]); // 6 left, level 3

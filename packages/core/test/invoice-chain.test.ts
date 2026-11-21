@@ -109,7 +109,6 @@ describe('invoice hash', () => {
           saleId: '01993a00-0000-7000-8000-000000000001',
           lineNo: 1,
           productId: '01993a00-0000-7000-8000-000000000006',
-          phoneUnitId: null,
           variantId: '01993a00-0000-7000-8000-000000000007',
           description: 'Fast Charger 25W',
           quantity: 2,
@@ -124,9 +123,8 @@ describe('invoice hash', () => {
           saleId: '01993a00-0000-7000-8000-000000000001',
           lineNo: 2,
           productId: '01993a00-0000-7000-8000-000000000006',
-          phoneUnitId: '01993a00-0000-7000-8000-000000000008',
-          variantId: null,
-          description: 'Galaxy A55 8/256 é',
+          variantId: '01993a00-0000-7000-8000-000000000008',
+          description: 'Braided Cable 2m é',
           quantity: 1,
           unitPrice: 199950,
           costPrice: 150000,
@@ -157,7 +155,7 @@ describe('invoice hash', () => {
     const sealed = sealInvoice(GENESIS_HASH, frozen);
     expect(InvoiceSchema.safeParse(sealed).success).toBe(true);
     // Recorded from the current implementation (first green run); it is a regression anchor, not an external spec.
-    expect(sealed.hash).toBe('52a96840d1a6aed31f9b68a1ca105f146426c2318e2fad45a0c75cfe6908b959');
+    expect(sealed.hash).toBe('5c76a9e055e2f3048056ef057ac83eebfb1789e283c8d170e5f30eb68328697d');
   });
 });
 

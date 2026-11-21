@@ -57,11 +57,8 @@ async function loadInventoryValue(driver: SqlDriver, branchId: string): Promise<
                  (SELECT SUM(sm.quantity) FROM stock_movements sm
                    WHERE sm.variant_id = av.id AND sm.branch_id = ?) AS on_hand
                FROM accessory_variants av) q
-         WHERE q.on_hand > 0), 0)
-     + COALESCE((SELECT SUM(pu.cost_price) FROM phone_units pu
-         WHERE (SELECT SUM(sm.quantity) FROM stock_movements sm
-                 WHERE sm.phone_unit_id = pu.id AND sm.branch_id = ?) > 0), 0) AS v`,
-    [branchId, branchId],
+         WHERE q.on_hand > 0), 0) AS v`,
+    [branchId],
   );
   return num(rows[0]?.v);
 }

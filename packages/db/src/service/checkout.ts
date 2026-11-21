@@ -47,7 +47,7 @@ import {
 import { lookupApproval } from './auth';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, mapError, money, optText } from './errors';
-import { phoneLabel, type Raw } from './mappers';
+import type { Raw } from './mappers';
 import { loadShop, type ShopMeta } from './meta';
 import {
   customerBalance,
@@ -57,10 +57,8 @@ import {
   loadCustomerRec,
   loadHead,
   loadInvoiceBy,
-  loadPhoneView,
   loadVariantView,
   likePattern,
-  phoneUnitInStock,
   requireInvoice,
   type CustomerRec,
 } from './queries';
@@ -69,8 +67,7 @@ import type { SqlDriver, SqlValue } from '../types';
 // ---------- shared invoice writer (used by sales, returns and voids) ----------
 export interface LineSpec {
   productId: string;
-  phoneUnitId: string | null;
-  variantId: string | null;
+  variantId: string;
   description: string;
   /** Signed base units (pieces, or grams / millilitres): positive on a sale, negative on a return/void. */
   quantity: number;
@@ -160,7 +157,6 @@ export async function writeInvoice(
           saleId: spec.saleId,
           lineNo: i + 1,
           productId: l.productId,
-          phoneUnitId: l.phoneUnitId,
           variantId: l.variantId,
           description: l.description,
           quantity: l.quantity,
@@ -194,7 +190,7 @@ export async function writeInvoice(
       const restored = new Map<string | null, number>();
       for (const l of invoice.lines) {
         let parts: Allocation[] = [{ batchId: null, quantity: Math.abs(l.quantity) }];
-        if (batched && l.variantId !== null && (await hasBatches(ctx.driver, l.variantId))) {
+        if (batched && (await hasBatches(ctx.driver, l.variantId))) {
           if (spec.kind === 'sale')
             parts = await allocateSale(
               ctx.driver,
@@ -218,7 +214,6 @@ export async function writeInvoice(
             id: ctx.newId(),
             branchId: shop.branchId,
             type: spec.kind === 'sale' ? 'sale' : 'return',
-            phoneUnitId: l.phoneUnitId,
             variantId: l.variantId,
             batchId: p.batchId,
             quantity: l.quantity > 0 ? -p.quantity : p.quantity,
@@ -323,100 +318,62 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
     balance = await customerBalance(ctx.driver, customer.id);
   }
 
-  // total requested per accessory variant across all lines (a variant may appear on several lines)
+  // total requested per item across all lines (an item may appear on several lines)
   const requested = new Map<string, number>();
   for (const l of draft.lines)
-    if (l.variantId !== undefined)
+    if (typeof l.variantId === 'string')
       requested.set(
         l.variantId,
         (requested.get(l.variantId) ?? 0) + (Number.isSafeInteger(l.quantity) ? l.quantity : 0),
       );
 
   const items: PricedItem[] = [];
-  const usedUnits = new Set<string>();
   const cumulative = new Map<string, number>();
   for (const [idx, l] of draft.lines.entries()) {
     const lineNo = idx + 1;
     const field = `lines.${idx}`;
-    if ((l.phoneUnitId === undefined) === (l.variantId === undefined))
-      throw invalid(field, 'Each line needs exactly one of phoneUnitId / variantId');
+    if (typeof l.variantId !== 'string') throw invalid(field, 'Each line needs a variantId');
     const quantity = intIn(l.quantity, `${field}.quantity`, 1, MAX_QUANTITY_ANY);
     const discount = discountMoney(l.discountAmount ?? 0, `${field}.discountAmount`);
 
-    if (l.phoneUnitId !== undefined) {
-      if (quantity !== 1) throw invalid(`${field}.quantity`, 'A phone unit is sold one at a time');
-      const view = await loadPhoneView(ctx.driver, l.phoneUnitId);
-      if (view === null) throw new ServiceError('NOT_FOUND', 'Phone unit not found', { lineNo });
-      if (
-        usedUnits.has(l.phoneUnitId) ||
-        !(await phoneUnitInStock(ctx.driver, l.phoneUnitId, shop.branchId))
-      )
-        throw new ServiceError('UNIT_NOT_IN_STOCK', 'This phone is not in stock', {
-          lineNo,
-          phoneUnitId: l.phoneUnitId,
-        });
-      usedUnits.add(l.phoneUnitId);
-      const id =
-        view.unit.imei1 !== null ? `IMEI ${view.unit.imei1}` : `SN ${view.unit.serial ?? ''}`;
-      items.push({
-        lineNo,
-        onHand: 1,
-        spec: {
-          productId: view.unit.productId,
-          phoneUnitId: l.phoneUnitId,
-          variantId: null,
-          description: `${phoneLabel(view.product, view.unit)} · ${id}`.slice(0, 200),
-          quantity: 1,
-          unitScale: 1,
-          unitPrice: view.unit.salePrice,
-          costPrice: view.unit.costPrice,
-          discountAmount: discount,
-        },
-      });
-    } else {
-      const view = await loadVariantView(ctx.driver, l.variantId ?? '', shop.branchId);
-      if (view === null || !view.variant.isActive)
-        throw new ServiceError('NOT_FOUND', 'Accessory not found', { lineNo });
-      if (quantity > maxQuantity(view.variant.unitScale))
-        throw invalid(`${field}.quantity`, 'Quantity is larger than this item allows');
-      const cum = (cumulative.get(view.variant.id) ?? 0) + quantity;
-      cumulative.set(view.variant.id, cum);
-      // Module batch_expiry: stock in batches past their expiry date cannot be sold
-      let expired = 0;
-      if (
-        hasModule(shop.modules, 'batch_expiry') &&
-        (await hasBatches(ctx.driver, view.variant.id))
-      )
-        expired = await expiredOnHand(
-          ctx.driver,
-          view.variant.id,
-          shop.branchId,
-          pktDate(ctx.clock()),
-        );
-      const sellable = view.onHand - expired;
-      if (!shop.settings.allowNegativeStock && cum > sellable)
-        throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
-          onHand: sellable,
-          requested: requested.get(view.variant.id) ?? cum,
-          lineNo,
-          ...(expired > 0 ? { expiredOnHand: expired } : {}),
-        });
-      items.push({
-        lineNo,
+    const view = await loadVariantView(ctx.driver, l.variantId, shop.branchId);
+    if (view === null || !view.variant.isActive)
+      throw new ServiceError('NOT_FOUND', 'Accessory not found', { lineNo });
+    if (quantity > maxQuantity(view.variant.unitScale))
+      throw invalid(`${field}.quantity`, 'Quantity is larger than this item allows');
+    const cum = (cumulative.get(view.variant.id) ?? 0) + quantity;
+    cumulative.set(view.variant.id, cum);
+    // Module batch_expiry: stock in batches past their expiry date cannot be sold
+    let expired = 0;
+    if (hasModule(shop.modules, 'batch_expiry') && (await hasBatches(ctx.driver, view.variant.id)))
+      expired = await expiredOnHand(
+        ctx.driver,
+        view.variant.id,
+        shop.branchId,
+        pktDate(ctx.clock()),
+      );
+    const sellable = view.onHand - expired;
+    if (!shop.settings.allowNegativeStock && cum > sellable)
+      throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
         onHand: sellable,
-        spec: {
-          productId: view.variant.productId,
-          phoneUnitId: null,
-          variantId: view.variant.id,
-          description: view.label.slice(0, 200),
-          quantity,
-          unitScale: view.variant.unitScale,
-          unitPrice: view.variant.salePrice,
-          costPrice: view.variant.costPrice,
-          discountAmount: discount,
-        },
+        requested: requested.get(view.variant.id) ?? cum,
+        lineNo,
+        ...(expired > 0 ? { expiredOnHand: expired } : {}),
       });
-    }
+    items.push({
+      lineNo,
+      onHand: sellable,
+      spec: {
+        productId: view.variant.productId,
+        variantId: view.variant.id,
+        description: view.label.slice(0, 200),
+        quantity,
+        unitScale: view.variant.unitScale,
+        unitPrice: view.variant.salePrice,
+        costPrice: view.variant.costPrice,
+        discountAmount: discount,
+      },
+    });
   }
 
   const priced = items.map((it): PricedLine => ({
@@ -598,11 +555,8 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
         params.push(f.kind);
       }
       if (f.q !== undefined && f.q.trim() !== '') {
-        const like = likePattern(f.q.trim());
-        conds.push(`(s.invoice_no LIKE ? ESCAPE '\\' OR EXISTS (
-          SELECT 1 FROM sale_lines l JOIN phone_units pu ON pu.id = l.phone_unit_id
-          WHERE l.sale_id = s.id AND (pu.imei1 LIKE ? ESCAPE '\\' OR pu.imei2 LIKE ? ESCAPE '\\')))`);
-        params.push(like, like, like);
+        conds.push("s.invoice_no LIKE ? ESCAPE '\\'");
+        params.push(likePattern(f.q.trim()));
       }
       const limit = Math.min(Math.max(f.limit ?? 100, 1), 500);
       params.push(limit);
@@ -637,7 +591,6 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
 function assertSameSale(existing: Invoice, input: CommitSaleInput): void {
   const tally = (
     lines: readonly {
-      phoneUnitId?: string | null;
       variantId?: string | null;
       quantity: number;
       discountAmount?: number;
@@ -645,7 +598,7 @@ function assertSameSale(existing: Invoice, input: CommitSaleInput): void {
   ): string => {
     const acc = new Map<string, { qty: number; disc: number }>();
     for (const l of lines) {
-      const key = l.phoneUnitId ? `p:${l.phoneUnitId}` : `v:${l.variantId ?? ''}`;
+      const key = l.variantId ?? '';
       const cur = acc.get(key) ?? { qty: 0, disc: 0 };
       acc.set(key, {
         qty: cur.qty + Math.abs(l.quantity),

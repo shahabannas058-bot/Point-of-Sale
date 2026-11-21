@@ -11,7 +11,7 @@ import {
 } from '../src/lib/stock-import';
 
 const KIRYANA: readonly ModuleId[] = ['weight_units', 'batch_expiry'];
-const MOBILE: readonly ModuleId[] = ['imei', 'warranty', 'repair'];
+const NO_WEIGHTS: readonly ModuleId[] = ['batch_expiry'];
 const HEADER = 'brand,name,sku,barcode,unit,cost,sale,qty,reorder';
 
 const csv = (...lines: string[]): string => [HEADER, ...lines].join('\n');
@@ -151,7 +151,7 @@ describe('toImportRows', () => {
 
   it('rejects kg / L when the shop lacks the weight_units module', () => {
     const { rows, problems } = toImportRows(csv(',Chini,,,kg,1,2,3,', ',Oil,,,L,1,2,3,'), {
-      modules: MOBILE,
+      modules: NO_WEIGHTS,
     });
     expect(rows).toEqual([]);
     expect(problems.map((p) => p.code)).toEqual(['unit_module', 'unit_module']);

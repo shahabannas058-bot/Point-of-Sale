@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { allocate, negPaisa, paisa } from '@pos/core';
 import {
   CHARGER_PRICE,
-  PHONE_PRICE,
+  CARTON_PRICE,
   expectCode,
   first,
   makeService,
@@ -48,7 +48,6 @@ describe('return restores stock (spec 7)', () => {
     expect(await t.svc.integrity.checks()).toMatchObject({
       salePaymentMismatch: 0,
       saleLineMismatch: 0,
-      badPhoneUnits: 0,
     });
   });
 
@@ -173,21 +172,21 @@ describe('return restores stock (spec 7)', () => {
     );
   });
 
-  it('a returned phone is back in stock and can be sold again', async () => {
+  it('a returned single carton is back in stock and can be sold again', async () => {
     await t.loginAs('mgr');
-    const sale = await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }]);
-    expect(await stockSum(t.driver, { phoneUnitId: t.ids.phoneId })).toBe(0);
+    const sale = await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
+    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
     await t.svc.checkout.createReturn({
       originalSaleId: sale.id,
       lines: [{ lineId: first(sale.lines).id, quantity: 1 }],
-      refund: [{ method: 'cash', amount: PHONE_PRICE }],
+      refund: [{ method: 'cash', amount: CARTON_PRICE }],
       reason: 'Dead on arrival',
     });
-    expect(await stockSum(t.driver, { phoneUnitId: t.ids.phoneId })).toBe(1);
-    const again = await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }]);
+    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(1);
+    const again = await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
     expect(again.seq).toBe(3);
-    expect(await stockSum(t.driver, { phoneUnitId: t.ids.phoneId })).toBe(0);
-    expect((await t.svc.integrity.checks()).badPhoneUnits).toBe(0);
+    expect(await stockSum(t.driver, { variantId: t.ids.cartonId })).toBe(0);
+    expect((await t.svc.integrity.checks()).saleLineMismatch).toBe(0);
   });
 
   it('a return invoice cannot itself be returned (RETURN_NOT_ALLOWED)', async () => {
@@ -413,12 +412,12 @@ describe('discount rounding on partial returns (spec 16, corrected)', () => {
       t,
       [
         { variantId: t.ids.chargerId, quantity: 2 },
-        { phoneUnitId: t.ids.phoneId, quantity: 1 },
+        { variantId: t.ids.cartonId, quantity: 1 },
       ],
       { invoiceDiscount: 100_001 },
     );
     expect(sale.discountTotal).toBe(100_001);
-    const [chargerLine, phoneLine] = sale.lines;
+    const [chargerLine, cartonLine] = sale.lines;
     const r1 = await t.svc.checkout.previewReturn(sale.id, [
       { lineId: first(sale.lines).id, quantity: 2 },
     ]);
@@ -429,13 +428,13 @@ describe('discount rounding on partial returns (spec 16, corrected)', () => {
       reason: 'chargers',
     });
     const r2 = await t.svc.checkout.previewReturn(sale.id, [
-      { lineId: phoneLine!.id, quantity: 1 },
+      { lineId: cartonLine!.id, quantity: 1 },
     ]);
     const ret2 = await t.svc.checkout.createReturn({
       originalSaleId: sale.id,
-      lines: [{ lineId: phoneLine!.id, quantity: 1 }],
+      lines: [{ lineId: cartonLine!.id, quantity: 1 }],
       refund: r2.suggestedRefund.map((p) => ({ method: p.method, amount: -p.amount })),
-      reason: 'phone',
+      reason: 'carton',
     });
     expect(ret1.discountTotal + ret2.discountTotal).toBe(-100_001);
     expect(ret1.total + ret2.total).toBe(negPaisa(sale.total));

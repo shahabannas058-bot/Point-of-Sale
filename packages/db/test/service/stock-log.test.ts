@@ -41,7 +41,7 @@ describe('reports.adjustments', () => {
     expect(latest?.label).toContain('Charger');
     expect(latest?.unitScale).toBe(1);
     expect(latest?.unitLabel).toBe('pcs');
-    expect(latest?.repair).toBeNull();
+    expect(latest).not.toHaveProperty('repair');
     expect(page.summary).toEqual({ count: 2, increases: 1, decreases: 1 });
     expect(page.nextBefore).toBeNull();
   });
@@ -49,7 +49,7 @@ describe('reports.adjustments', () => {
   it('includes opening stock and filters by text', async () => {
     await t.loginAs('owner');
     const all = await t.svc.reports.adjustments();
-    expect(all.entries.length).toBeGreaterThan(0); // the seeded phone and charger came in as opening stock
+    expect(all.entries.length).toBeGreaterThan(0); // the seeded carton and charger came in as opening stock
     const from = t.clock.peek();
     await t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: -1, reason: 'Chori' });
     const hit = await t.svc.reports.adjustments({ from, q: 'chori' });
@@ -79,29 +79,6 @@ describe('reports.adjustments', () => {
     });
     expect(p2.entries.map((e) => e.reason)).toEqual(['Step 1']);
     expect(p2.nextBefore).toBeNull();
-  });
-
-  it('marks spare parts used in a repair', async () => {
-    await t.loginAs('owner');
-    const from = t.clock.peek();
-    const ticket = await t.svc.repairs.create({
-      deviceBrand: 'Samsung',
-      deviceModel: 'A55',
-      problem: 'Charging port',
-      walkIn: { name: 'Ali' },
-      estimatedCost: 100_000,
-    });
-    await t.svc.repairs.setStatus({ ticketId: ticket.ticket.id, status: 'in_repair' });
-    await t.svc.repairs.addPart({
-      ticketId: ticket.ticket.id,
-      variantId: t.ids.chargerId,
-      quantity: 1,
-    });
-    const page = await t.svc.reports.adjustments({ from });
-    expect(first(page.entries).repair).toEqual({
-      ticketId: ticket.ticket.id,
-      ticketNo: ticket.ticket.ticketNo,
-    });
   });
 });
 

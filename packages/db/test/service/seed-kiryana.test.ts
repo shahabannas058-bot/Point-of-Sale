@@ -13,13 +13,13 @@ async function freshDriver() {
 
 async function seededKiryana() {
   const driver = await freshDriver();
-  const summary = await seedDemoData({ driver, pinIterations: 1000 }, { businessType: 'kiryana' });
+  const summary = await seedDemoData({ driver, pinIterations: 1000 });
   const svc = createPosService({ driver, pinIterations: 1000 });
   return { driver, summary, svc };
 }
 
 describe('seedDemoData for a kiryana shop', () => {
-  it('creates a demo shop that is a kiryana shop with the kiryana modules and no phones', async () => {
+  it('creates a demo shop that is a kiryana shop with the kiryana modules', async () => {
     const { driver, summary, svc } = await seededKiryana();
     const shop = await svc.setup.getShop();
     expect(shop).toMatchObject({
@@ -27,7 +27,7 @@ describe('seedDemoData for a kiryana shop', () => {
       businessType: 'kiryana',
       modules: MODULE_PRESETS.kiryana,
     });
-    expect(summary.phones).toBe(0);
+    expect(summary).not.toHaveProperty('phones');
     expect(summary.accessories).toBeGreaterThanOrEqual(15);
     expect(summary.customers).toBeGreaterThanOrEqual(4);
     expect(summary.suppliers).toBeGreaterThanOrEqual(2);
@@ -51,7 +51,6 @@ describe('seedDemoData for a kiryana shop', () => {
     expect(loose.some((i) => i.variant.unitLabel === 'kg')).toBe(true);
     expect(packed.every((i) => i.variant.barcode !== null)).toBe(true);
     expect(items.every((i) => i.onHand > 0)).toBe(true);
-    expect(await svc.catalog.listPhones()).toEqual([]);
     driver.close();
   });
 
@@ -73,7 +72,6 @@ describe('seedDemoData for a kiryana shop', () => {
     expect(await svc.integrity.checks()).toMatchObject({
       salePaymentMismatch: 0,
       saleLineMismatch: 0,
-      badPhoneUnits: 0,
     });
     const weighed = await driver.query<{ n: number }>(
       'select count(*) as n from sale_lines where unit_scale = 1000 and quantity % 1000 <> 0',
@@ -112,13 +110,6 @@ describe('seedDemoData for a kiryana shop', () => {
     driver.close();
   });
 
-  it('still refuses mobile-shop features: repairs are MODULE_DISABLED', async () => {
-    const { driver, svc } = await seededKiryana();
-    await svc.auth.login('owner', '1234');
-    await expectCode(svc.repairs.list(), 'MODULE_DISABLED');
-    driver.close();
-  });
-
   it('is deterministic: two kiryana seeds get the same SKUs, barcodes and device id', async () => {
     const a = await seededKiryana();
     const b = await seededKiryana();
@@ -136,19 +127,7 @@ describe('seedDemoData for a kiryana shop', () => {
 
   it('a second kiryana seed throws ALREADY_SETUP', async () => {
     const { driver } = await seededKiryana();
-    await expectCode(
-      seedDemoData({ driver, pinIterations: 1000 }, { businessType: 'kiryana' }),
-      'ALREADY_SETUP',
-    );
-    driver.close();
-  });
-
-  it('the default seed is still the mobile shop (no option = unchanged behaviour)', async () => {
-    const driver = await freshDriver();
-    const summary = await seedDemoData({ driver, pinIterations: 1000 });
-    expect(summary.phones).toBe(12);
-    const svc = createPosService({ driver, pinIterations: 1000 });
-    expect((await svc.setup.getShop()).businessType).toBe('custom');
+    await expectCode(seedDemoData({ driver, pinIterations: 1000 }), 'ALREADY_SETUP');
     driver.close();
   });
 });

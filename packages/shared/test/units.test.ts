@@ -96,22 +96,16 @@ describe('formatQuantity / parseQuantity', () => {
 });
 
 describe('modules', () => {
-  it('presets only name known modules, and custom owns all of them', () => {
+  it('presets only name known modules, and a kiryana shop owns all of them', () => {
     for (const list of Object.values(MODULE_PRESETS))
       for (const m of list) expect(MODULE_IDS).toContain(m);
-    expect([...MODULE_PRESETS.custom].sort()).toEqual([...MODULE_IDS].sort());
-  });
-
-  it('a kiryana shop has no phone modules, a mobile shop has no weight units', () => {
+    expect([...MODULE_PRESETS.kiryana].sort()).toEqual([...MODULE_IDS].sort());
     expect(hasModule(MODULE_PRESETS.kiryana, 'weight_units')).toBe(true);
-    for (const m of ['imei', 'repair', 'warranty'] as const)
-      expect(hasModule(MODULE_PRESETS.kiryana, m)).toBe(false);
-    expect(hasModule(MODULE_PRESETS.mobile, 'weight_units')).toBe(false);
-    expect(hasModule(MODULE_PRESETS.mobile, 'imei')).toBe(true);
+    expect(hasModule([], 'batch_expiry')).toBe(false);
   });
 
   it('parseModuleList drops unknown ids so an older app survives a newer licence', () => {
-    expect(parseModuleList('imei, bogus ,repair,,')).toEqual(['imei', 'repair']);
+    expect(parseModuleList('imei, bogus ,weight_units,,')).toEqual(['weight_units']);
     expect(parseModuleList('')).toEqual([]);
   });
 
@@ -127,7 +121,6 @@ describe('schemas carry the unit', () => {
     saleId: id(2),
     lineNo: 1,
     productId: id(3),
-    phoneUnitId: null,
     variantId: id(4),
     description: 'Chini (sugar) loose',
     quantity: 1250,
@@ -159,10 +152,8 @@ describe('schemas carry the unit', () => {
     expect(parsed.unitScale).toBe(1);
   });
 
-  it('rejects a phone unit sold by weight', () => {
-    const r = SaleLineSchema.safeParse(
-      variantLine({ phoneUnitId: id(5), variantId: null, quantity: 1, lineTotal: 28 }),
-    );
+  it('rejects a line without a variant', () => {
+    const r = SaleLineSchema.safeParse(variantLine({ variantId: null }));
     expect(r.success).toBe(false);
   });
 

@@ -19,7 +19,7 @@ export function translate(lang: Lang, key: TKey, params?: Params): string {
   });
 }
 
-/** Builds a key for dynamic families such as `pta.approved` or `err.STOCK_INSUFFICIENT`; falls back to `fallback`. */
+/** Builds a key for dynamic families such as `method.cash` or `err.STOCK_INSUFFICIENT`; falls back to `fallback`. */
 export function dynKey(prefix: string, value: string, fallback?: TKey): TKey {
   const k = `${prefix}.${value}`;
   if (k in en) return k as TKey;

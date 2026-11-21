@@ -4,7 +4,6 @@ import { createPosService } from './create-service';
 import type { ServiceDeps } from './deps';
 
 export interface SeedSummary {
-  phones: number;
   accessories: number;
   customers: number;
   suppliers: number;

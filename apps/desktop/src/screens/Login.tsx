@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { Languages, LoaderCircle, WifiOff, ShieldCheck, Sparkles } from 'lucide-react';
-import {
-  BUSINESS_TYPES,
-  hasModule,
-  isServiceError,
-  type BusinessType,
-  type Role,
-} from '@pos/shared';
+import { isServiceError, type Role } from '@pos/shared';
 import logoUrl from '../assets/hs-pos-logo.png';
 import { LanguageSwitch } from '../components/LanguageSwitch';
 import { Button } from '../components/ui/Button';
@@ -16,7 +10,6 @@ import { Badge } from '../components/ui/Badge';
 import { PIN_LENGTH, PinPad } from '../components/ui/PinPad';
 import { ErrorBox } from '../components/ui/misc';
 import { useT, type TKey } from '../i18n';
-import { nicheKey } from '../i18n/niche';
 import { errorMessage } from '../i18n/errors';
 import { useRuntime } from '../service/context';
 import { useServiceQuery } from '../service/use-query';
@@ -33,7 +26,7 @@ function readLastUser(): string | null {
   }
 }
 
-function BrandPanel({ shopName, hasImei }: { shopName: string; hasImei: boolean }): ReactNode {
+function BrandPanel({ shopName }: { shopName: string }): ReactNode {
   const t = useT();
   const points: { icon: typeof WifiOff; key: TKey }[] = [
     { icon: WifiOff, key: 'login.pointOffline' },
@@ -47,7 +40,7 @@ function BrandPanel({ shopName, hasImei }: { shopName: string; hasImei: boolean 
       </div>
       <div>
         <h1 className="display text-4xl font-bold leading-tight tracking-tight">{shopName}</h1>
-        <p className="mt-3 max-w-sm text-slate-300">{t(nicheKey(hasImei, 'login.tagline'))}</p>
+        <p className="mt-3 max-w-sm text-slate-300">{t('login.tagline')}</p>
         <ul className="mt-8 flex flex-col gap-3">
           {points.map((p) => (
             <li key={p.key} className="flex items-center gap-3 text-sm text-slate-200">
@@ -63,9 +56,7 @@ function BrandPanel({ shopName, hasImei }: { shopName: string; hasImei: boolean 
         </ul>
       </div>
       <div className="font-mono text-xs text-slate-400 ltr" aria-hidden="true">
-        {hasImei
-          ? 'Rs 1,23,45,678 · IMEI 35 693803 ······ · A-000042'
-          : 'Rs 1,23,45,678 · 1.250 kg · K-000042'}
+        Rs 1,23,45,678 · 1.250 kg · K-000042
       </div>
     </aside>
   );
@@ -84,8 +75,6 @@ function SetupWizard(): ReactNode {
     pin: '',
     pin2: '',
   });
-  // kiryana is the first business type we ship, so it is pre-selected
-  const [businessType, setBusinessType] = useState<BusinessType>('kiryana');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
@@ -120,7 +109,7 @@ function SetupWizard(): ReactNode {
         branchName: form.branchName.trim(),
         invoicePrefix: form.invoicePrefix,
         owner: { username: form.username, displayName: form.displayName.trim(), pin: form.pin },
-        businessType,
+        businessType: 'kiryana',
       });
       bump();
     } catch (err) {
@@ -134,7 +123,7 @@ function SetupWizard(): ReactNode {
     setBusy(true);
     setError(null);
     try {
-      await rt.loadDemo(businessType);
+      await rt.loadDemo();
       window.location.reload();
     } catch (err) {
       setError(err);
@@ -162,31 +151,6 @@ function SetupWizard(): ReactNode {
             required
           />
         </Field>
-        <div className="sm:col-span-2" role="radiogroup" aria-label={t('setup.businessType')}>
-          <div className="mb-1.5 text-sm font-semibold">{t('setup.businessType')}</div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {BUSINESS_TYPES.map((bt) => {
-              const on = businessType === bt;
-              return (
-                <button
-                  key={bt}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => setBusinessType(bt)}
-                  className={`flex min-h-14 flex-col justify-center rounded-xl border px-4 py-2 text-start transition-colors ${
-                    on
-                      ? 'border-primary bg-primary-soft'
-                      : 'border-line bg-surface hover:bg-surface-2'
-                  }`}
-                >
-                  <span className="font-semibold">{t(`setup.bt.${bt}` as TKey)}</span>
-                  <span className="text-xs text-muted">{t(`setup.bt.${bt}Hint` as TKey)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
         <Field label={t('setup.branchName')}>
           <Input value={form.branchName} onChange={set('branchName')} required />
         </Field>
@@ -405,10 +369,7 @@ export function Login(): ReactNode {
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      <BrandPanel
-        shopName={setupQ.data === false ? t('app.name') : shopName}
-        hasImei={shopQ.data !== undefined && hasModule(shopQ.data.modules, 'imei')}
-      />
+      <BrandPanel shopName={setupQ.data === false ? t('app.name') : shopName} />
       <main className="relative grid place-items-center p-6">
         <div className="absolute end-4 top-4">
           <LanguageSwitch />

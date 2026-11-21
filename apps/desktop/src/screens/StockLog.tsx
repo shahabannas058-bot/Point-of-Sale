@@ -52,13 +52,7 @@ function Row({ e }: { e: StockLogEntry }): ReactNode {
         {qty(e.balanceAfter)}
       </td>
       <td data-label={t('adjlog.reason')}>
-        {e.repair ? (
-          <Link to={`/repairs/${e.repair.ticketId}`} className="font-semibold text-primary-ink">
-            {t('adjlog.repair', { no: e.repair.ticketNo })}
-          </Link>
-        ) : (
-          (e.reason ?? '—')
-        )}
+        {e.reason ?? '—'}
         {e.batch ? (
           <span className="ltr block text-xs text-muted">
             {e.batch.batchNo ?? ''} · {t('hist.exp')} {e.batch.expiryDate}

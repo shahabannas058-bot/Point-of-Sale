@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '@pos/shared';
-import { IMEI_Y, PINS, expectCode, makeService, type TestService, type TestUser } from './helpers';
+import { PINS, expectCode, makeService, type TestService, type TestUser } from './helpers';
 
 let t: TestService;
 beforeEach(async () => {
@@ -112,7 +112,7 @@ describe('login (spec 10)', () => {
     // the old token is gone, so a discount needing approval still asks for it
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 1_000_000 }],
+        lines: [{ variantId: t.ids.cartonId, quantity: 1, discountAmount: 1_000_000 }],
         payments: [{ method: 'cash', amount: 7_500_000 }],
         approvalToken: grant.token,
       }),
@@ -157,7 +157,7 @@ describe('roles and permissions (spec 10)', () => {
   it('without a session everything is NOT_AUTHENTICATED', async () => {
     await expectCode(t.svc.checkout.preview({ lines: [] }), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.catalog.search('x'), 'NOT_AUTHENTICATED');
-    await expectCode(t.svc.catalog.listPhones(), 'NOT_AUTHENTICATED');
+    await expectCode(t.svc.catalog.listAccessories(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.settings.get(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.auth.listUsers(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.integrity.verifyChain(), 'NOT_AUTHENTICATED');
@@ -165,14 +165,12 @@ describe('roles and permissions (spec 10)', () => {
     await expectCode(t.svc.auth.changePin('1234', '5555'), 'NOT_AUTHENTICATED');
   });
 
-  it('a cashier cannot create phones, summarise reports, adjust stock, manage users or settings', async () => {
+  it('a cashier cannot create items, summarise reports, adjust stock, manage users or settings', async () => {
     await t.loginAs('cash');
     await expectCode(
-      t.svc.catalog.createPhoneUnit({
+      t.svc.catalog.createAccessory({
         product: { brand: 'X', name: 'Y' },
-        imei1: IMEI_Y,
-        ptaStatus: 'approved',
-        condition: 'new',
+        sku: 'X-Y',
         costPrice: 1,
         salePrice: 2,
       }),

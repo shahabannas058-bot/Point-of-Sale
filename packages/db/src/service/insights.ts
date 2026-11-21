@@ -6,12 +6,11 @@ import {
   type Paisa,
   type ReorderSuggestion,
 } from '@pos/shared';
-import type { SqlValue } from '../types';
 import { canDo, requirePermission, type Ctx } from './deps';
 import { guardApi, invalid, optIntIn } from './errors';
 import { toVariantView, type Raw } from './mappers';
 import { loadShop } from './meta';
-import { VARIANT_VIEW_SQL, customerBalance, requirePhoneView, requireVariantView } from './queries';
+import { VARIANT_VIEW_SQL, customerBalance, requireVariantView } from './queries';
 
 const DAY_MS = 86_400_000;
 const INSIGHT_DAYS = 30;
@@ -20,11 +19,6 @@ const LEAD_DAYS = 7;
 const DEFAULT_WINDOW_DAYS = 30;
 const DEFAULT_COVER_DAYS = 14;
 
-/** Which sale lines count as "this item": one accessory variant, or every unit of one phone model. */
-interface ItemMatch {
-  sql: string;
-  param: SqlValue;
-}
 interface CostAt {
   unitCost: number;
   at: number;
@@ -40,13 +34,12 @@ const optId = (v: unknown, field: string): string | null => {
 async function lastCosts(
   ctx: Ctx,
   branchId: string,
-  column: 'variant_id' | 'phone_unit_id',
   id: string | null,
 ): Promise<Map<string, CostAt>> {
   const rows = await ctx.driver.query<{ item: string; unit_cost: number; created_at: number }>(
-    `SELECT ${column} AS item, unit_cost, created_at FROM stock_movements
+    `SELECT variant_id AS item, unit_cost, created_at FROM stock_movements
      WHERE branch_id = ? AND quantity > 0 AND type IN ('purchase', 'adjustment')
-       AND unit_cost IS NOT NULL AND ${column} IS NOT NULL ${id === null ? '' : `AND ${column} = ?`}
+       AND unit_cost IS NOT NULL ${id === null ? '' : 'AND variant_id = ?'}
      ORDER BY created_at, rowid`,
     id === null ? [branchId] : [branchId, id],
   );
@@ -59,7 +52,7 @@ async function lastCosts(
 async function lastSoldTo(
   ctx: Ctx,
   customerId: string,
-  match: ItemMatch,
+  variantId: string,
 ): Promise<ItemInsight['lastSoldToCustomer']> {
   const rows = await ctx.driver.query<{
     line_total: number;
@@ -70,9 +63,9 @@ async function lastSoldTo(
   }>(
     `SELECT sl.line_total, sl.quantity, sl.unit_scale, s.created_at, s.invoice_no
      FROM sale_lines sl JOIN sales s ON s.id = sl.sale_id
-     WHERE s.kind = 'sale' AND s.customer_id = ? AND ${match.sql}
+     WHERE s.kind = 'sale' AND s.customer_id = ? AND sl.variant_id = ?
      ORDER BY s.created_at DESC, s.seq DESC LIMIT 1`,
-    [customerId, match.param],
+    [customerId, variantId],
   );
   const r = rows[0];
   if (r === undefined) return null;
@@ -90,20 +83,19 @@ async function soldSince(
   ctx: Ctx,
   branchId: string,
   since: number,
-  match: ItemMatch,
+  variantId: string,
 ): Promise<number> {
   // return / void lines carry negative quantities, so the sum is net of returns
   const rows = await ctx.driver.query<{ n: number }>(
     `SELECT COALESCE(SUM(sl.quantity), 0) AS n FROM sale_lines sl JOIN sales s ON s.id = sl.sale_id
-     WHERE s.branch_id = ? AND s.created_at >= ? AND ${match.sql}`,
-    [branchId, since, match.param],
+     WHERE s.branch_id = ? AND s.created_at >= ? AND sl.variant_id = ?`,
+    [branchId, since, variantId],
   );
   return Math.max(0, Number(rows[0]?.n ?? 0));
 }
 
 interface ItemFacts {
   onHand: number;
-  match: ItemMatch;
   lastPurchase: ItemInsight['lastPurchase'];
 }
 
@@ -111,39 +103,22 @@ async function variantFacts(ctx: Ctx, branchId: string, variantId: string): Prom
   const v = await requireVariantView(ctx.driver, variantId, branchId);
   let lastPurchase: ItemInsight['lastPurchase'] = null;
   if (canDo(ctx, 'view_cost')) {
-    const c = (await lastCosts(ctx, branchId, 'variant_id', variantId)).get(variantId);
+    const c = (await lastCosts(ctx, branchId, variantId)).get(variantId);
     lastPurchase = c ? { unitCost: paisa(c.unitCost), at: c.at } : null;
   }
-  return { onHand: v.onHand, match: { sql: 'sl.variant_id = ?', param: variantId }, lastPurchase };
-}
-
-async function phoneFacts(ctx: Ctx, branchId: string, phoneUnitId: string): Promise<ItemFacts> {
-  const u = await requirePhoneView(ctx.driver, phoneUnitId);
-  let lastPurchase: ItemInsight['lastPurchase'] = null;
-  if (canDo(ctx, 'view_cost')) {
-    const c = (await lastCosts(ctx, branchId, 'phone_unit_id', u.unit.id)).get(u.unit.id);
-    lastPurchase = {
-      unitCost: paisa(c?.unitCost ?? u.unit.costPrice),
-      at: c?.at ?? u.unit.createdAt,
-    };
-  }
-  return {
-    onHand: u.inStock ? 1 : 0,
-    match: { sql: 'sl.product_id = ? AND sl.phone_unit_id IS NOT NULL', param: u.product.id },
-    lastPurchase,
-  };
+  return { onHand: v.onHand, lastPurchase };
 }
 
 async function customerFacts(
   ctx: Ctx,
   customerId: string,
-  match: ItemMatch,
+  variantId: string,
 ): Promise<Pick<ItemInsight, 'lastSoldToCustomer' | 'customerBalance'>> {
   const exists = await ctx.driver.query('SELECT id FROM customers WHERE id = ?', [customerId]);
   if (exists.length === 0)
     throw new ServiceError('NOT_FOUND', 'Customer not found', { field: 'customerId' });
   return {
-    lastSoldToCustomer: await lastSoldTo(ctx, customerId, match),
+    lastSoldToCustomer: await lastSoldTo(ctx, customerId, variantId),
     customerBalance: paisa(await customerBalance(ctx.driver, customerId)),
   };
 }
@@ -153,21 +128,16 @@ export function createInsightsApi(ctx: Ctx): InsightsApi {
     async item(input) {
       requirePermission(ctx, 'sell');
       const variantId = optId(input.variantId, 'variantId');
-      const phoneUnitId = optId(input.phoneUnitId, 'phoneUnitId');
       const customerId = optId(input.customerId, 'customerId');
-      if ((variantId === null) === (phoneUnitId === null))
-        throw invalid('variantId', 'Give exactly one of variantId or phoneUnitId');
+      if (variantId === null) throw invalid('variantId', 'variantId is required');
       const { branchId } = await loadShop(ctx.driver);
 
-      const facts =
-        variantId !== null
-          ? await variantFacts(ctx, branchId, variantId)
-          : await phoneFacts(ctx, branchId, phoneUnitId as string);
-      const sold = await soldSince(ctx, branchId, ctx.clock() - INSIGHT_DAYS * DAY_MS, facts.match);
+      const facts = await variantFacts(ctx, branchId, variantId);
+      const sold = await soldSince(ctx, branchId, ctx.clock() - INSIGHT_DAYS * DAY_MS, variantId);
       const party =
         customerId === null
           ? { lastSoldToCustomer: null, customerBalance: null as Paisa | null }
-          : await customerFacts(ctx, customerId, facts.match);
+          : await customerFacts(ctx, customerId, variantId);
 
       return {
         onHand: facts.onHand,
@@ -187,15 +157,13 @@ export function createInsightsApi(ctx: Ctx): InsightsApi {
       ).map(toVariantView);
       const soldRows = await ctx.driver.query<{ variant_id: string; n: number }>(
         `SELECT sl.variant_id, SUM(sl.quantity) AS n FROM sale_lines sl JOIN sales s ON s.id = sl.sale_id
-         WHERE s.branch_id = ? AND s.created_at >= ? AND sl.variant_id IS NOT NULL
+         WHERE s.branch_id = ? AND s.created_at >= ?
          GROUP BY sl.variant_id`,
         [branchId, ctx.clock() - days * DAY_MS],
       );
       const soldBy = new Map(soldRows.map((r) => [r.variant_id, Math.max(0, Number(r.n))]));
       const showCost = canDo(ctx, 'view_cost');
-      const costs = showCost
-        ? await lastCosts(ctx, branchId, 'variant_id', null)
-        : new Map<string, CostAt>();
+      const costs = showCost ? await lastCosts(ctx, branchId, null) : new Map<string, CostAt>();
 
       const rows: ReorderSuggestion[] = [];
       for (const item of items) {

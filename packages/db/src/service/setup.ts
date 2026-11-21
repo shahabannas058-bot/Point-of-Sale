@@ -49,7 +49,7 @@ export function createSetupApi(ctx: Ctx): SetupApi {
           'owner.username',
           'Username may contain only a-z, 0-9, dot, dash, underscore',
         );
-      const type = BusinessTypeSchema.safeParse(input.businessType ?? 'custom');
+      const type = BusinessTypeSchema.safeParse(input.businessType ?? 'kiryana');
       if (!type.success) throw invalid('businessType', 'Unknown business type');
       const displayName = reqText(input.owner.displayName, 'owner.displayName', 1, 100);
       validatePinFormat(input.owner.pin, 'owner.pin');

@@ -21,12 +21,9 @@ export { count } from '../helpers';
 export const PINS = { owner: '1234', mgr: '2345', cash: '3456' } as const;
 export type TestUser = keyof typeof PINS;
 
-export const IMEI_X = '356938035643809';
-/** A second, Luhn-valid IMEI (GSMA documentation example). */
-export const IMEI_Y = '490154203237518';
-
-export const PHONE_COST = 7_800_000;
-export const PHONE_PRICE = 8_500_000;
+/** Ghee carton X: one high-value piece item, a single unit in stock. */
+export const CARTON_COST = 7_800_000;
+export const CARTON_PRICE = 8_500_000;
 export const CHARGER_COST = 90_000;
 export const CHARGER_PRICE = 150_000;
 export const CREDIT_LIMIT = 5_000_000;
@@ -37,8 +34,8 @@ export interface TestIds {
   ownerId: string;
   managerId: string;
   cashierId: string;
-  /** Phone unit X. */
-  phoneId: string;
+  /** Ghee carton X (1 on hand). */
+  cartonId: string;
   /** Charger variant C. */
   chargerId: string;
   /** Customer Bilal. */
@@ -75,7 +72,7 @@ export interface MakeServiceOptions {
 /**
  * In-memory service over a migrated database with a stepping clock (+1000 ms per call),
  * a deterministic id generator, 1000 PBKDF2 iterations and a licence-hook spy.
- * Seeded (as owner): manager mgr/2345, cashier cash/3456, phone X, charger C (10 on hand, reorder 3),
+ * Seeded (as owner): manager mgr/2345, cashier cash/3456, carton X (1 on hand), charger C (10 on hand, reorder 3),
  * customer Bilal (credit limit Rs 50,000). Ends logged out.
  */
 export async function makeService(options: MakeServiceOptions = {}): Promise<TestService> {
@@ -120,7 +117,7 @@ export async function makeService(options: MakeServiceOptions = {}): Promise<Tes
   }
 
   const shop = await svc.setup.firstRun({
-    shopName: 'Test Mobile Centre',
+    shopName: 'Test Kiryana Store',
     branchName: 'Main Counter',
     invoicePrefix: 'A',
     owner: { username: 'owner', displayName: 'Owner', pin: PINS.owner },
@@ -138,13 +135,12 @@ export async function makeService(options: MakeServiceOptions = {}): Promise<Tes
     role: 'cashier',
     pin: PINS.cash,
   });
-  const phone = await svc.catalog.createPhoneUnit({
-    product: { brand: 'Samsung', name: 'Galaxy A55', category: 'Smartphone' },
-    imei1: IMEI_X,
-    ptaStatus: 'approved',
-    condition: 'new',
-    costPrice: PHONE_COST,
-    salePrice: PHONE_PRICE,
+  const carton = await svc.catalog.createAccessory({
+    product: { brand: 'Dalda', name: 'Ghee Carton 16kg', category: 'Ghee' },
+    sku: 'GHEE-CTN',
+    costPrice: CARTON_COST,
+    salePrice: CARTON_PRICE,
+    openingQty: 1,
   });
   const charger = await svc.catalog.createAccessory({
     product: { brand: 'Generic', name: 'Fast Charger 25W', category: 'Charger' },
@@ -174,7 +170,7 @@ export async function makeService(options: MakeServiceOptions = {}): Promise<Tes
       ownerId: session.user.id,
       managerId: manager.id,
       cashierId: cashier.id,
-      phoneId: phone.unit.id,
+      cartonId: carton.variant.id,
       chargerId: charger.variant.id,
       bilalId: bilal.id,
     },
@@ -213,18 +209,14 @@ export async function expectCode(
   return e;
 }
 
-/** Sum of stock_movements.quantity for a phone unit or an accessory variant. */
+/** Sum of stock_movements.quantity for one item. */
 export async function stockSum(
   driver: NodeSqliteDriver,
-  target: { phoneUnitId: string } | { variantId: string },
+  target: { variantId: string },
 ): Promise<number> {
-  const [col, id] =
-    'phoneUnitId' in target
-      ? (['phone_unit_id', target.phoneUnitId] as const)
-      : (['variant_id', target.variantId] as const);
   const rows = await driver.query<{ n: number }>(
-    `select coalesce(sum(quantity), 0) as n from stock_movements where ${col} = ?`,
-    [id],
+    'select coalesce(sum(quantity), 0) as n from stock_movements where variant_id = ?',
+    [target.variantId],
   );
   return rows[0]?.n ?? 0;
 }
@@ -258,7 +250,7 @@ export async function snapshotCounts(driver: NodeSqliteDriver): Promise<Counts> 
 /** Commit helper: one cash payment equal to `total`. */
 export async function sellCash(
   t: TestService,
-  lines: { phoneUnitId?: string; variantId?: string; quantity: number; discountAmount?: number }[],
+  lines: { variantId: string; quantity: number; discountAmount?: number }[],
   extra: { customerId?: string; invoiceDiscount?: number; saleId?: string } = {},
 ): Promise<Invoice> {
   const preview = await t.svc.checkout.preview({ lines, ...extra });

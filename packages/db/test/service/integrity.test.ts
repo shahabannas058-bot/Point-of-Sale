@@ -5,7 +5,7 @@ import { mapError } from '../../src/service';
 import { movementRow, paymentRow } from '../helpers';
 import {
   CHARGER_PRICE,
-  PHONE_PRICE,
+  CARTON_PRICE,
   expectCode,
   first,
   makeService,
@@ -33,7 +33,7 @@ describe('verifyChain / checks', () => {
   it('is ok after mixed sales, returns and voids', async () => {
     await t.loginAs('mgr');
     const a = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 3 }]);
-    await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }], { customerId: t.ids.bilalId });
+    await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }], { customerId: t.ids.bilalId });
     await t.svc.checkout.createReturn({
       originalSaleId: a.id,
       lines: [{ lineId: first(a.lines).id, quantity: 1 }],
@@ -45,7 +45,6 @@ describe('verifyChain / checks', () => {
     expect(await t.svc.integrity.checks()).toMatchObject({
       salePaymentMismatch: 0,
       saleLineMismatch: 0,
-      badPhoneUnits: 0,
     });
   });
 
@@ -96,31 +95,6 @@ describe('verifyChain / checks', () => {
     expect((await t.svc.integrity.checks()).salePaymentMismatch).toBe(1);
     expect(paymentRow(inv.id).amount).toBeDefined();
   });
-
-  it('checks() sees a phone unit outside 0..1 only if the guard trigger were bypassed', async () => {
-    await t.loginAs('owner');
-    await t.driver.exec('DROP TRIGGER trg_stock_movements_unit_guard');
-    await t.driver.batch([
-      {
-        sql: 'insert into stock_movements (id, branch_id, type, phone_unit_id, variant_id, quantity, unit_cost, ref_type, ref_id, reason, created_by, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-        params: [
-          t.newId(),
-          t.ids.branchId,
-          'adjustment',
-          t.ids.phoneId,
-          null,
-          1,
-          null,
-          null,
-          null,
-          'dup',
-          t.ids.ownerId,
-          1,
-        ],
-      },
-    ]);
-    expect((await t.svc.integrity.checks()).badPhoneUnits).toBe(1);
-  });
 });
 
 describe('mapError taxonomy', () => {
@@ -158,7 +132,6 @@ describe('mapError taxonomy', () => {
   });
 
   it('maps each SQLite trigger / constraint message', () => {
-    expect(code('phone unit on-hand must stay within 0..1')).toBe('UNIT_NOT_IN_STOCK');
     expect(code('sales: seq must be previous seq + 1 for this device')).toBe('CHAIN_CONFLICT');
     expect(code('sales: prev_hash must equal the hash of the previous invoice')).toBe(
       'CHAIN_CONFLICT',
@@ -183,14 +156,14 @@ describe('mapError taxonomy', () => {
   });
 
   it('extracts table and field from a UNIQUE violation', () => {
-    const e = mapError(new Error('UNIQUE constraint failed: phone_units.imei1'));
+    const e = mapError(new Error('UNIQUE constraint failed: accessory_variants.sku'));
     expect(e.code).toBe('DUPLICATE');
-    expect(e.details).toEqual({ table: 'phone_units', field: 'imei1' });
+    expect(e.details).toEqual({ table: 'accessory_variants', field: 'sku' });
   });
 
   it('real database errors map through the same rules', async () => {
     await t.loginAs('owner');
-    const sale = await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }]);
+    const sale = await sellCash(t, [{ variantId: t.ids.cartonId, quantity: 1 }]);
     const errOf = async (p: Promise<unknown>): Promise<ServiceError> => {
       try {
         await p;
@@ -199,16 +172,16 @@ describe('mapError taxonomy', () => {
       }
       throw new Error('expected the statement to fail');
     };
-    // selling a unit that is already out of stock: the DB trigger is the backstop for the service check
-    const unit = await errOf(
+    // a sale movement must take stock out: the CHECK is the backstop for the service
+    const positiveSale = await errOf(
       t.driver.batch([
         {
-          sql: 'insert into stock_movements (id, branch_id, type, phone_unit_id, quantity, created_by, created_at) values (?,?,?,?,?,?,?)',
-          params: [t.newId(), t.ids.branchId, 'sale', t.ids.phoneId, -1, t.ids.ownerId, 1],
+          sql: 'insert into stock_movements (id, branch_id, type, variant_id, quantity, created_by, created_at) values (?,?,?,?,?,?,?)',
+          params: [t.newId(), t.ids.branchId, 'sale', t.ids.cartonId, 1, t.ids.ownerId, 1],
         },
       ]),
     );
-    expect(unit.code).toBe('UNIT_NOT_IN_STOCK');
+    expect(positiveSale.code).toBe('DB_CONSTRAINT');
     expect((await errOf(t.driver.exec("UPDATE sales SET note = 'x'"))).code).toBe(
       'IMMUTABLE_RECORD',
     );
@@ -222,8 +195,9 @@ describe('mapError taxonomy', () => {
     );
     const dup = await errOf(
       t.driver.exec(
-        `INSERT INTO phone_units (id, product_id, imei1, pta_status, condition, cost_price, sale_price, created_at, updated_at)
-         SELECT '${t.newId()}', product_id, imei1, pta_status, condition, cost_price, sale_price, created_at, updated_at FROM phone_units`,
+        `INSERT INTO accessory_variants (id, product_id, sku, cost_price, sale_price, created_at, updated_at)
+         SELECT '${t.newId()}', product_id, sku, cost_price, sale_price, created_at, updated_at
+         FROM accessory_variants WHERE id = '${t.ids.cartonId}'`,
       ),
     );
     expect(dup.code).toBe('DUPLICATE');
@@ -264,6 +238,6 @@ describe('mapError taxonomy', () => {
       );
       expect(e).toBeInstanceOf(ServiceError);
     }
-    expect(PHONE_PRICE).toBeGreaterThan(0);
+    expect(CARTON_PRICE).toBeGreaterThan(0);
   });
 });

@@ -16,7 +16,14 @@ vi.hoisted(() => {
   };
 });
 
-import { cartToDraft, lineGrossOf, lineScale, useCart, type CartLine } from '../src/store/cart';
+import {
+  cartToDraft,
+  lineGrossOf,
+  lineScale,
+  migrateHeldBills,
+  useCart,
+  type CartLine,
+} from '../src/store/cart';
 
 const variant = (o: {
   id: string;
@@ -198,7 +205,6 @@ describe('cart: held bills saved before weights existed', () => {
   it('resume as piece lines', () => {
     const old = {
       key: 'v:old',
-      kind: 'accessory',
       variantId: 'old',
       label: 'Old charger',
       sub: '',
@@ -214,5 +220,39 @@ describe('cart: held bills saved before weights existed', () => {
     const line = first();
     expect(lineScale(line)).toBe(1);
     expect(lineGrossOf(line)).toBe(300_000);
+  });
+});
+
+describe('cart: held bills saved by the mobile-shop build (persist version 0)', () => {
+  const bill = (id: string, lines: unknown[]) => ({
+    id,
+    heldAt: 1,
+    total: 0,
+    customer: null,
+    invoiceDiscount: 0,
+    lines,
+  });
+  const phone = { key: 'p:u1', kind: 'phone', phoneUnitId: 'u1', label: 'Galaxy A55', qty: 1 };
+  const item = { key: 'v:pens', kind: 'accessory', variantId: 'pens', label: 'Pen', qty: 2 };
+
+  it('drops phone lines, strips the old kind tag and keeps the item lines', () => {
+    const { held } = migrateHeldBills({ held: [bill('h1', [phone, item])] }, 0);
+    expect(held).toHaveLength(1);
+    expect(held[0]?.lines).toEqual([{ key: 'v:pens', variantId: 'pens', label: 'Pen', qty: 2 }]);
+  });
+
+  it('drops a bill that held only phones', () => {
+    const { held } = migrateHeldBills({ held: [bill('h1', [phone]), bill('h2', [item])] }, 0);
+    expect(held.map((h) => h.id)).toEqual(['h2']);
+  });
+
+  it('survives missing or broken stored state', () => {
+    expect(migrateHeldBills(null, 0)).toEqual({ held: [] });
+    expect(migrateHeldBills({ held: 'x' }, 0)).toEqual({ held: [] });
+  });
+
+  it('leaves current-version state alone', () => {
+    const held = [bill('h1', [{ key: 'v:pens', variantId: 'pens' }])];
+    expect(migrateHeldBills({ held }, 1)).toEqual({ held });
   });
 });

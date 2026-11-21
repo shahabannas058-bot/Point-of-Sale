@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { NewPhoneUnitInput } from '@pos/shared';
 import {
   CHARGER_COST,
-  IMEI_Y,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_COST,
   expectCode,
   first,
   makeService,
@@ -16,27 +13,19 @@ beforeEach(async () => {
   t = await makeService();
 });
 
-const newPhone = (over: Partial<NewPhoneUnitInput> = {}): NewPhoneUnitInput => ({
-  product: { brand: 'Infinix', name: 'Hot 40 Pro' },
-  imei1: IMEI_Y,
-  ptaStatus: 'approved',
-  condition: 'new',
-  costPrice: PHONE_COST,
-  salePrice: PHONE_PRICE,
-  ...over,
-});
-
 async function makeSupplier(name = 'Hafeez Centre Traders'): Promise<string> {
   return (await t.svc.purchasing.createSupplier({ name })).id;
 }
 
-/** Phone (7 800 000) + 10 chargers (900 000) = 8 700 000, 2 000 000 paid now, supplier invoice INV-9001. */
+/** Carton (7 800 000) + 10 chargers (900 000) = 8 700 000, 2 000 000 paid now, supplier invoice INV-9001. */
 async function receiveBig(supplierId: string): Promise<void> {
   await t.svc.purchasing.receive({
     supplierId,
     referenceNo: 'INV-9001',
-    phones: [newPhone()],
-    accessories: [{ variantId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST }],
+    accessories: [
+      { variantId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST },
+      { variantId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST },
+    ],
     paidNow: { method: 'cash', amount: 2_000_000 },
   });
 }
