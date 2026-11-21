@@ -41,6 +41,7 @@ import { cartLineItemRef } from '../lib/item-history';
 import { formatRs, paisaToInput, parseRupees, percentDiscount } from '../lib/money';
 import { printReceipt } from '../lib/print';
 import { loadReceiptModel } from '../lib/receipt-model';
+import { pickableHit } from '../lib/search-pick';
 import { useHotkeys } from '../lib/shortcuts';
 import { useService } from '../service/context';
 import {
@@ -403,6 +404,8 @@ export function Billing(): ReactNode {
   const searchRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<CatalogHit[]>([]);
+  // the search text the current hits were found for: Enter may only pick a hit of the text in the box
+  const [hitsFor, setHitsFor] = useState('');
   const [dropOpen, setDropOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const can = useCan();
@@ -426,7 +429,17 @@ export function Billing(): ReactNode {
   const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null);
   const pendingPayments = useRef<PaymentInput[] | null>(null);
 
-  const focusSearch = useCallback(() => searchRef.current?.focus(), []);
+  // Next frame: a dialog closing in the same render hands focus back to its opener, which would win.
+  // After a mouse pick in a dialog Chrome can report the box as focused while keys go nowhere, so a
+  // box that already holds focus is blurred first; the scanner's keystrokes then land in it.
+  const focusSearch = useCallback(() => {
+    requestAnimationFrame(() => {
+      const box = searchRef.current;
+      if (!box) return;
+      if (document.activeElement === box) box.blur();
+      box.focus();
+    });
+  }, []);
   useEffect(focusSearch, [focusSearch]);
 
   // ---- live preview (debounced) ----
@@ -529,6 +542,7 @@ export function Billing(): ReactNode {
         .then((r) => {
           if (!live) return;
           setHits(r);
+          setHitsFor(term);
           setDropOpen(r.length > 0);
           setActive(-1);
         })
@@ -543,8 +557,9 @@ export function Billing(): ReactNode {
   const submitSearch = async (): Promise<void> => {
     const term = q.trim();
     if (!term) return;
-    if (dropOpen && active >= 0 && hits[active]) {
-      addHit(hits[active]);
+    const picked = pickableHit({ hits, active, open: dropOpen, hitsFor, term });
+    if (picked) {
+      addHit(picked);
       return;
     }
     try {
@@ -554,6 +569,7 @@ export function Billing(): ReactNode {
       if (single) return addHit(single);
       if (res.length === 0) return toast.error(t('billing.notFound', { q: term }));
       setHits(res);
+      setHitsFor(term);
       setDropOpen(true);
       setActive(0);
     } catch (e) {

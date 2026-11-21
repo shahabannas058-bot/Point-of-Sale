@@ -43,9 +43,11 @@ export function createSqlJsDriver(initial: Database, persist?: SqlJsPersistence)
   let chain: Promise<void> = Promise.resolve();
   let queued: Promise<void> | null = null;
 
+  /** Reopens before closing the old handle, so a failing reopen leaves the driver usable. */
   const restoreSaved = (store: SqlJsPersistence, good: Uint8Array): void => {
+    const reopened = store.reopen(good);
     db.close();
-    db = store.reopen(good);
+    db = reopened;
     applyPragmas();
     restores += 1;
     queued = null; // writes after the restore start a fresh save
@@ -63,7 +65,11 @@ export function createSqlJsDriver(initial: Database, persist?: SqlJsPersistence)
         await persist.save(bytes);
         saved = bytes;
       } catch (e) {
-        if (saved) restoreSaved(persist, saved);
+        try {
+          if (saved) restoreSaved(persist, saved);
+        } catch {
+          // the reopen failed and the old handle stays open; the save error is the one the writer must see
+        }
         throw e;
       }
     });

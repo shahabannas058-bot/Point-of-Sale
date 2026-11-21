@@ -2,6 +2,8 @@
 
 Date: 2026-10-18. Runner: vitest through npm (`npx vitest run …`, `npm run check`). Design: ADR-0009.
 
+> **Update 2026-11-21 (ADR-0011):** the mobile shop no longer exists. Row 16 now tests a shop without the `batch_expiry` module (`batches.test.ts`, "a shop without the module cannot receive batches or read the expiry list").
+
 ## Source plan
 
 No `*.plan.md`. The journeys come from the owner's request ("batch expiry wala feature bhi banaho") and the previous

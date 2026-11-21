@@ -137,18 +137,21 @@ describe('grocery upgrade (0009) on sql.js', () => {
 /** The boot screen for a refused database: download, restore and reset wait for the owner PIN (security review). */
 describe('legacy boot screen gate', () => {
   it('nothing is offered before the owner PIN; reset waits for a downloaded copy', () => {
-    expect(legacyActions({ unlocked: false, downloaded: false })).toEqual({
-      download: false,
-      restore: false,
-      reset: false,
-    });
-    expect(legacyActions({ unlocked: false, downloaded: true }).reset).toBe(false);
-    expect(legacyActions({ unlocked: true, downloaded: false })).toEqual({
+    const gate = { unlocked: false, downloaded: false, ownerless: false };
+    expect(legacyActions(gate)).toEqual({ download: false, restore: false, reset: false });
+    expect(legacyActions({ ...gate, downloaded: true }).reset).toBe(false);
+    expect(legacyActions({ ...gate, unlocked: true })).toEqual({
       download: true,
       restore: true,
       reset: false,
     });
-    expect(legacyActions({ unlocked: true, downloaded: true }).reset).toBe(true);
+    expect(legacyActions({ ...gate, unlocked: true, downloaded: true }).reset).toBe(true);
+  });
+
+  it('a database with no active owner offers download and restore without a PIN; reset still waits for a copy', () => {
+    const gate = { unlocked: false, downloaded: false, ownerless: true };
+    expect(legacyActions(gate)).toEqual({ download: true, restore: true, reset: false });
+    expect(legacyActions({ ...gate, downloaded: true }).reset).toBe(true);
   });
 
   it('checks the PIN against the stored 0008 owner without migrating or changing the bytes', async () => {
@@ -157,18 +160,28 @@ describe('legacy boot screen gate', () => {
     const before = Uint8Array.from(bytes);
     const check = createOwnerPinCheck(SQL, bytes);
 
-    await expect(check('1234')).resolves.toBeUndefined();
-    await expect(check('3456')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' }); // the cashier's PIN
-    await expect(check('0000')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
-    expect(bytes).toEqual(before);
+    await expect(check.hasOwner()).resolves.toBe(true);
+    await expect(check.verify('1234')).resolves.toBeUndefined();
+    await expect(check.verify('3456')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' }); // the cashier's PIN
+    await expect(check.verify('0000')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    expect(Buffer.compare(bytes, before)).toBe(0); // toEqual on ~0.5 MB of bytes takes seconds
     const reopened = createSqlJsDriver(new SQL.Database(bytes));
     expect(await version(reopened)).toBe(8);
+  });
+
+  it('reports a stored database whose owners are all inactive as having no owner', async () => {
+    const SQL = await initSqlJs();
+    const db = await kiryanaAt8();
+    await db.exec("UPDATE users SET is_active = 0 WHERE role = 'owner'");
+    const check = createOwnerPinCheck(SQL, db.exportBytes());
+    await expect(check.hasOwner()).resolves.toBe(false);
+    await expect(check.verify('1234')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
   });
 
   it('locks after repeated wrong PINs, like the login screen', async () => {
     const SQL = await initSqlJs();
     const check = createOwnerPinCheck(SQL, (await kiryanaAt8()).exportBytes());
-    for (let i = 0; i < 5; i += 1) await check('0000').catch(() => undefined);
-    await expect(check('1234')).rejects.toMatchObject({ code: 'LOGIN_LOCKED' });
+    for (let i = 0; i < 5; i += 1) await check.verify('0000').catch(() => undefined);
+    await expect(check.verify('1234')).rejects.toMatchObject({ code: 'LOGIN_LOCKED' });
   });
 });

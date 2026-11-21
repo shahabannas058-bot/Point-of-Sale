@@ -20,6 +20,8 @@ export const en = {
   'boot.legacyOwnerPin': 'Owner PIN',
   'boot.legacyUnlock': 'Unlock',
   'boot.legacyResetNeedsCopy': 'Download a copy first, then you can start fresh.',
+  'boot.legacyNoOwner':
+    'The saved database has no active owner, so no PIN can unlock it. You can still download a copy and restore a backup.',
 
   'common.actions': 'Actions',
   'common.apply': 'Apply',

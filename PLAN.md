@@ -1,8 +1,8 @@
-# PLAN.md — Multi-business POS (kiryana first, then mobile and laptop shops)
+# PLAN.md — Grocery (kiryana) POS
 
 Tick boxes as work completes. Architecture rules and licensing design are in `CLAUDE.md`.
 
-**Order of business types (decided 2026-10-18):** 1) kiryana/grocery, 2) mobile shop (largely built already), 3) laptop shop. One codebase; each shop gets only its modules via the signed licence token.
+**Business type (decided 2026-11-21, ADR-0011):** kiryana / grocery only. Mobile-shop and laptop-shop features were removed from the code. Each shop gets only its modules (`weight_units`, `batch_expiry`) via the signed licence token.
 
 ## 1. Services we sell
 
@@ -14,13 +14,12 @@ Tick boxes as work completes. Architecture rules and licensing design are in `CL
 - [ ] Customer khata with monthly settlement and WhatsApp reminder — _khata exists; monthly settlement view and WhatsApp pending_
 - [x] Wholesaler/supplier credit ledger (reuses the supplier khata screens)
 - [ ] Urdu item names on receipts — _item names are free text; Urdu rendering check is pending with ESC/POS_
-- [x] Kiryana preset: modules `weight_units`, `batch_expiry`; hides IMEI / repair / warranty screens and blocks them in `PosService`
-- [x] Kiryana demo data for "Load demo data" (`seedDemoData(deps, { businessType: 'kiryana' })`, 19 items, khata, wholesaler credit; the setup wizard passes the chosen type)
+- [x] Kiryana preset: modules `weight_units`, `batch_expiry`, the only business type; the mobile-shop screens and tables were removed on 2026-11-21 (migration 0009, ADR-0011)
+- [x] Kiryana demo data for "Load demo data" (`seedDemoData(deps)`, the kiryana seed in `seed-kiryana.ts`: loose and packed items, khata, wholesaler credit)
 
 ### Basic (entry plan)
 - [ ] Fast billing with barcode scan, hold/resume bill, discounts
-- [ ] Phone inventory with **IMEI/serial per unit**, PTA status, new/used/open-box
-- [ ] Accessories inventory with barcode, variants (model, colour), low-stock alert
+- [x] Item inventory with barcode and low-stock alert — _barcode scan and the reorder panel exist_
 - [ ] Urdu + English receipt, 58 mm / 80 mm thermal print, A4 invoice
 - [ ] Customer **khata / udhaar** ledger (take & give payments)
 - [ ] Daily sales, profit and stock reports
@@ -32,16 +31,10 @@ Tick boxes as work completes. Architecture rules and licensing design are in `CL
 - [ ] Multiple users with roles (owner / manager / cashier); cashier cannot discount or void without PIN
 - [ ] Supplier purchases, supplier payable ledger, purchase returns
 - [x] Expense tracking, cash-in-hand / day close — _migration 0008, Cash drawer screen (galla): expenses, cash in / out, reversals, day close with count and difference; reports show profit after expenses_
-- [x] **Warranty tracking by IMEI** (shop vs company warranty, expiry lookup)
-- [ ] **Trade-in / purchase of used phones** (CNIC + IMEI capture, goes back to stock)
-- [x] **Repair job tickets** (received → in repair → ready → delivered), advance payment, spare-part stock consumption
-- [ ] Easyload / recharge / scratch-card register and commission
-- [ ] JazzCash / Easypaisa agent transaction register
 - [ ] WhatsApp invoice / reminder sending
 - [ ] Audit log (who changed/deleted what)
 
 ### Pro
-- [ ] **Installment (qist) system**: advance, monthly plan, guarantor, due-date WhatsApp reminders, overdue report
 - [ ] Multi-branch with consolidated reports and stock transfer between branches
 - [ ] Owner remote dashboard (PWA): live sales, stock, khata from phone
 - [ ] Cloud backup (automatic, encrypted)
@@ -77,7 +70,7 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 ### Phase 1 — Working offline POS (no licensing yet)
 - [x] Desktop shell — _C# WPF + WebView2 in `apps/shell-dotnet` (ADR-0010 replaces Tauri). Verified 2026-10-18 on a scratch data folder: setup wizard on an empty native `pos.db`, demo load, login, Expiry screen and a real sale with batches all work through the bridge. Still to do: installer / auto-update, ESC/POS printing, fix the 2 old C# test problems, licence guard on `db.batch`_
 - [x] SQLite schema + migrations, money in integer paisa
-- [x] Products: phones (IMEI units) and accessories (SKU/barcode/variants)
+- [x] Products: items with SKU/barcode and unit scale (phone units were also built here and removed 2026-11-21, ADR-0011)
 - [x] Stock ledger (`stock_movements`), purchase entry
 - [x] Billing screen, payments (cash / khata / split), hash-chained immutable invoices
 - [x] Returns / voids as entries
@@ -105,9 +98,7 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 - [ ] Licence verifier in the C# shell (NSec Ed25519 + DPAPI, enforced at the bridge's `db.batch`), clock guard (`last_seen` ×3, sales floor, offline budget)
 - [ ] Lock screen, grace warnings, read-only mode, emergency unlock code
 
-### Phase 3 — Mobile-shop depth
-- [ ] Warranty, trade-in, repair tickets, easyload/agent registers — _warranty + repair tickets done (migration 0005, service, screens); trade-in and easyload/agent registers pending_
-- [ ] Installment (qist) system with reminders
+### Phase 3 — Cloud and reminders
 - [ ] WhatsApp integration, owner PWA, cloud backup
 
 ### Phase 4 — Growth
@@ -116,6 +107,5 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 ## 4. Open questions for the owner
 - Confirm the working folder may move off OneDrive (sync conflicts with `node_modules`/SQLite).
 - Plan prices (draft only): Basic ~Rs 1,500–2,500, Standard ~Rs 3,500–5,000, Pro ~Rs 6,000+ per month. Competitor snapshot (public web, 2026-10-18, re-verify before publishing): BazaarMint Rs 999/mo (14-day trial), SadaPOS Rs 1,199 / 2,399 / 4,599 per month with a free plan, Switcher Techno demo-only pricing. The draft prices sit above the cheap end of the market, so differentiation must be reliability, local setup/training and Urdu support.
-- Laptop-shop module set: confirm what it needs beyond serial tracking, warranty and repair (spec variants, trade-in?).
-- Apify (optional, not part of the product): lead lists of kiryana/mobile/laptop shops per city, and a weekly competitor-price check.
+- Apify (optional, not part of the product): lead lists of kiryana shops per city, and a weekly competitor-price check.
 - Trial length (7 vs 14 days) and grace length (3 vs 5 days).

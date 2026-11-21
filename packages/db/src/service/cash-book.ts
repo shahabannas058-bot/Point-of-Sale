@@ -135,6 +135,16 @@ async function periodEntries(
 const clockBehind = (): ServiceError =>
   invalid('clock', 'The PC clock is behind the last day close; fix the date and time');
 
+/** The earliest time a cash write may be stamped at: just after the last day close (0 when there is none). */
+const firstOpenStamp = (last: DayClose | null): number => (last === null ? 0 : last.closedAt + 1);
+
+/**
+ * The (exclusive) end of the open period: the PC clock, but always past the earliest stamp, so writes that cashStamp
+ * moved past a clock that is behind the last close are counted at once. closeDay refuses while the clock is below it.
+ */
+const openPeriodEnd = (now: number, last: DayClose | null): number =>
+  Math.max(now, firstOpenStamp(last) + 1);
+
 /**
  * The time to stamp a write that moves cash (sale, refund, udhaar or supplier payment, cash book entry): the PC clock,
  * but never at or before the last day close. A write stamped inside a closed period would never be counted in any
@@ -142,8 +152,7 @@ const clockBehind = (): ServiceError =>
  */
 export async function cashStamp(ctx: Ctx, branchId: string): Promise<number> {
   const last = await lastClose(ctx.driver, branchId);
-  const now = ctx.clock();
-  return last === null ? now : Math.max(now, last.closedAt + 1);
+  return Math.max(ctx.clock(), firstOpenStamp(last));
 }
 
 function insertEntry(b: WriteBatch, e: CashEntry): void {
@@ -171,7 +180,7 @@ export function createCashApi(ctx: Ctx): CashApi {
       const shop = await loadShop(ctx.driver);
       const last = await lastClose(ctx.driver, shop.branchId);
       const from = last?.closedAt ?? 0;
-      const asOf = ctx.clock();
+      const asOf = openPeriodEnd(ctx.clock(), last);
       const totals = await breakdown(
         ctx.driver,
         shop.branchId,
@@ -274,7 +283,7 @@ export function createCashApi(ctx: Ctx): CashApi {
         const last = await lastClose(ctx.driver, shop.branchId);
         const from = last?.closedAt ?? 0;
         const at = ctx.clock();
-        if (at < from) throw clockBehind();
+        if (at < openPeriodEnd(at, last)) throw clockBehind();
         const totals = await breakdown(
           ctx.driver,
           shop.branchId,

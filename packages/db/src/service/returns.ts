@@ -102,10 +102,12 @@ function lineDiscountShare(discount: number, k: number, n: number): number {
 }
 
 /**
- * Signed discount of a return line that gives back q more of a line after k were returned already. The line keeps the
- * SQL rule (gross of q, rounded on its own, minus the discount), so the rounding difference to the cumulative gross
- * (gross of k + q minus gross of k) is folded into the discount: the parts of a weighed line then add up to the line,
- * never to more. When the cumulative share is one paisa more than the part's own gross, the part refunds its gross.
+ * Signed discount of a return line that gives back q more of a line after k were returned already. The return line
+ * keeps the SQL rule (its own gross of q, rounded on its own, minus the discount) but refunds its fair part: the
+ * cumulative gross (gross of k + q minus gross of k) minus its cumulative discount share. The rounding difference
+ * between the two grosses is folded into the discount, and the discount is kept between 0 and the own gross: when the
+ * fair part is above the own gross (a rounding gap the share cannot absorb) the part refunds its own gross, and when
+ * the fair part is below zero it refunds nothing. The parts of a weighed line add up to the line or less, never more.
  */
 function returnLineDiscount(line: InvoiceLine, k: number, q: number): Paisa {
   const n = line.quantity;

@@ -122,4 +122,26 @@ describe('sql.js driver (smoke; full conformance lives with qa-tester)', () => {
     await driver.batch(insertSale('sale-3'));
     expect(storedIds()).toEqual(['sale-3']);
   });
+
+  it('when reopening the saved bytes fails, the driver keeps its old handle and rethrows the save error', async () => {
+    const SQL = await initSqlJs();
+    const state = { failNext: false, reopenFails: false };
+    const driver = createSqlJsDriver(new SQL.Database(), {
+      save: () => {
+        if (!state.failNext) return Promise.resolve();
+        state.failNext = false;
+        return Promise.reject(new Error('QuotaExceededError'));
+      },
+      reopen: (bytes) => {
+        if (state.reopenFails) throw new Error('reopen failed');
+        return new SQL.Database(bytes);
+      },
+    });
+    await driver.exec('CREATE TABLE sales (id TEXT PRIMARY KEY)');
+
+    state.failNext = true;
+    state.reopenFails = true;
+    await expect(driver.batch(insertSale('sale-1'))).rejects.toThrow('QuotaExceededError');
+    await expect(driver.query('SELECT count(*) AS n FROM sales')).resolves.toHaveLength(1); // still open
+  });
 });

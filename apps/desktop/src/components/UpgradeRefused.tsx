@@ -1,6 +1,6 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { Download, KeyRound, RotateCcw } from 'lucide-react';
-import { legacyActions } from '../db/legacy-gate';
+import { legacyActions, type OwnerPinCheck } from '../db/legacy-gate';
 import { useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { downloadFile } from '../lib/download';
@@ -13,12 +13,25 @@ import { PIN_LENGTH } from './ui/PinPad';
 
 const RESET_WORD = 'RESET';
 
+type CheckRef = MutableRefObject<Promise<OwnerPinCheck | null> | null>;
+
+/** One checker for the screen, so wrong PINs lock it out like the login screen. A failed load is retried next time. */
+function loadCheck(ref: CheckRef): Promise<OwnerPinCheck | null> {
+  ref.current ??= import('../db/browser-db')
+    .then((m) => m.storedOwnerPinCheck())
+    .catch((e: unknown) => {
+      ref.current = null;
+      throw e;
+    });
+  return ref.current;
+}
+
 /**
  * Boot screen for a database that migration 0009 refused because it still holds mobile-shop data (phones, repairs).
  * Nothing was changed. The shopkeeper can keep a copy, restore a backup or start fresh (the same restore and reset
  * the Settings screen offers) once the owner PIN of the stored database is checked; start fresh also needs a copy
- * downloaded first (legacy-gate.ts). Browser only: the desktop shell migrates pos.db before the page loads and shows
- * its own message when 0009 is refused.
+ * downloaded first (legacy-gate.ts). A database without an active owner offers download and restore without a PIN.
+ * Browser only: the desktop shell migrates pos.db before the page loads and shows its own message when 0009 is refused.
  */
 export function UpgradeRefused({ error }: { error: unknown }): ReactNode {
   const t = useT();
@@ -26,23 +39,37 @@ export function UpgradeRefused({ error }: { error: unknown }): ReactNode {
   const [unlocked, setUnlocked] = useState(false);
   const [checking, setChecking] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
-  const check = useRef<Promise<((pin: string) => Promise<void>) | null> | null>(null);
-  const actions = legacyActions({ unlocked, downloaded });
+  const [ownerless, setOwnerless] = useState(false);
+  const check: CheckRef = useRef(null);
+  const actions = legacyActions({ unlocked, downloaded, ownerless });
   const [resetOpen, setResetOpen] = useState(false);
   const [word, setWord] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    loadCheck(check)
+      .then(async (c) => (c ? c.hasOwner() : true))
+      .then((hasOwner) => {
+        if (live) setOwnerless(!hasOwner);
+      })
+      .catch((e: unknown) => {
+        if (live) setProblem(errorMessage(e, t));
+      });
+    return () => {
+      live = false;
+    };
+  }, [t]);
 
   const unlock = async (): Promise<void> => {
     if (pin.length !== PIN_LENGTH || checking) return;
     setChecking(true);
     setProblem(null);
     try {
-      // one checker for the screen, so wrong PINs lock it out like the login screen
-      check.current ??= import('../db/browser-db').then((m) => m.storedOwnerPinCheck());
-      const verify = await check.current;
+      const verify = await loadCheck(check);
       if (!verify) return setProblem(t('boot.legacyNoCopy'));
-      await verify(pin);
+      await verify.verify(pin);
       setUnlocked(true);
     } catch (e) {
       setProblem(errorMessage(e, t));
@@ -93,7 +120,8 @@ export function UpgradeRefused({ error }: { error: unknown }): ReactNode {
         <h1 className="text-xl">{t('boot.legacyTitle')}</h1>
         <p className="text-sm">{t('boot.legacyHint')}</p>
         <p className="text-sm text-muted">{t('boot.legacyNext')}</p>
-        {unlocked ? (
+        {ownerless ? <p className="text-sm font-medium">{t('boot.legacyNoOwner')}</p> : null}
+        {actions.download ? (
           <div className="flex flex-col items-center gap-2">
             <Button onClick={() => void download()}>
               <Download size={16} aria-hidden="true" />

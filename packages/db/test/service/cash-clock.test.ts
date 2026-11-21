@@ -102,6 +102,16 @@ describe('cash writes with the PC clock behind the last day close', () => {
     expect((await drawerAfterClockFix()).supplierPaid).toBe(40_000);
   });
 
+  it('the drawer shows a cash sale at once, while the clock is still behind the close', async () => {
+    const closedAt = await closeThenStepBack();
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 1 }]);
+    const drawer = await t.svc.cash.drawer();
+    expect(drawer.periodStart).toBe(closedAt);
+    expect(drawer.asOf).toBeGreaterThan(closedAt);
+    expect(drawer.cashSales).toBe(CHARGER_PRICE);
+    expect(drawer.expected).toBe(CHARGER_PRICE);
+  });
+
   it('with the clock ahead of the last close the real time is kept', async () => {
     const close = await t.svc.cash.closeDay({ counted: 0, carriedForward: 0 });
     const at = t.clock.peek();

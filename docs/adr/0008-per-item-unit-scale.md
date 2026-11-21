@@ -2,6 +2,7 @@
 
 **Date**: 2026-10-18
 **Status**: accepted (supersedes ADR-0005)
+> Superseded in part by ADR-0011 (2026-11-21): phone units and the "accessory variant" name were removed (now `items` / `item_id`); the hash keys stay as they were.
 **Deciders**: Owner, Claude
 
 ## Context

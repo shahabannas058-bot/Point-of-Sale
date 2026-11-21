@@ -26,6 +26,8 @@ export const ur: Dict = {
   'boot.legacyUnlock': 'Kholein',
   'boot.legacyResetNeedsCopy':
     'Pehle copy download karein, phir naye siray se shuru kar sakte hain.',
+  'boot.legacyNoOwner':
+    'Mehfooz database mein koi active owner nahi, is liye koi PIN ise khol nahi sakta. Aap phir bhi copy download aur backup restore kar sakte hain.',
 
   'common.actions': 'Actions',
   'common.apply': 'Lagayein',

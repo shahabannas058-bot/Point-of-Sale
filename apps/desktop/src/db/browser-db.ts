@@ -3,7 +3,7 @@ import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url';
 import { del, get, set } from 'idb-keyval';
 import { migrate, migrationsFromFiles } from '@pos/db';
 import { validateBackup } from './backup-check';
-import { createOwnerPinCheck } from './legacy-gate';
+import { createOwnerPinCheck, type OwnerPinCheck } from './legacy-gate';
 import { createSqlJsDriver, type SqlJsDriver } from './sqljs-driver';
 
 const DB_KEY = 'pos-db-v1';
@@ -59,7 +59,7 @@ export async function readStoredBrowserDb(): Promise<Uint8Array | undefined> {
 }
 
 /** The owner-PIN check over the stored bytes (see legacy-gate.ts); null when nothing is stored. */
-export async function storedOwnerPinCheck(): Promise<((pin: string) => Promise<void>) | null> {
+export async function storedOwnerPinCheck(): Promise<OwnerPinCheck | null> {
   const SQL = await loadSql();
   const bytes = await get<Uint8Array>(DB_KEY);
   return bytes ? createOwnerPinCheck(SQL, bytes) : null;

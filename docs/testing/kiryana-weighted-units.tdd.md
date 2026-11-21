@@ -3,6 +3,8 @@
 **Source plan**: none as a `*.plan.md`. The scope is the `/plan` of 2026-10-18 (kiryana first, modules per business type)
 plus ADR-0003 and ADR-0008. Journeys below were written during this run.
 
+> **Update 2026-11-21 (ADR-0011):** the phone rules (a phone cannot be weighed, phones are always pcs, no phones / repairs / warranty in journey 5) were removed with the mobile-shop code. The kg / litre rules still hold. Renames: `variant` → `item` and `variantQtyText` → `itemQtyText`.
+
 ## How strictly TDD was followed (honest summary)
 
 | Part | Order actually followed |

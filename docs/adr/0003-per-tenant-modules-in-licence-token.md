@@ -2,6 +2,7 @@
 
 **Date**: 2026-10-18
 **Status**: accepted
+> Superseded in part by ADR-0011 (2026-11-21): the mobile and laptop business types and their modules were removed; only kiryana remains.
 **Deciders**: Owner, Claude
 
 ## Context
