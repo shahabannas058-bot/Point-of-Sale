@@ -45,6 +45,12 @@ export const itemQtyText = (quantity: number, v: Pick<Item, 'unitScale' | 'unitL
 /** What the + and - keys change: one piece, or 250 g for goods sold by weight. */
 export const qtyStep = (scale: UnitScale): number => (scale === 1 ? 1 : 250);
 
+/** The quantity after the - key: one step less, but never below one step, and never more than it was. */
+export function minusQty(qty: number, scale: UnitScale): number {
+  const step = qtyStep(scale);
+  return Math.max(Math.min(step, qty), qty - step);
+}
+
 /**
  * Like parseQuantity but allows one leading minus ("-0.5" -> -500), for stock adjustments.
  * Returns null for anything else, including "+2", "-" and fractions of a piece. Never -0.

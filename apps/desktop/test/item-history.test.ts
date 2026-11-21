@@ -11,6 +11,7 @@ import {
   SUMMARY_ROWS,
   batchText,
   cartLineItemRef,
+  fetchItemHistory,
   historyDateRange,
   historyKindKey,
   historyKindTone,
@@ -145,6 +146,29 @@ describe('historyDateRange', () => {
     expect(r.to).toBe(localDayRange('2026-10-18').toMs - 1);
     expect(historyDateRange('2026-10-01', '')).toEqual({ from: r.from });
     expect(historyDateRange('', '2026-10-18')).toEqual({ to: r.to });
+  });
+});
+
+describe('fetchItemHistory', () => {
+  const PAGE = {
+    entries: [],
+    nextBefore: null,
+    summary: { purchased: 0, sold: 0, returned: 0, adjusted: 0, onHand: 5 },
+  };
+
+  it('a to day before the from day finds nothing without asking the service (QA#19b)', async () => {
+    const itemHistory = vi.fn(() => Promise.resolve(PAGE));
+    const range = historyDateRange('2026-11-10', '2026-11-01');
+    await expect(fetchItemHistory({ itemHistory }, { itemId: 'a' }, range)).resolves.toBeNull();
+    expect(itemHistory).not.toHaveBeenCalled();
+  });
+
+  it('asks the service for a normal or open range', async () => {
+    const itemHistory = vi.fn(() => Promise.resolve(PAGE));
+    const range = historyDateRange('2026-11-01', '2026-11-01');
+    await expect(fetchItemHistory({ itemHistory }, { itemId: 'a' }, range)).resolves.toBe(PAGE);
+    await expect(fetchItemHistory({ itemHistory }, { itemId: 'a' }, {})).resolves.toBe(PAGE);
+    expect(itemHistory).toHaveBeenCalledWith({ itemId: 'a' }, range);
   });
 });
 

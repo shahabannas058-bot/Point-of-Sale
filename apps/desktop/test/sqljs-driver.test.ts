@@ -11,8 +11,35 @@ const files = import.meta.glob<string>('../../../packages/db/migrations/*.sql', 
 
 async function open(persist?: (b: Uint8Array) => Promise<void>) {
   const SQL = await initSqlJs();
-  return createSqlJsDriver(new SQL.Database(), persist);
+  return createSqlJsDriver(
+    new SQL.Database(),
+    persist && { save: persist, reopen: (bytes) => new SQL.Database(bytes) },
+  );
 }
+
+/** A driver whose next save fails once; `stored` holds the last saved bytes. */
+async function openFlaky() {
+  const SQL = await initSqlJs();
+  const state = { failNext: false, stored: null as Uint8Array | null };
+  const driver = createSqlJsDriver(new SQL.Database(), {
+    save: async (bytes) => {
+      await new Promise((r) => setTimeout(r, 5));
+      if (state.failNext) {
+        state.failNext = false;
+        throw new Error('QuotaExceededError');
+      }
+      state.stored = bytes;
+    },
+    reopen: (bytes) => new SQL.Database(bytes),
+  });
+  const storedIds = (): unknown[] =>
+    new SQL.Database(state.stored ?? undefined)
+      .exec('SELECT id FROM sales ORDER BY id')[0]
+      ?.values.map((v) => v[0]) ?? [];
+  return { driver, state, storedIds };
+}
+
+const insertSale = (id: string) => [{ sql: 'INSERT INTO sales VALUES (?)', params: [id] }];
 
 describe('sql.js driver (smoke; full conformance lives with qa-tester)', () => {
   it('applies every migration and keeps foreign keys + recursive triggers on', async () => {
@@ -64,5 +91,35 @@ describe('sql.js driver (smoke; full conformance lives with qa-tester)', () => {
     expect(calls - before).toBeLessThanOrEqual(2);
     expect(lastBytes).toBeGreaterThan(0);
     expect((await driver.query('SELECT * FROM t')).length).toBe(4);
+  });
+
+  it('a write whose save failed is undone in memory too, so a retry does not store it twice (QA#18)', async () => {
+    const { driver, state, storedIds } = await openFlaky();
+    await driver.exec('CREATE TABLE sales (id TEXT PRIMARY KEY)');
+
+    state.failNext = true;
+    await expect(driver.batch(insertSale('sale-1'))).rejects.toThrow('QuotaExceededError');
+    expect(await driver.query('SELECT id FROM sales')).toEqual([]);
+
+    await driver.batch(insertSale('sale-2'));
+    expect(storedIds()).toEqual(['sale-2']);
+    expect(await driver.query('SELECT id FROM sales')).toEqual([{ id: 'sale-2' }]);
+    const fk = await driver.query<{ foreign_keys: number }>('PRAGMA foreign_keys');
+    expect(fk[0]?.foreign_keys).toBe(1);
+  });
+
+  it('a write committed while a failing save was in flight is rejected too, not reported as saved', async () => {
+    const { driver, state, storedIds } = await openFlaky();
+    await driver.exec('CREATE TABLE sales (id TEXT PRIMARY KEY)');
+
+    state.failNext = true;
+    const first = driver.batch(insertSale('sale-1'));
+    await new Promise((r) => setTimeout(r, 1)); // the first save is now running
+    const second = driver.batch(insertSale('sale-2'));
+    await expect(first).rejects.toThrow('QuotaExceededError');
+    await expect(second).rejects.toThrow();
+
+    await driver.batch(insertSale('sale-3'));
+    expect(storedIds()).toEqual(['sale-3']);
   });
 });

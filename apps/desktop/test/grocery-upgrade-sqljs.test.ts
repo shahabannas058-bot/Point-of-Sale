@@ -9,6 +9,7 @@ import {
 } from '@pos/db';
 import { createPosService, seedDemoData } from '@pos/db/service';
 import { isGroceryUpgradeRefused } from '../src/bootstrap';
+import { createOwnerPinCheck, legacyActions } from '../src/db/legacy-gate';
 import { createSqlJsDriver, type SqlJsDriver } from '../src/db/sqljs-driver';
 
 /**
@@ -130,5 +131,44 @@ describe('grocery upgrade (0009) on sql.js', () => {
       "select name from sqlite_master where type = 'table' and name in ('items', 'accessory_variants')",
     );
     expect(tables.map((t) => t.name)).toEqual(['accessory_variants']);
+  });
+});
+
+/** The boot screen for a refused database: download, restore and reset wait for the owner PIN (security review). */
+describe('legacy boot screen gate', () => {
+  it('nothing is offered before the owner PIN; reset waits for a downloaded copy', () => {
+    expect(legacyActions({ unlocked: false, downloaded: false })).toEqual({
+      download: false,
+      restore: false,
+      reset: false,
+    });
+    expect(legacyActions({ unlocked: false, downloaded: true }).reset).toBe(false);
+    expect(legacyActions({ unlocked: true, downloaded: false })).toEqual({
+      download: true,
+      restore: true,
+      reset: false,
+    });
+    expect(legacyActions({ unlocked: true, downloaded: true }).reset).toBe(true);
+  });
+
+  it('checks the PIN against the stored 0008 owner without migrating or changing the bytes', async () => {
+    const SQL = await initSqlJs();
+    const bytes = (await kiryanaAt8()).exportBytes();
+    const before = Uint8Array.from(bytes);
+    const check = createOwnerPinCheck(SQL, bytes);
+
+    await expect(check('1234')).resolves.toBeUndefined();
+    await expect(check('3456')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' }); // the cashier's PIN
+    await expect(check('0000')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    expect(bytes).toEqual(before);
+    const reopened = createSqlJsDriver(new SQL.Database(bytes));
+    expect(await version(reopened)).toBe(8);
+  });
+
+  it('locks after repeated wrong PINs, like the login screen', async () => {
+    const SQL = await initSqlJs();
+    const check = createOwnerPinCheck(SQL, (await kiryanaAt8()).exportBytes());
+    for (let i = 0; i < 5; i += 1) await check('0000').catch(() => undefined);
+    await expect(check('1234')).rejects.toMatchObject({ code: 'LOGIN_LOCKED' });
   });
 });

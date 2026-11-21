@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, HandCoins, Printer } from 'lucide-react';
-import { PAYMENT_METHODS, type PaymentMethod } from '@pos/shared';
+import { PAYMENT_METHODS, type SupplierLedgerLine, type PaymentMethod } from '@pos/shared';
+import { LoadOlder } from '../components/LoadOlder';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -11,8 +12,9 @@ import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { formatDateTime } from '../lib/dates';
 import { paisaToInput, parseRupees } from '../lib/money';
-import { printPage } from '../lib/print';
+import { printPageWhenReady } from '../lib/print';
 import { useService } from '../service/context';
+import { useOlderPages } from '../service/use-older-pages';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { toast } from '../store/toast';
@@ -139,10 +141,21 @@ function PaySupplierDialog({
   );
 }
 
+const LEDGER_PAGE = 100;
+const entryKey = (l: SupplierLedgerLine): SupplierLedgerLine['entry'] => l.entry;
+
 export function SupplierDetail(): ReactNode {
   const t = useT();
   const { id = '' } = useParams();
-  const q = useServiceQuery((s) => s.purchasing.getLedger(id), [id]);
+  const service = useService();
+  const q = useServiceQuery((s) => s.purchasing.getLedger(id, { limit: LEDGER_PAGE }), [id]);
+  const pages = useOlderPages(
+    q.data?.lines,
+    LEDGER_PAGE,
+    entryKey,
+    async (cursor) =>
+      (await service.purchasing.getLedger(id, { limit: LEDGER_PAGE, ...cursor })).lines,
+  );
   const [payOpen, setPayOpen] = useState(false);
   const data = q.data;
 
@@ -168,7 +181,7 @@ export function SupplierDetail(): ReactNode {
         subtitle={<span className="ltr">{s.phone ?? ''}</span>}
         actions={
           <>
-            <Button onClick={printPage}>
+            <Button onClick={() => void printPageWhenReady(pages.loadAll)}>
               <Printer size={16} aria-hidden="true" />
               {t('khata.printStatement')}
             </Button>
@@ -198,7 +211,7 @@ export function SupplierDetail(): ReactNode {
       </div>
 
       <div className="tbl-wrap">
-        {data.lines.length === 0 ? (
+        {pages.rows.length === 0 ? (
           <Empty title={t('khata.noEntries')} />
         ) : (
           <table className="tbl">
@@ -212,7 +225,7 @@ export function SupplierDetail(): ReactNode {
               </tr>
             </thead>
             <tbody>
-              {data.lines.map((l) => (
+              {pages.rows.map((l) => (
                 <tr key={l.entry.id}>
                   <td className="ltr text-sm">{formatDateTime(l.entry.createdAt)}</td>
                   <td>
@@ -249,6 +262,8 @@ export function SupplierDetail(): ReactNode {
           </table>
         )}
       </div>
+
+      <LoadOlder pages={pages} label={t('khata.loadOlder')} endLabel={t('khata.noOlder')} />
 
       <PaySupplierDialog
         open={payOpen}

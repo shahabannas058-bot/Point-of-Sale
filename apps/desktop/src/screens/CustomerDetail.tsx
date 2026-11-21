@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, FileText, HandCoins, Printer } from 'lucide-react';
-import { PAYMENT_METHODS, type PaymentMethod } from '@pos/shared';
+import { PAYMENT_METHODS, type LedgerLine, type PaymentMethod } from '@pos/shared';
 import { ReceiptDialog } from '../components/ReceiptDialog';
+import { LoadOlder } from '../components/LoadOlder';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -13,8 +14,9 @@ import { errorMessage } from '../i18n/errors';
 import { useBusyAction } from '../lib/busy-action';
 import { formatDateTime, monthYm } from '../lib/dates';
 import { paisaToInput, parseRupees } from '../lib/money';
-import { printPage } from '../lib/print';
+import { printPageWhenReady } from '../lib/print';
 import { useService } from '../service/context';
+import { useOlderPages } from '../service/use-older-pages';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { toast } from '../store/toast';
@@ -138,10 +140,20 @@ function ReceivePaymentDialog({
   );
 }
 
+const LEDGER_PAGE = 100;
+const entryKey = (l: LedgerLine): LedgerLine['entry'] => l.entry;
+
 export function CustomerDetail(): ReactNode {
   const t = useT();
   const { id = '' } = useParams();
-  const q = useServiceQuery((s) => s.khata.getLedger(id), [id]);
+  const service = useService();
+  const q = useServiceQuery((s) => s.khata.getLedger(id, { limit: LEDGER_PAGE }), [id]);
+  const pages = useOlderPages(
+    q.data?.lines,
+    LEDGER_PAGE,
+    entryKey,
+    async (cursor) => (await service.khata.getLedger(id, { limit: LEDGER_PAGE, ...cursor })).lines,
+  );
   const [payOpen, setPayOpen] = useState(false);
   const [receipt, setReceipt] = useState<string | null>(null);
   const data = q.data;
@@ -176,7 +188,7 @@ export function CustomerDetail(): ReactNode {
               <FileText size={16} aria-hidden="true" />
               {t('udhaar.statement')}
             </Link>
-            <Button onClick={printPage}>
+            <Button onClick={() => void printPageWhenReady(pages.loadAll)}>
               <Printer size={16} aria-hidden="true" />
               {t('khata.printStatement')}
             </Button>
@@ -213,7 +225,7 @@ export function CustomerDetail(): ReactNode {
       </div>
 
       <div className="tbl-wrap">
-        {data.lines.length === 0 ? (
+        {pages.rows.length === 0 ? (
           <Empty title={t('khata.noEntries')} />
         ) : (
           <table className="tbl">
@@ -227,7 +239,7 @@ export function CustomerDetail(): ReactNode {
               </tr>
             </thead>
             <tbody>
-              {data.lines.map((l) => (
+              {pages.rows.map((l) => (
                 <tr key={l.entry.id}>
                   <td className="ltr text-sm">{formatDateTime(l.entry.createdAt)}</td>
                   <td>
@@ -276,6 +288,8 @@ export function CustomerDetail(): ReactNode {
           </table>
         )}
       </div>
+
+      <LoadOlder pages={pages} label={t('khata.loadOlder')} endLabel={t('khata.noOlder')} />
 
       <ReceivePaymentDialog
         open={payOpen}

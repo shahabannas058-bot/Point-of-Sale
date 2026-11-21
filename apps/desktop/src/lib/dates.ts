@@ -44,6 +44,12 @@ export function localMonthRange(ym: string): SummaryRange {
   };
 }
 
+/** A half-open [fromMs, toMs) range as the inclusive { from, to } bounds the service queries take. */
+export const inclusiveBounds = (r: SummaryRange): { from: number; to: number } => ({
+  from: r.fromMs,
+  to: r.toMs - 1,
+});
+
 /** "2026-10" + 1 -> "2026-11"; -1 -> "2026-09". Rolls over the year. */
 export function shiftMonth(ym: string, delta: number): string {
   const [y = 1970, m = 1] = ym.split('-').map(Number);

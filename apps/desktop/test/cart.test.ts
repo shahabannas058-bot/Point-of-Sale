@@ -200,6 +200,80 @@ describe('cart: loose goods sold by weight', () => {
   });
 });
 
+describe('cart: QA#14 and S8 fixes', () => {
+  const three = (): void => {
+    for (const id of ['a', 'b', 'c'])
+      useCart.getState().addItem(makeItem({ id, onHand: 10, salePrice: 1_000 }));
+  };
+
+  it('removing an earlier line keeps the same line selected', () => {
+    three();
+    useCart.getState().select(1);
+    useCart.getState().remove('v:a');
+    const s = useCart.getState();
+    expect(s.lines[s.selected]?.key).toBe('v:b');
+  });
+
+  it('removing the selected or a later line keeps a valid selection', () => {
+    three();
+    useCart.getState().select(2);
+    useCart.getState().remove('v:c');
+    expect(useCart.getState().selected).toBe(1);
+    useCart.getState().select(0);
+    useCart.getState().remove('v:b');
+    expect(useCart.getState().selected).toBe(0);
+  });
+
+  it('the invoice discount is lowered to the subtotal when the bill gets smaller', () => {
+    useCart.getState().addItem(pens(), 4); // Rs 100
+    useCart.getState().setInvoiceDiscount(9_000);
+    const key = first().key;
+    useCart.getState().setQty(key, 3); // Rs 75
+    expect(useCart.getState().invoiceDiscount).toBe(7_500);
+    useCart.getState().setLineDiscount(key, 1_000); // subtotal Rs 65
+    expect(useCart.getState().invoiceDiscount).toBe(6_500);
+    useCart.getState().setQty(key, 4); // growing back leaves the discount alone
+    expect(useCart.getState().invoiceDiscount).toBe(6_500);
+  });
+
+  it('removing a line lowers the invoice discount too', () => {
+    three();
+    useCart.getState().setInvoiceDiscount(2_500);
+    useCart.getState().remove('v:a');
+    useCart.getState().remove('v:b');
+    expect(useCart.getState().invoiceDiscount).toBe(1_000);
+  });
+
+  it('a held bill keeps its note and resume brings it back', () => {
+    useCart.getState().addItem(pens());
+    useCart.getState().setNote('deliver to house 12');
+    useCart.getState().hold(2_500);
+    expect(useCart.getState().note).toBe('');
+    useCart.getState().addItem(chini());
+    useCart.getState().setNote('B note');
+    const heldA = useCart.getState().held[0]!.id;
+    useCart.getState().resume(heldA);
+    expect(useCart.getState().note).toBe('deliver to house 12');
+    useCart.getState().resume(useCart.getState().held[0]!.id); // the parked bill B
+    expect(useCart.getState().note).toBe('B note');
+  });
+
+  it('a bill held by an older version (no note) resumes with an empty note', () => {
+    useCart.getState().setNote('stale');
+    useCart.setState({
+      held: [{ id: 'h1', heldAt: 1, total: 0, customer: null, invoiceDiscount: 0, lines: [] }],
+    });
+    useCart.getState().resume('h1');
+    expect(useCart.getState().note).toBe('');
+  });
+
+  it('changing the customer drops a manager approval (S8)', () => {
+    useCart.getState().setApproval('tok');
+    useCart.getState().setCustomer({ id: 'c1', name: 'Haji' });
+    expect(useCart.getState().approvalToken).toBeNull();
+  });
+});
+
 describe('cart: held bills saved before weights existed', () => {
   it('resume as piece lines', () => {
     const old = {

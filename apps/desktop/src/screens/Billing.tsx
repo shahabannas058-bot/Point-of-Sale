@@ -58,6 +58,7 @@ import { formatTime } from '../lib/dates';
 import {
   QUICK_AMOUNTS,
   perUnit,
+  minusQty,
   qtyStep,
   qtyText,
   quickLabel,
@@ -358,6 +359,39 @@ function InvoiceDiscountDialog({
 // ---------------------------------------------------------------- main screen
 const REASON_FALLBACK: ApprovalReason = 'discount';
 
+/** "Clear the whole bill?" confirm. Cancel has the focus: an Enter from a barcode scanner must not wipe the bill. */
+export function ClearBillDialog({
+  open,
+  onClose,
+  onClear,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onClear: () => void;
+}): ReactNode {
+  const t = useT();
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      width={400}
+      title={t('billing.clearCart')}
+      footer={
+        <>
+          <Button onClick={onClose} data-autofocus>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="danger" onClick={onClear}>
+            {t('billing.clearCart')}
+          </Button>
+        </>
+      }
+    >
+      <p>{t('billing.clearConfirm')}</p>
+    </Dialog>
+  );
+}
+
 export function Billing(): ReactNode {
   const t = useT();
   const service = useService();
@@ -649,10 +683,8 @@ export function Billing(): ReactNode {
           );
       },
       '-': () => {
-        if (selectedLine) {
-          const step = qtyStep(lineScale(selectedLine));
-          cart.setQty(selectedLine.key, Math.max(step, selectedLine.qty - step));
-        }
+        if (selectedLine)
+          cart.setQty(selectedLine.key, minusQty(selectedLine.qty, lineScale(selectedLine)));
       },
     },
     true,
@@ -1165,30 +1197,15 @@ export function Billing(): ReactNode {
         </dl>
       </Dialog>
 
-      <Dialog
+      <ClearBillDialog
         open={clearOpen}
         onClose={() => setClearOpen(false)}
-        width={400}
-        title={t('billing.clearCart')}
-        footer={
-          <>
-            <Button onClick={() => setClearOpen(false)}>{t('common.cancel')}</Button>
-            <Button
-              variant="danger"
-              data-autofocus
-              onClick={() => {
-                cart.clear();
-                setClearOpen(false);
-                focusSearch();
-              }}
-            >
-              {t('billing.clearCart')}
-            </Button>
-          </>
-        }
-      >
-        <p>{t('billing.clearConfirm')}</p>
-      </Dialog>
+        onClear={() => {
+          cart.clear();
+          setClearOpen(false);
+          focusSearch();
+        }}
+      />
 
       <ItemHistoryDialog
         item={historyLine ? cartLineItemRef(historyLine) : null}

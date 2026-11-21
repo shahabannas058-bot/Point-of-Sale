@@ -4,6 +4,7 @@ import type {
   ItemHistoryPage,
   ItemHistoryQuery,
   ItemRef,
+  PosService,
   UnitLabel,
   UnitScale,
 } from '@pos/shared';
@@ -106,8 +107,8 @@ export const SUMMARY_ROWS: readonly [SummaryKey, TKey][] = [
 
 /**
  * The query bounds for the two date boxes (YYYY-MM-DD or empty). Both ends are whole local days, the
- * `to` day included; an empty box means unbounded on that side. A `to` before `from` is left to the service
- * (it simply finds nothing).
+ * `to` day included; an empty box means unbounded on that side. A `to` before `from` is not sent to the
+ * service: `fetchItemHistory` finds nothing for it.
  */
 export function historyDateRange(
   fromYmd: string,
@@ -117,6 +118,16 @@ export function historyDateRange(
     ...(fromYmd ? { from: localDayRange(fromYmd).fromMs } : {}),
     ...(toYmd ? { to: localDayRange(toYmd).toMs - 1 } : {}),
   };
+}
+
+/** One page of an item's history; null (nothing found, the service is not asked) when `to` is before `from`. */
+export function fetchItemHistory(
+  catalog: Pick<PosService['catalog'], 'itemHistory'>,
+  ref: ItemRef,
+  q: ItemHistoryQuery,
+): Promise<ItemHistoryPage | null> {
+  if (q.from !== undefined && q.to !== undefined && q.to < q.from) return Promise.resolve(null);
+  return catalog.itemHistory(ref, q);
 }
 
 /** A stable key for a dialog's item, for query dependencies. */

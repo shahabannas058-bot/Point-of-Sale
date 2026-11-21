@@ -40,6 +40,21 @@ public partial class App : Application
             Shutdown(2);
             return;
         }
+        catch (MigrationException ex) when (ex.Message.Contains("grocery upgrade refused", StringComparison.Ordinal))
+        {
+            // migration 0009 found mobile-shop data (phones, repairs) and rolled back: pos.db is still on 0008
+            _log?.Error("startup", ex);
+            MessageBox.Show(
+                "Yeh database purane mobile-shop version ka hai (phones / repairs ka data). " +
+                "Is liye grocery version ise nahi khol sakta. Data ko haath nahi lagaya gaya, sab mehfooz hai.\n" +
+                "This database is from the old mobile-shop version, so the grocery version cannot open it. " +
+                "Nothing was changed or deleted.\n\n" +
+                $"Database: {PosPaths.DatabaseFile}\nBackups: {PosPaths.BackupDir}\n\n" +
+                "Support se rabta karein. / Please contact support.",
+                "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Shutdown(1);
+            return;
+        }
         catch (Exception ex)
         {
             _log?.Error("startup", ex);

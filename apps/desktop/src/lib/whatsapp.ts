@@ -3,13 +3,14 @@
  * digits (03001234567 or +923001234567); wa.me wants the international number without the plus.
  */
 
-/** "03001234567" -> "923001234567"; already-international numbers pass through; null when not a usable number. */
+/** "03001234567" or "3001234567" -> "923001234567"; already-international numbers pass through; null when not a usable number. */
 export function waNumber(phone: string | null | undefined): string | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 7) return null;
   if (digits.startsWith('00')) return digits.slice(2);
   if (digits.startsWith('0')) return `92${digits.slice(1)}`;
+  if (digits.length === 10 && digits.startsWith('3')) return `92${digits}`; // a mobile typed without the 0
   return digits;
 }
 

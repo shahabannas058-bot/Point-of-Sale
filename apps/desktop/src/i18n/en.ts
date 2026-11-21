@@ -11,14 +11,15 @@ export const en = {
   'boot.legacyHint':
     'The app is now for grocery shops only. The saved database still holds mobile-shop data (phones and repairs), so it cannot be opened. Nothing was changed or deleted.',
   'boot.legacyNext':
-    'Download a copy first to keep the old data. Then restore a grocery backup, or start fresh.',
-  'boot.legacyShell':
-    'Your data is safe. Please contact support to move this shop to the grocery version.',
+    'The owner PIN unlocks these steps. Download a copy first to keep the old data. Then restore a grocery backup, or start fresh.',
   'boot.legacyDownload': 'Download a copy',
   'boot.legacyReset': 'Start fresh',
   'boot.legacyResetConfirm':
     'This deletes the old mobile-shop data from this browser and opens a new shop with demo data. Type RESET to confirm.',
   'boot.legacyNoCopy': 'There is no saved database to download.',
+  'boot.legacyOwnerPin': 'Owner PIN',
+  'boot.legacyUnlock': 'Unlock',
+  'boot.legacyResetNeedsCopy': 'Download a copy first, then you can start fresh.',
 
   'common.actions': 'Actions',
   'common.apply': 'Apply',
@@ -302,7 +303,10 @@ export const en = {
   'sales.view': 'View',
   'sales.return': 'Return',
   'sales.void': 'Void',
-  'sales.partlyReturned': 'Returned',
+  'sales.partlyReturned': 'Partly returned',
+  'sales.fullyReturned': 'Returned',
+  'sales.loadMore': 'Load more',
+  'sales.noMore': 'No more invoices',
   'sales.sold': 'Sold',
   'sales.returned': 'Returned',
   'sales.returnQty': 'Return qty',
@@ -371,6 +375,8 @@ export const en = {
   'khata.entry': 'Entry',
   'khata.noEntries': 'No entries yet',
   'khata.printStatement': 'Print statement',
+  'khata.loadOlder': 'Load older entries',
+  'khata.noOlder': 'No older entries',
 
   'suppliers.openingBalance': 'Opening balance (shop owes)',
   'suppliers.openingHint': 'Amount already owed to this supplier',

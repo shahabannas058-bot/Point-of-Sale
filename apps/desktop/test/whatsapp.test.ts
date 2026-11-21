@@ -13,6 +13,12 @@ describe('waNumber: Pakistani phones become international wa.me numbers', () => 
     expect(waNumber('00923001234567')).toBe('923001234567');
   });
 
+  it('adds 92 to a 10-digit mobile saved without the leading 0 (QA#10)', () => {
+    expect(waNumber('3001234567')).toBe('923001234567');
+    expect(waNumber('300-1234567')).toBe('923001234567');
+    expect(waNumber('300 123 4567')).toBe('923001234567');
+  });
+
   it('refuses empty or too-short phones', () => {
     expect(waNumber(null)).toBeNull();
     expect(waNumber(undefined)).toBeNull();

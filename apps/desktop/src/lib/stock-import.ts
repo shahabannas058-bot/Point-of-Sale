@@ -124,16 +124,16 @@ export function parseCsv(text: string): CsvRow[] {
           i += 1;
         } else quoted = false;
       } else {
-        if (ch === '\n') line += 1;
+        if (ch === '\n' || (ch === '\r' && src[i + 1] !== '\n')) line += 1;
         cell += ch;
       }
-    } else if (ch === '"') quoted = true;
+    } else if (ch === '"' && cell === '')
+      quoted = true; // a quote opens a cell only at its start
     else if (ch === ',') {
       cells.push(cell);
       cell = '';
-    } else if (ch === '\r') {
-      /* CRLF: handled by the \n that follows */
-    } else if (ch === '\n') {
+    } else if (ch === '\r' || ch === '\n') {
+      if (ch === '\r' && src[i + 1] === '\n') i += 1; // CRLF is one line end; a lone CR (old Mac) is one too
       endRow();
       line += 1;
     } else cell += ch;

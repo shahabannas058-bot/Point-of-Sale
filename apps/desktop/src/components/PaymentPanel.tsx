@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import { PAYMENT_METHODS, type PaymentInput, type PaymentMethod } from '@pos/shared';
 import { dynKey, useT } from '../i18n';
 import { formatRs, paisaToInput, parseRupees } from '../lib/money';
+import { paymentReady } from '../lib/payment';
 import { useHotkeys } from '../lib/shortcuts';
 import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
@@ -51,7 +52,8 @@ export function PaymentPanel({
 
   useEffect(() => {
     if (open) {
-      setRows([{ id: 0, method: 'cash', amount: paisaToInput(total) }]);
+      // a zero total (full discount) needs no payment at all
+      setRows(total > 0 ? [{ id: 0, method: 'cash', amount: paisaToInput(total) }] : []);
       setTendered('');
       setSeq(1);
     }
@@ -61,9 +63,8 @@ export function PaymentPanel({
   const parsed = useMemo(() => rows.map((r) => ({ ...r, paisa: parseRupees(r.amount) })), [rows]);
   const paid = parsed.reduce((a, r) => a + (r.paisa ?? 0), 0);
   const remaining = total - paid;
-  const anyInvalid = parsed.some((r) => r.paisa === null || r.paisa <= 0);
   const khataBlocked = parsed.some((r) => r.method === 'khata') && !hasCustomer;
-  const ok = !anyInvalid && remaining === 0 && !khataBlocked && rows.length > 0;
+  const ok = paymentReady(parsed, total, hasCustomer);
 
   const cashRow = parsed.find((r) => r.method === 'cash');
   const tenderedP = parseRupees(tendered);
@@ -201,7 +202,7 @@ export function PaymentPanel({
                 icon
                 size="sm"
                 aria-label={t('common.remove')}
-                disabled={rows.length === 1}
+                disabled={rows.length === 1 && total > 0}
                 onClick={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
               >
                 <X size={16} aria-hidden="true" />

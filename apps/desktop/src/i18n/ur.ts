@@ -16,14 +16,16 @@ export const ur: Dict = {
   'boot.legacyHint':
     'Ab yeh app sirf kiryana / grocery dukaan ke liye hai. Mehfooz database mein abhi mobile-shop ka data hai (phone aur repair), is liye yeh khul nahi sakta. Kuch badla ya delete nahi hua.',
   'boot.legacyNext':
-    'Purana data rakhna hai to pehle iski copy download kar lein. Phir grocery ka backup restore karein, ya naye siray se shuru karein.',
-  'boot.legacyShell':
-    'Aap ka data mehfooz hai. Is dukaan ko grocery version par lane ke liye support se rabta karein.',
+    'Yeh kaam owner ke PIN se khulte hain. Purana data rakhna hai to pehle iski copy download kar lein. Phir grocery ka backup restore karein, ya naye siray se shuru karein.',
   'boot.legacyDownload': 'Copy download karein',
   'boot.legacyReset': 'Naye siray se shuru karein',
   'boot.legacyResetConfirm':
     'Yeh is browser se purana mobile-shop data delete kar dega aur demo data ke saath nayi dukaan khole ga. Tasdeeq ke liye RESET likhein.',
   'boot.legacyNoCopy': 'Download ke liye koi mehfooz database nahi.',
+  'boot.legacyOwnerPin': 'Owner ka PIN',
+  'boot.legacyUnlock': 'Kholein',
+  'boot.legacyResetNeedsCopy':
+    'Pehle copy download karein, phir naye siray se shuru kar sakte hain.',
 
   'common.actions': 'Actions',
   'common.apply': 'Lagayein',
@@ -309,7 +311,10 @@ export const ur: Dict = {
   'sales.view': 'Dekhein',
   'sales.return': 'Wapsi',
   'sales.void': 'Void',
-  'sales.partlyReturned': 'Wapas hua',
+  'sales.partlyReturned': 'Kuch wapas hua',
+  'sales.fullyReturned': 'Poora wapas hua',
+  'sales.loadMore': 'Aur bill dekhein',
+  'sales.noMore': 'Aur koi bill nahi',
   'sales.sold': 'Becha',
   'sales.returned': 'Wapas hua',
   'sales.returnQty': 'Wapsi tadaad',
@@ -355,6 +360,8 @@ export const ur: Dict = {
   'khata.entry': 'Entry',
   'khata.noEntries': 'Abhi koi entry nahi',
   'khata.printStatement': 'Statement print karein',
+  'khata.loadOlder': 'Purani entries dekhein',
+  'khata.noOlder': 'Is se purani koi entry nahi',
 
   'suppliers.subtitle': 'Kharidari aur supplier ko dene wali raqam',
   'suppliers.new': 'Naya supplier',

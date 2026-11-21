@@ -3,6 +3,7 @@ import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url';
 import { del, get, set } from 'idb-keyval';
 import { migrate, migrationsFromFiles } from '@pos/db';
 import { validateBackup } from './backup-check';
+import { createOwnerPinCheck } from './legacy-gate';
 import { createSqlJsDriver, type SqlJsDriver } from './sqljs-driver';
 
 const DB_KEY = 'pos-db-v1';
@@ -28,7 +29,10 @@ export async function openBrowserDb(opts: { fresh?: boolean } = {}): Promise<Sql
   const SQL = await loadSql();
   const stored = opts.fresh ? undefined : await get<Uint8Array>(DB_KEY);
   const db = stored ? new SQL.Database(stored) : new SQL.Database();
-  const driver = createSqlJsDriver(db, (bytes) => set(DB_KEY, bytes));
+  const driver = createSqlJsDriver(db, {
+    save: (bytes) => set(DB_KEY, bytes),
+    reopen: (bytes) => new SQL.Database(bytes),
+  });
   await migrate(driver, migrationsFromFiles(migrationFiles));
   return driver;
 }
@@ -52,6 +56,13 @@ export async function restoreBrowserDb(
 /** The stored database bytes as they are, without opening or migrating them (a copy to keep before a reset). */
 export async function readStoredBrowserDb(): Promise<Uint8Array | undefined> {
   return get<Uint8Array>(DB_KEY);
+}
+
+/** The owner-PIN check over the stored bytes (see legacy-gate.ts); null when nothing is stored. */
+export async function storedOwnerPinCheck(): Promise<((pin: string) => Promise<void>) | null> {
+  const SQL = await loadSql();
+  const bytes = await get<Uint8Array>(DB_KEY);
+  return bytes ? createOwnerPinCheck(SQL, bytes) : null;
 }
 
 /** Removes the persisted database. The caller must close any open driver first. */

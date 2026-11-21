@@ -32,3 +32,11 @@ export async function printReceipt(model: ReceiptModel): Promise<void> {
 export function printPage(): void {
   window.print();
 }
+
+/** Prints the current screen once `prepare` has loaded everything it shows (a whole ledger) and React drew it. */
+export async function printPageWhenReady(prepare: () => Promise<boolean>): Promise<void> {
+  if (!(await prepare())) return;
+  await nextFrame();
+  await nextFrame();
+  window.print();
+}

@@ -9,6 +9,7 @@ import {
   type ReturnPreview,
 } from '@pos/shared';
 import { ApprovalDialog } from '../components/ApprovalDialog';
+import { LoadOlder } from '../components/LoadOlder';
 import { ReceiptDialog } from '../components/ReceiptDialog';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -24,11 +25,13 @@ import { labelFor, perUnit, qtyText } from '../lib/qty';
 import {
   hasBadPick,
   remainingText,
+  returnBadgeKey,
   returnPick,
   returnPickList,
   type ReturnPick,
 } from '../lib/return-qty';
 import { useService } from '../service/context';
+import { useOlderPages } from '../service/use-older-pages';
 import { useServiceQuery } from '../service/use-query';
 import { useDataVersion } from '../store/data-version';
 import { useCan } from '../store/session';
@@ -349,6 +352,9 @@ function VoidDialog({
 }
 
 // ------------------------------------------------------------------ screen
+const PAGE = 200;
+const invoiceKey = (i: InvoiceSummary): InvoiceSummary => i;
+
 export function Sales(): ReactNode {
   const t = useT();
   const can = useCan();
@@ -359,16 +365,18 @@ export function Sales(): ReactNode {
   const [ret, setRet] = useState<InvoiceSummary | null>(null);
   const [voiding, setVoiding] = useState<InvoiceSummary | null>(null);
 
-  const list = useServiceQuery(
-    (s) =>
-      s.checkout.listInvoices({
-        ...(q.trim() ? { q: q.trim() } : {}),
-        ...(from ? { fromMs: localDayRange(from).fromMs } : {}),
-        ...(to ? { toMs: localDayRange(to).toMs } : {}),
-        limit: 200,
-      }),
-    [q, from, to],
+  const service = useService();
+  const filter = {
+    ...(q.trim() ? { q: q.trim() } : {}),
+    ...(from ? { fromMs: localDayRange(from).fromMs } : {}),
+    ...(to ? { toMs: localDayRange(to).toMs } : {}),
+    limit: PAGE,
+  };
+  const list = useServiceQuery((s) => s.checkout.listInvoices(filter), [q, from, to]);
+  const pages = useOlderPages(list.data, PAGE, invoiceKey, (cursor) =>
+    service.checkout.listInvoices({ ...filter, ...cursor }),
   );
+  const invoices = pages.rows;
 
   return (
     <div>
@@ -412,7 +420,7 @@ export function Sales(): ReactNode {
         <div className="tbl-wrap">
           {list.loading && !list.data ? (
             <SkeletonRows />
-          ) : (list.data ?? []).length === 0 ? (
+          ) : invoices.length === 0 ? (
             <Empty title={t('sales.none')} hint={t('sales.noneHint')} />
           ) : (
             <table className="tbl">
@@ -430,72 +438,82 @@ export function Sales(): ReactNode {
                 </tr>
               </thead>
               <tbody>
-                {(list.data ?? []).map((i) => (
-                  <tr key={i.id}>
-                    <td className="ltr font-mono text-sm font-semibold">{i.invoiceNo}</td>
-                    <td className="ltr text-sm">{formatDateTime(i.createdAt)}</td>
-                    <td>
-                      <Badge
-                        tone={
-                          i.kind === 'sale' ? 'primary' : i.kind === 'return' ? 'warning' : 'danger'
-                        }
-                      >
-                        {t(dynKey('kind', i.kind))}
-                      </Badge>
-                      {i.returnedTotal > 0 ? (
-                        <span className="ms-1">
-                          <Badge tone="warning">{t('sales.partlyReturned')}</Badge>
-                        </span>
-                      ) : null}
-                    </td>
-                    <td>
-                      {i.customerName ?? <span className="text-muted">{t('billing.walkIn')}</span>}
-                    </td>
-                    <td>{i.cashierName}</td>
-                    <td className="num">
-                      <Money
-                        value={i.total}
-                        symbol={null}
-                        className={`font-semibold ${i.total < 0 ? 'text-[var(--danger-ink)]' : ''}`}
-                      />
-                    </td>
-                    <td>
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setView(i.id)}>
-                          <Eye size={15} aria-hidden="true" />
-                          {t('sales.view')}
-                        </Button>
-                        {i.kind === 'sale' && (can('return_void') || can('sell')) ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={i.returnedTotal >= i.total}
-                              onClick={() => setRet(i)}
-                            >
-                              <Undo2 size={15} aria-hidden="true" />
-                              {t('sales.return')}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={i.returnedTotal >= i.total}
-                              onClick={() => setVoiding(i)}
-                            >
-                              <Ban size={15} aria-hidden="true" />
-                              {t('sales.void')}
-                            </Button>
-                          </>
+                {invoices.map((i) => {
+                  const badge = returnBadgeKey(i);
+                  return (
+                    <tr key={i.id}>
+                      <td className="ltr font-mono text-sm font-semibold">{i.invoiceNo}</td>
+                      <td className="ltr text-sm">{formatDateTime(i.createdAt)}</td>
+                      <td>
+                        <Badge
+                          tone={
+                            i.kind === 'sale'
+                              ? 'primary'
+                              : i.kind === 'return'
+                                ? 'warning'
+                                : 'danger'
+                          }
+                        >
+                          {t(dynKey('kind', i.kind))}
+                        </Badge>
+                        {badge ? (
+                          <span className="ms-1">
+                            <Badge tone="warning">{t(badge)}</Badge>
+                          </span>
                         ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>
+                        {i.customerName ?? (
+                          <span className="text-muted">{t('billing.walkIn')}</span>
+                        )}
+                      </td>
+                      <td>{i.cashierName}</td>
+                      <td className="num">
+                        <Money
+                          value={i.total}
+                          symbol={null}
+                          className={`font-semibold ${i.total < 0 ? 'text-[var(--danger-ink)]' : ''}`}
+                        />
+                      </td>
+                      <td>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setView(i.id)}>
+                            <Eye size={15} aria-hidden="true" />
+                            {t('sales.view')}
+                          </Button>
+                          {i.kind === 'sale' && (can('return_void') || can('sell')) ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={i.returnedTotal >= i.total}
+                                onClick={() => setRet(i)}
+                              >
+                                <Undo2 size={15} aria-hidden="true" />
+                                {t('sales.return')}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={i.returnedTotal >= i.total}
+                                onClick={() => setVoiding(i)}
+                              >
+                                <Ban size={15} aria-hidden="true" />
+                                {t('sales.void')}
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
       )}
+      <LoadOlder pages={pages} label={t('sales.loadMore')} endLabel={t('sales.noMore')} />
 
       <ReceiptDialog invoiceId={view} onClose={() => setView(null)} />
       <ReturnDialog invoice={ret} onClose={() => setRet(null)} />

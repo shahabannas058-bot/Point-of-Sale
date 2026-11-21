@@ -4,6 +4,7 @@ import {
   labelFor,
   parseSignedQuantity,
   perUnit,
+  minusQty,
   qtyStep,
   qtyText,
   quantityForAmount,
@@ -58,6 +59,19 @@ describe('qtyStep: what + and - change', () => {
   it('is one piece, or 250 g for weighed goods', () => {
     expect(qtyStep(1)).toBe(1);
     expect(qtyStep(1000)).toBe(250);
+  });
+});
+
+describe('minusQty: the - key never raises a line (QA#14)', () => {
+  it('takes one step off, down to one step', () => {
+    expect(minusQty(3, 1)).toBe(2);
+    expect(minusQty(1, 1)).toBe(1);
+    expect(minusQty(1000, 1000)).toBe(750);
+    expect(minusQty(300, 1000)).toBe(250);
+  });
+
+  it('leaves a line already below one step as it is', () => {
+    expect(minusQty(100, 1000)).toBe(100);
   });
 });
 

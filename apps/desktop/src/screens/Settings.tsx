@@ -580,18 +580,21 @@ export function Settings(): ReactNode {
         <IntegritySection />
       </Section>
 
-      <Section title={t('settings.backup')}>
-        <div className="flex flex-col gap-2">
-          <Button className="self-start" disabled={!rt.exportBytes} onClick={exportDb}>
-            <Download size={16} aria-hidden="true" />
-            {t('settings.exportDb')}
-          </Button>
-          <p className="text-sm text-muted">
-            {rt.exportBytes ? t('settings.cloudBackup') : t('settings.exportUnavailable')}
-          </p>
-          {can('manage_settings') ? <RestoreBackup /> : null}
-        </div>
-      </Section>
+      {/* the database file holds every user's PIN hash: owner only */}
+      {can('manage_settings') ? (
+        <Section title={t('settings.backup')}>
+          <div className="flex flex-col gap-2">
+            <Button className="self-start" disabled={!rt.exportBytes} onClick={exportDb}>
+              <Download size={16} aria-hidden="true" />
+              {t('settings.exportDb')}
+            </Button>
+            <p className="text-sm text-muted">
+              {rt.exportBytes ? t('settings.cloudBackup') : t('settings.exportUnavailable')}
+            </p>
+            <RestoreBackup />
+          </div>
+        </Section>
+      ) : null}
 
       {shop.data?.isDemo && can('manage_settings') && rt.resetDemo !== undefined ? (
         <Section title={t('settings.demo')} hint={t('settings.demoHint')}>

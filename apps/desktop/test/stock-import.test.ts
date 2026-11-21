@@ -39,6 +39,22 @@ describe('parseCsv', () => {
     ]);
   });
 
+  it('treats a quote inside an unquoted cell as a plain character (QA#8)', () => {
+    expect(parseCsv('name,sale\nLED 32" TV,30000\nCharger,500')).toEqual([
+      { line: 1, cells: ['name', 'sale'] },
+      { line: 2, cells: ['LED 32" TV', '30000'] },
+      { line: 3, cells: ['Charger', '500'] },
+    ]);
+  });
+
+  it('splits rows on classic-Mac CR-only line ends (QA#19c)', () => {
+    expect(parseCsv('a,b\r1,2\r\r3,4\r')).toEqual([
+      { line: 1, cells: ['a', 'b'] },
+      { line: 2, cells: ['1', '2'] },
+      { line: 4, cells: ['3', '4'] },
+    ]);
+  });
+
   it('returns nothing for an empty file', () => {
     expect(parseCsv('')).toEqual([]);
     expect(parseCsv('﻿\r\n\n')).toEqual([]);

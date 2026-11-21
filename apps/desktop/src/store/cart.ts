@@ -49,6 +49,8 @@ export interface HeldBill {
   invoiceDiscount: number;
   /** the attempt id the bill had when it was held; bills saved by an older version lack it */
   saleId?: string;
+  /** the bill's note; bills saved by an older version lack it */
+  note?: string;
 }
 
 /** 'weighed' = a loose item that is already on the bill: its weight is edited, not added to. */
@@ -85,6 +87,10 @@ interface CartState {
 
 const itemSub = (v: ItemView): string =>
   [v.item.model, v.item.colour, v.item.sku].filter(Boolean).join(' · ');
+
+/** The bill's subtotal: every line's gross less its discount (what the invoice discount may not exceed). */
+const subtotalOf = (lines: readonly CartLine[]): number =>
+  lines.reduce((sum, l) => sum + lineGrossOf(l) - l.discount, 0);
 
 /** v0 = the mobile-shop build, v1 = `variantId` lines, v2 = `itemId` lines. */
 const HELD_BILLS_VERSION = 2;
@@ -199,32 +205,45 @@ export const useCart = create<CartState>()(
         const next = Math.max(1, Math.min(Math.trunc(qty), max));
         // keep the line discount below the new gross so the service never sees discount > gross
         const gross = lineGross(next, line.unitPrice, lineScale(line));
+        const lines = get().lines.map((l) =>
+          l.key === key ? { ...l, qty: next, discount: Math.min(l.discount, gross) } : l,
+        );
         set({
-          lines: get().lines.map((l) =>
-            l.key === key ? { ...l, qty: next, discount: Math.min(l.discount, gross) } : l,
-          ),
+          lines,
+          invoiceDiscount: Math.min(get().invoiceDiscount, subtotalOf(lines)),
           approvalToken: null,
         });
         return qty > max ? 'capped' : 'added';
       },
       remove: (key) => {
-        const lines = get().lines.filter((l) => l.key !== key);
+        const { lines: before, selected } = get();
+        const removed = before.findIndex((l) => l.key === key);
+        const lines = before.filter((l) => l.key !== key);
         set({
           lines,
-          selected: Math.min(get().selected, lines.length - 1),
+          // a line above the selection moved it up one row: follow the same line
+          selected: Math.min(
+            removed >= 0 && removed < selected ? selected - 1 : selected,
+            lines.length - 1,
+          ),
+          invoiceDiscount: Math.min(get().invoiceDiscount, subtotalOf(lines)),
           approvalToken: null,
           // an emptied cart ends the attempt: whatever is rung up next is a new sale
           ...(lines.length === 0 ? { saleId: uuidv7() } : {}),
         });
       },
-      setLineDiscount: (key, paisa) =>
+      setLineDiscount: (key, paisa) => {
+        const lines = get().lines.map((l) =>
+          l.key === key ? { ...l, discount: Math.max(0, Math.min(paisa, lineGrossOf(l))) } : l,
+        );
         set({
-          lines: get().lines.map((l) =>
-            l.key === key ? { ...l, discount: Math.max(0, Math.min(paisa, lineGrossOf(l))) } : l,
-          ),
+          lines,
+          invoiceDiscount: Math.min(get().invoiceDiscount, subtotalOf(lines)),
           approvalToken: null,
-        }),
-      setCustomer: (customer) => set({ customer }),
+        });
+      },
+      // an approval was given for this bill and customer, not for whoever is picked next
+      setCustomer: (customer) => set({ customer, approvalToken: null }),
       setInvoiceDiscount: (invoiceDiscount) =>
         set({ invoiceDiscount: Math.max(0, invoiceDiscount), approvalToken: null }),
       setApproval: (approvalToken) => set({ approvalToken }),
@@ -242,6 +261,7 @@ export const useCart = create<CartState>()(
           lines: s.lines,
           invoiceDiscount: s.invoiceDiscount,
           saleId: s.saleId,
+          note: s.note,
         };
         set({ ...fresh(), held: [bill, ...s.held].slice(0, 20) });
       },
@@ -261,6 +281,7 @@ export const useCart = create<CartState>()(
                   lines: s.lines,
                   invoiceDiscount: s.invoiceDiscount,
                   saleId: s.saleId,
+                  note: s.note,
                 },
               ]
             : [];
@@ -270,6 +291,7 @@ export const useCart = create<CartState>()(
           saleId: bill.saleId ?? uuidv7(),
           customer: bill.customer,
           invoiceDiscount: bill.invoiceDiscount,
+          note: bill.note ?? '',
           approvalToken: null,
           selected: bill.lines.length - 1,
           held: [...parked, ...s.held.filter((h) => h.id !== id)],
