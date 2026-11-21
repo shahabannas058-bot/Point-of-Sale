@@ -870,26 +870,6 @@ export const ur: Dict = {
   'quick.full': 'Zyada se zyada {max} items pin ho sakte hain',
   'quick.noMatch': 'Koi item nahi mila',
   'sc.quick': 'Jaldi wala item 1 se 9 add karein',
-  'scan.camera': 'Camera se scan karein',
-  'scan.title': 'Camera se scan',
-  'scan.hint':
-    'Barcode ko dabbe ke andar rakhein. Taqreeban 25 cm door se shuru karein aur beep aane tak aahista paas layein. Seedha, khada ya tircha, har tarah ka barcode chalega; haath rok kar rakhein aur chamak se bachayein.',
-  'scan.asking':
-    'Camera ki ijazat dein: browser ke popup mein Allow dabayein, ya address bar mein camera ke icon par click karein.',
-  'scan.dark':
-    'Camera se tasveer nahi aa rahi. Kya camera ka cover ya shutter band hai, ya koi aur app (Zoom, Meet) camera istemal kar rahi hai?',
-  'scan.starting': 'Camera chal raha hai…',
-  'scan.device': 'Camera',
-  'scan.defaultDevice': 'Default camera',
-  'scan.denied':
-    'Camera ki ijazat nahi mili. Address bar mein taale (lock) ke icon par click karein, Camera ko Allow karein, phir dobara koshish karein.',
-  'scan.missing': 'Is computer mein koi camera nahi mila.',
-  'scan.busy': 'Camera kisi aur app mein khula hai. Use band karke dobara koshish karein.',
-  'scan.unsupported': 'Ye window camera istemal nahi kar sakti.',
-  'scan.failed': 'Camera ya barcode reader shuru nahi ho saka.',
-  'scan.added': '{name} bill mein add ho gaya',
-  'scan.filled': 'Barcode {code} bhar diya',
-  'sc.camera': 'Camera se scan',
   'adjlog.open': 'Stock badlav ki history',
   'adjlog.title': 'Stock badlav ki history',
   'adjlog.subtitle':

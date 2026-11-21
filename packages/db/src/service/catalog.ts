@@ -259,6 +259,19 @@ const tokenClauses = (text: string, q: string): { sql: string; params: SqlValue[
   };
 };
 
+/** 0 = the label starts with the typed text, 1 = every typed word starts some word of it, 2 = it is only somewhere inside. */
+type TextRank = 0 | 1 | 2;
+const textRank = (label: string, q: string): TextRank => {
+  const typed = q
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w !== '');
+  const text = label.toLowerCase();
+  if (text.startsWith(typed.join(' '))) return 0;
+  const words = text.split(/[^\p{L}\p{N}]+/u);
+  return typed.every((w) => words.some((x) => x.startsWith(w))) ? 1 : 2;
+};
+
 export function createCatalogApi(ctx: Ctx): CatalogApi {
   const branch = async (): Promise<string> => (await loadShop(ctx.driver)).branchId;
 
@@ -321,17 +334,27 @@ export function createCatalogApi(ctx: Ctx): CatalogApi {
           item: p,
         });
 
-      // 2. text search on names (every word must match)
+      // 2. text search on names (every word must match); names that start with the text come first
       const pt = tokenClauses(PHONE_TEXT, q);
-      for (const p of await phones(`WHERE ${pt.sql}${phoneStock}`, pt.params))
-        push({ kind: 'phone_unit', matchedBy: /^\d+$/.test(q) ? 'imei' : 'name', item: p });
       const vt = tokenClauses(VARIANT_TEXT, q);
+      const text: { rank: TextRank; hit: CatalogHit }[] = [];
+      for (const p of await phones(`WHERE ${pt.sql}${phoneStock}`, pt.params))
+        text.push({
+          rank: textRank(p.label, q),
+          hit: { kind: 'phone_unit', matchedBy: /^\d+$/.test(q) ? 'imei' : 'name', item: p },
+        });
       for (const v of await variants(
         branchId,
         `WHERE av.is_active = 1 AND ${vt.sql}${variantStock}`,
         vt.params,
       ))
-        push({ kind: 'variant', matchedBy: 'name', item: v });
+        text.push({
+          rank: textRank(v.label, q),
+          hit: { kind: 'variant', matchedBy: 'name', item: v },
+        });
+      // Array.sort is stable: inside one rank the brand / name order from SQL is kept
+      text.sort((a, b) => a.rank - b.rank);
+      for (const { rank, hit } of text) if (rank < 2 || opts.prefixOnly !== true) push(hit);
       return hits;
     },
 

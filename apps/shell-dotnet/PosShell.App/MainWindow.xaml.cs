@@ -87,12 +87,8 @@ public partial class MainWindow : Window
         core.NavigationStarting += (_, e) => { if (!IsAllowed(e.Uri)) e.Cancel = true; };   // never browse away from our own UI
         core.NewWindowRequested += (_, e) => e.Handled = true;
         core.DownloadStarting += (_, e) => e.Cancel = true;
-        // only our own page may use the camera (barcode scanning); microphone, location, notifications etc. stay denied.
-        // Allowing it here means the shopkeeper never sees a browser-style "allow camera?" prompt.
-        core.PermissionRequested += (_, e) => e.State =
-            e.PermissionKind == CoreWebView2PermissionKind.Camera && IsAllowed(e.Uri)
-                ? CoreWebView2PermissionState.Allow
-                : CoreWebView2PermissionState.Deny;
+        // the POS needs no camera, microphone, location or notifications: every permission request is denied.
+        core.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
         core.WebMessageReceived += OnWebMessageReceived;
 
         core.Navigate(DevUrl ?? $"https://{Host}/index.html");

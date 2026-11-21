@@ -337,8 +337,15 @@ export interface StockLogPage {
 export const MAX_QUICK_ITEMS = 24;
 
 export interface CatalogApi {
-  /** Exact barcode/sku/imei/serial first (scanner: UI auto-adds if exactly 1 exact hit), then LIKE on brand/name/model/colour. */
-  search(query: string, opts?: { limit?: number; inStockOnly?: boolean }): Promise<CatalogHit[]>;
+  /**
+   * Exact barcode/sku/imei/serial first (scanner: UI auto-adds if exactly 1 exact hit), then LIKE on brand/name/model/colour.
+   * Text hits whose name starts with the query come before names that only contain it; `prefixOnly` drops the latter
+   * (type-ahead after the first letter: "a" lists the items that start with a, not every SKU with an a inside).
+   */
+  search(
+    query: string,
+    opts?: { limit?: number; inStockOnly?: boolean; prefixOnly?: boolean },
+  ): Promise<CatalogHit[]>;
   listPhones(f?: {
     q?: string;
     inStock?: boolean;

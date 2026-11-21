@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  Camera,
   Keyboard,
   Minus,
   CirclePause,
@@ -27,7 +26,6 @@ import {
 } from '@pos/shared';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { CustomerPicker } from '../components/CustomerPicker';
-import { CameraScanner, type ScanFeedback } from '../components/CameraScanner';
 import { ImeiPicker } from '../components/ImeiPicker';
 import { ItemHistoryDialog } from '../components/ItemHistoryDialog';
 import { PaymentPanel } from '../components/PaymentPanel';
@@ -383,7 +381,6 @@ export function Billing(): ReactNode {
   const can = useCan();
   const [quick, setQuick] = useState<VariantView[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
 
   const [customerOpen, setCustomerOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
@@ -495,10 +492,10 @@ export function Billing(): ReactNode {
     ]),
   );
 
-  // type-ahead results
+  // type-ahead results: from the first letter, no Enter needed. One letter lists only the items whose name starts with it.
   useEffect(() => {
     const term = q.trim();
-    if (term.length < 2) {
+    if (term.length < 1) {
       setHits([]);
       setDropOpen(false);
       return;
@@ -506,7 +503,7 @@ export function Billing(): ReactNode {
     let live = true;
     const id = window.setTimeout(() => {
       service.catalog
-        .search(term, { inStockOnly: true, limit: 12 })
+        .search(term, { inStockOnly: true, limit: 12, prefixOnly: term.length === 1 })
         .then((r) => {
           if (!live) return;
           setHits(r);
@@ -549,20 +546,6 @@ export function Billing(): ReactNode {
       setActive(0);
     } catch (e) {
       toast.error(errorMessage(e, t));
-    }
-  };
-
-  // a camera read only adds an exact barcode / SKU / IMEI hit; anything else is reported inside the scanner
-  const onCameraScan = async (code: string): Promise<ScanFeedback> => {
-    try {
-      const res = await service.catalog.search(code, { inStockOnly: true, limit: 12 });
-      const exact = res.filter((h) => h.matchedBy !== 'name');
-      const hit = exact.length === 1 ? exact[0] : undefined;
-      if (!hit) return { ok: false, text: t('billing.notFound', { q: code }) };
-      addHit(hit);
-      return { ok: true, text: t('scan.added', { name: hit.item.label }) };
-    } catch (e) {
-      return { ok: false, text: errorMessage(e, t) };
     }
   };
 
@@ -633,7 +616,6 @@ export function Billing(): ReactNode {
       ...quickKeys,
       F1: () => setHelpOpen(true),
       F2: () => focusSearch(),
-      F3: () => setCameraOpen(true),
       F4: () => setCustomerOpen(true),
       F6: () => {
         if (cart.customer) void nav(`/customers/${cart.customer.id}`);
@@ -702,7 +684,6 @@ export function Billing(): ReactNode {
   const shortcutRows: [string, TKey][] = [
     ['F1', 'sc.help'],
     ['F2', 'sc.search'],
-    ['F3', 'sc.camera'],
     ['F4', 'sc.customer'],
     ['F6', 'sc.khata'],
     ['F7', 'sc.hold'],
@@ -767,15 +748,6 @@ export function Billing(): ReactNode {
             }}
           />
           <span className="absolute end-2 top-1/2 flex -translate-y-1/2 items-center gap-2">
-            <Button
-              icon
-              variant="ghost"
-              aria-label={t('scan.camera')}
-              title={`${t('scan.camera')} (F3)`}
-              onClick={() => setCameraOpen(true)}
-            >
-              <Camera size={20} aria-hidden="true" />
-            </Button>
             <span className="pe-2" aria-hidden="true">
               <Kbd>F2</Kbd>
             </span>
@@ -1111,15 +1083,6 @@ export function Billing(): ReactNode {
       </aside>
 
       {/* ------------------------------------------------ dialogs */}
-      <CameraScanner
-        open={cameraOpen}
-        onClose={() => {
-          setCameraOpen(false);
-          focusSearch();
-        }}
-        onDetect={onCameraScan}
-        continuous
-      />
       <QuickItemsDialog
         open={quickOpen}
         onClose={() => {
