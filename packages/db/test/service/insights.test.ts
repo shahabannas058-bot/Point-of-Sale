@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { VariantView } from '@pos/shared';
+import type { ItemView } from '@pos/shared';
 import {
   CHARGER_COST,
   CHARGER_PRICE,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_COST,
+  CARTON_PRICE,
   expectCode,
   first,
   makeService,
   sellCash,
   type TestService,
 } from './helpers';
+import { addMilk, receive, shopOf } from './batch-helpers';
 
 const DAY = 86_400_000;
 
@@ -23,8 +24,8 @@ async function addSupplier(): Promise<string> {
   return (await t.svc.purchasing.createSupplier({ name: 'Hall Road Traders' })).id;
 }
 
-async function addChini(openingGrams: number): Promise<VariantView> {
-  return t.svc.catalog.createAccessory({
+async function addChini(openingGrams: number): Promise<ItemView> {
+  return t.svc.catalog.createItem({
     product: { brand: 'Loose', name: 'Chini (sugar)', category: 'Grocery' },
     sku: 'CHINI-LOOSE',
     costPrice: 25_000, // Rs 250 per kg
@@ -38,9 +39,10 @@ async function addChini(openingGrams: number): Promise<VariantView> {
 describe('insights: till info', () => {
   it('shows stock, 30-day sales, and the last rate and balance for the customer', async () => {
     await t.loginAs('cash');
-    const walkIn = await t.svc.insights.item({ variantId: t.ids.chargerId });
+    const walkIn = await t.svc.insights.item({ itemId: t.ids.chargerId });
     expect(walkIn).toEqual({
       onHand: 10,
+      expiredOnHand: 0,
       lastPurchase: null, // cashier has no view_cost
       lastSoldToCustomer: null,
       customerBalance: null,
@@ -49,11 +51,11 @@ describe('insights: till info', () => {
 
     const inv = await sellCash(
       t,
-      [{ variantId: t.ids.chargerId, quantity: 3, discountAmount: 3_000 }],
+      [{ itemId: t.ids.chargerId, quantity: 3, discountAmount: 3_000 }],
       { customerId: t.ids.bilalId },
     );
     const after = await t.svc.insights.item({
-      variantId: t.ids.chargerId,
+      itemId: t.ids.chargerId,
       customerId: t.ids.bilalId,
     });
     expect(after).toMatchObject({
@@ -71,62 +73,61 @@ describe('insights: till info', () => {
 
   it('nets out returns and only counts the last 30 days', async () => {
     await t.loginAs('mgr');
-    const inv = await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 4 }]);
+    const inv = await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 4 }]);
     await t.svc.checkout.createReturn({
       originalSaleId: inv.id,
       lines: [{ lineId: first(inv.lines).id, quantity: 1 }],
       refund: [{ method: 'cash', amount: CHARGER_PRICE }],
       reason: 'faulty',
     });
-    expect((await t.svc.insights.item({ variantId: t.ids.chargerId })).soldLast30Days).toBe(3);
+    expect((await t.svc.insights.item({ itemId: t.ids.chargerId })).soldLast30Days).toBe(3);
 
     t.clock.advance(31 * DAY);
-    expect((await t.svc.insights.item({ variantId: t.ids.chargerId })).soldLast30Days).toBe(0);
+    expect((await t.svc.insights.item({ itemId: t.ids.chargerId })).soldLast30Days).toBe(0);
   });
 
   it('shows the latest purchase cost to managers', async () => {
     await t.loginAs('mgr');
-    const opening = await t.svc.insights.item({ variantId: t.ids.chargerId });
+    const opening = await t.svc.insights.item({ itemId: t.ids.chargerId });
     expect(opening.lastPurchase?.unitCost).toBe(CHARGER_COST);
 
     await t.svc.purchasing.receive({
       supplierId: await addSupplier(),
-      phones: [],
-      accessories: [{ variantId: t.ids.chargerId, quantity: 5, unitCost: 95_000 }],
+      items: [{ itemId: t.ids.chargerId, quantity: 5, unitCost: 95_000 }],
     });
-    const bought = await t.svc.insights.item({ variantId: t.ids.chargerId });
+    const bought = await t.svc.insights.item({ itemId: t.ids.chargerId });
     expect(bought.lastPurchase?.unitCost).toBe(95_000);
     expect(bought.onHand).toBe(15);
   });
 
-  it('works for a phone unit: in stock is 1 or 0, cost falls back to the unit cost', async () => {
+  it('a single-piece item: on hand goes 1 -> 0, opening stock gives the last cost', async () => {
     await t.loginAs('owner');
-    const before = await t.svc.insights.item({ phoneUnitId: t.ids.phoneId });
+    const before = await t.svc.insights.item({ itemId: t.ids.cartonId });
     expect(before.onHand).toBe(1);
-    expect(before.lastPurchase?.unitCost).toBe(PHONE_COST);
+    expect(before.lastPurchase?.unitCost).toBe(CARTON_COST);
 
-    const inv = await sellCash(t, [{ phoneUnitId: t.ids.phoneId, quantity: 1 }], {
+    const inv = await sellCash(t, [{ itemId: t.ids.cartonId, quantity: 1 }], {
       customerId: t.ids.bilalId,
     });
     const sold = await t.svc.insights.item({
-      phoneUnitId: t.ids.phoneId,
+      itemId: t.ids.cartonId,
       customerId: t.ids.bilalId,
     });
     expect(sold).toMatchObject({
       onHand: 0,
       soldLast30Days: 1,
-      lastSoldToCustomer: { unitPrice: PHONE_PRICE, invoiceNo: inv.invoiceNo },
+      lastSoldToCustomer: { unitPrice: CARTON_PRICE, invoiceNo: inv.invoiceNo },
     });
   });
 
   it('gives the last rate per kg for goods sold by weight', async () => {
     await t.loginAs('owner');
     const chini = await addChini(20_000);
-    await sellCash(t, [{ variantId: chini.variant.id, quantity: 1_500 }], {
+    await sellCash(t, [{ itemId: chini.item.id, quantity: 1_500 }], {
       customerId: t.ids.bilalId,
     });
     const info = await t.svc.insights.item({
-      variantId: chini.variant.id,
+      itemId: chini.item.id,
       customerId: t.ids.bilalId,
     });
     expect(info.onHand).toBe(18_500);
@@ -136,17 +137,13 @@ describe('insights: till info', () => {
   });
 
   it('rejects bad input and needs a session', async () => {
-    await expectCode(t.svc.insights.item({ variantId: t.ids.chargerId }), 'NOT_AUTHENTICATED');
+    await expectCode(t.svc.insights.item({ itemId: t.ids.chargerId }), 'NOT_AUTHENTICATED');
     await t.loginAs('cash');
-    await expectCode(t.svc.insights.item({}), 'VALIDATION');
+    await expectCode(t.svc.insights.item({} as never), 'VALIDATION');
+    await expectCode(t.svc.insights.item({ itemId: 42 } as never), 'VALIDATION');
+    await expectCode(t.svc.insights.item({ itemId: 'missing' }), 'NOT_FOUND');
     await expectCode(
-      t.svc.insights.item({ variantId: t.ids.chargerId, phoneUnitId: t.ids.phoneId }),
-      'VALIDATION',
-    );
-    await expectCode(t.svc.insights.item({ variantId: 'missing' }), 'NOT_FOUND');
-    await expectCode(t.svc.insights.item({ phoneUnitId: 'missing' }), 'NOT_FOUND');
-    await expectCode(
-      t.svc.insights.item({ variantId: t.ids.chargerId, customerId: 'missing' }),
+      t.svc.insights.item({ itemId: t.ids.chargerId, customerId: 'missing' }),
       'NOT_FOUND',
     );
   });
@@ -155,9 +152,9 @@ describe('insights: till info', () => {
 describe('insights: reorder suggestions', () => {
   it('lists an item at its reorder level with the suggested quantity', async () => {
     await t.loginAs('mgr');
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 7 }]); // 3 left, level 3
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 7 }]); // 3 left, level 3
     const row = first(await t.svc.insights.reorder());
-    expect(row.item.variant.id).toBe(t.ids.chargerId);
+    expect(row.item.item.id).toBe(t.ids.chargerId);
     expect(row).toMatchObject({
       sold: 7,
       dailyAvg: 0.23,
@@ -177,10 +174,9 @@ describe('insights: reorder suggestions', () => {
     await t.loginAs('mgr');
     await t.svc.purchasing.receive({
       supplierId: await addSupplier(),
-      phones: [],
-      accessories: [{ variantId: t.ids.chargerId, quantity: 40, unitCost: 95_000 }],
+      items: [{ itemId: t.ids.chargerId, quantity: 40, unitCost: 95_000 }],
     });
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 44 }]); // 6 left, level 3
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 44 }]); // 6 left, level 3
     const row = first(await t.svc.insights.reorder());
     expect(row).toMatchObject({
       sold: 44,
@@ -193,10 +189,8 @@ describe('insights: reorder suggestions', () => {
   it('works in grams for goods sold by weight', async () => {
     await t.loginAs('owner');
     const chini = await addChini(6_000); // 6 kg, reorder at 5 kg
-    await sellCash(t, [{ variantId: chini.variant.id, quantity: 1_500 }]); // 4.5 kg left
-    const row = (await t.svc.insights.reorder()).find(
-      (r) => r.item.variant.id === chini.variant.id,
-    );
+    await sellCash(t, [{ itemId: chini.item.id, quantity: 1_500 }]); // 4.5 kg left
+    const row = (await t.svc.insights.reorder()).find((r) => r.item.item.id === chini.item.id);
     expect(row).toMatchObject({
       sold: 1_500,
       // 5 kg + ceil(1500 g x 14 / 30) = 5000 + 700, minus 4500 g on hand
@@ -207,11 +201,31 @@ describe('insights: reorder suggestions', () => {
 
   it('hides cost from cashiers and validates options', async () => {
     await t.loginAs('cash');
-    await sellCash(t, [{ variantId: t.ids.chargerId, quantity: 8 }]);
+    await sellCash(t, [{ itemId: t.ids.chargerId, quantity: 8 }]);
     const rows = await t.svc.insights.reorder({ days: 7, coverDays: 7 });
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.unitCost === null)).toBe(true);
     await expectCode(t.svc.insights.reorder({ days: 0 }), 'VALIDATION');
     await expectCode(t.svc.insights.reorder({ coverDays: 181 }), 'VALIDATION');
+  });
+});
+
+describe('insights: till info for batch-tracked items', () => {
+  it('shows only the stock that can be sold, with expired stock apart', async () => {
+    const shop = await shopOf();
+    const milk = await addMilk(shop);
+    await receive(shop, milk.item.id, [
+      { qty: 3, days: -2, batchNo: 'OLD' },
+      { qty: 8, days: 10, batchNo: 'FRESH' },
+    ]);
+    const info = await shop.svc.insights.item({ itemId: milk.item.id });
+    expect(info.onHand).toBe(8);
+    expect(info.expiredOnHand).toBe(3);
+  });
+
+  it('reports no expired stock for an item without batches', async () => {
+    await t.loginAs('cash');
+    const info = await t.svc.insights.item({ itemId: t.ids.chargerId });
+    expect(info.expiredOnHand).toBe(0);
   });
 });

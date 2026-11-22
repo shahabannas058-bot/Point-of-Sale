@@ -5,7 +5,7 @@ import {
   parseQuantity,
   unitScaleFor,
   type ModuleId,
-  type NewAccessoryInput,
+  type NewItemInput,
   type Paisa,
   type UnitLabel,
 } from '@pos/shared';
@@ -124,16 +124,16 @@ export function parseCsv(text: string): CsvRow[] {
           i += 1;
         } else quoted = false;
       } else {
-        if (ch === '\n') line += 1;
+        if (ch === '\n' || (ch === '\r' && src[i + 1] !== '\n')) line += 1;
         cell += ch;
       }
-    } else if (ch === '"') quoted = true;
+    } else if (ch === '"' && cell === '')
+      quoted = true; // a quote opens a cell only at its start
     else if (ch === ',') {
       cells.push(cell);
       cell = '';
-    } else if (ch === '\r') {
-      /* CRLF: handled by the \n that follows */
-    } else if (ch === '\n') {
+    } else if (ch === '\r' || ch === '\n') {
+      if (ch === '\r' && src[i + 1] === '\n') i += 1; // CRLF is one line end; a lone CR (old Mac) is one too
       endRow();
       line += 1;
     } else cell += ch;
@@ -319,10 +319,10 @@ export function toImportRows(text: string, opts: { modules: readonly ModuleId[] 
 export type ImportResult =
   { row: ImportRow; status: 'created' } | { row: ImportRow; status: 'failed'; error: unknown };
 
-/** The service call for one row: `service.catalog.createAccessory`. */
-export type CreateItem = (input: NewAccessoryInput) => Promise<unknown>;
+/** The service call for one row: `service.catalog.createItem`. */
+export type CreateItem = (input: NewItemInput) => Promise<unknown>;
 
-export const toAccessoryInput = (row: ImportRow): NewAccessoryInput => ({
+export const toItemInput = (row: ImportRow): NewItemInput => ({
   product: { brand: row.brand, name: row.name, category: 'Grocery' },
   sku: row.sku,
   barcode: row.barcode,
@@ -346,7 +346,7 @@ export async function runStockImport(
   const results: ImportResult[] = [];
   for (const row of rows) {
     try {
-      await create(toAccessoryInput(row));
+      await create(toItemInput(row));
       results.push({ row, status: 'created' });
     } catch (error) {
       results.push({ row, status: 'failed', error });

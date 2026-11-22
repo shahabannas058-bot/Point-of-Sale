@@ -8,7 +8,13 @@ import { Input } from '../components/ui/Field';
 import { Empty, ErrorBox, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
-import { formatDateTime, localMonthRange, monthYm, shiftMonth } from '../lib/dates';
+import {
+  formatDateTime,
+  inclusiveBounds,
+  localMonthRange,
+  monthYm,
+  shiftMonth,
+} from '../lib/dates';
 import { signedQtyText } from '../lib/item-history';
 import { qtyText } from '../lib/qty';
 import { useService } from '../service/context';
@@ -52,13 +58,7 @@ function Row({ e }: { e: StockLogEntry }): ReactNode {
         {qty(e.balanceAfter)}
       </td>
       <td data-label={t('adjlog.reason')}>
-        {e.repair ? (
-          <Link to={`/repairs/${e.repair.ticketId}`} className="font-semibold text-primary-ink">
-            {t('adjlog.repair', { no: e.repair.ticketNo })}
-          </Link>
-        ) : (
-          (e.reason ?? '—')
-        )}
+        {e.reason ?? '—'}
         {e.batch ? (
           <span className="ltr block text-xs text-muted">
             {e.batch.batchNo ?? ''} · {t('hist.exp')} {e.batch.expiryDate}
@@ -88,8 +88,11 @@ export function StockLog(): ReactNode {
     return () => window.clearTimeout(id);
   }, [q]);
 
-  const range = localMonthRange(ym);
-  const query = { from: range.fromMs, to: range.toMs, limit: PAGE, ...(term ? { q: term } : {}) };
+  const query = {
+    ...inclusiveBounds(localMonthRange(ym)),
+    limit: PAGE,
+    ...(term ? { q: term } : {}),
+  };
   const allowed = can('view_reports');
   const page = useServiceQuery((s) => s.reports.adjustments(query), [ym, term], allowed);
   // a new first page (filter change or any write) drops the pages loaded with "Load older"

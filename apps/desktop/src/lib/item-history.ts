@@ -4,6 +4,7 @@ import type {
   ItemHistoryPage,
   ItemHistoryQuery,
   ItemRef,
+  PosService,
   UnitLabel,
   UnitScale,
 } from '@pos/shared';
@@ -19,7 +20,6 @@ const KIND_KEY: Record<ItemHistoryKind, TKey> = {
   return: 'hist.kind.return',
   purchase: 'hist.kind.purchase',
   adjustment: 'hist.kind.adjustment',
-  repair: 'hist.kind.repair',
   transfer: 'hist.kind.transfer',
 };
 
@@ -33,7 +33,6 @@ export function historyKindTone(kind: ItemHistoryKind): Tone {
     case 'return':
       return 'success';
     case 'sale':
-    case 'repair':
       return 'danger';
     case 'adjustment':
       return 'warning';
@@ -49,13 +48,13 @@ export function signedQtyText(quantity: number, scale: UnitScale, unit: UnitLabe
 }
 
 export interface ReferenceLines {
-  /** What the movement belonged to: invoice + customer, supplier + bill no, ticket no, or the reason. */
+  /** What the movement belonged to: invoice + customer, supplier + bill no, or the reason. */
   main: string;
   /** Batch / expiry and any note that is not already the main line; null when there is nothing more to say. */
   sub: string | null;
 }
 
-/** The main line: "Invoice K-000012 · Haji Rafiq", "Supplier Mandi · ref 123", "Ticket R-0004", or the reason. */
+/** The main line: "Invoice K-000012 · Haji Rafiq", "Supplier Mandi · ref 123", or the reason. */
 export function referenceText(entry: Pick<ItemHistoryEntry, 'ref' | 'reason'>, t: TFn): string {
   const { ref } = entry;
   switch (ref.kind) {
@@ -71,8 +70,6 @@ export function referenceText(entry: Pick<ItemHistoryEntry, 'ref' | 'reason'>, t
       ]
         .filter(Boolean)
         .join(' · ');
-    case 'repair':
-      return `${t('repair.ticket')} ${ref.ticketNo}`;
     case 'adjustment':
       return entry.reason ?? '—';
     case 'transfer':
@@ -110,8 +107,8 @@ export const SUMMARY_ROWS: readonly [SummaryKey, TKey][] = [
 
 /**
  * The query bounds for the two date boxes (YYYY-MM-DD or empty). Both ends are whole local days, the
- * `to` day included; an empty box means unbounded on that side. A `to` before `from` is left to the service
- * (it simply finds nothing).
+ * `to` day included; an empty box means unbounded on that side. A `to` before `from` is not sent to the
+ * service: `fetchItemHistory` finds nothing for it.
  */
 export function historyDateRange(
   fromYmd: string,
@@ -123,16 +120,20 @@ export function historyDateRange(
   };
 }
 
-/** A stable key for a dialog's item, for query dependencies. */
-export const itemRefKey = (ref: ItemRef): string =>
-  'variantId' in ref ? `v:${ref.variantId}` : `p:${ref.phoneUnitId}`;
-
-/** Which item a cart line is: a variant or a phone unit; null for a line that has neither (should not happen). */
-export function cartLineItemRef(line: {
-  variantId?: string;
-  phoneUnitId?: string;
-}): ItemRef | null {
-  if (line.variantId) return { variantId: line.variantId };
-  if (line.phoneUnitId) return { phoneUnitId: line.phoneUnitId };
-  return null;
+/** One page of an item's history; null (nothing found, the service is not asked) when `to` is before `from`. */
+export function fetchItemHistory(
+  catalog: Pick<PosService['catalog'], 'itemHistory'>,
+  ref: ItemRef,
+  q: ItemHistoryQuery,
+): Promise<ItemHistoryPage | null> {
+  if (q.from !== undefined && q.to !== undefined && q.to < q.from) return Promise.resolve(null);
+  return catalog.itemHistory(ref, q);
 }
+
+/** A stable key for a dialog's item, for query dependencies. */
+export const itemRefKey = (ref: ItemRef): string => `v:${ref.itemId}`;
+
+/** Which item a cart line is. */
+export const cartLineItemRef = (line: { itemId: string }): ItemRef => ({
+  itemId: line.itemId,
+});

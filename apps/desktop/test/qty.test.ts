@@ -4,11 +4,12 @@ import {
   labelFor,
   parseSignedQuantity,
   perUnit,
+  minusQty,
   qtyStep,
   qtyText,
   quantityForAmount,
   quickLabel,
-  variantQtyText,
+  itemQtyText,
   weightForAmount,
   adjustmentDelta,
   qtyWithUnit,
@@ -58,6 +59,19 @@ describe('qtyStep: what + and - change', () => {
   it('is one piece, or 250 g for weighed goods', () => {
     expect(qtyStep(1)).toBe(1);
     expect(qtyStep(1000)).toBe(250);
+  });
+});
+
+describe('minusQty: the - key never raises a line (QA#14)', () => {
+  it('takes one step off, down to one step', () => {
+    expect(minusQty(3, 1)).toBe(2);
+    expect(minusQty(1, 1)).toBe(1);
+    expect(minusQty(1000, 1000)).toBe(750);
+    expect(minusQty(300, 1000)).toBe(250);
+  });
+
+  it('leaves a line already below one step as it is', () => {
+    expect(minusQty(100, 1000)).toBe(100);
   });
 });
 
@@ -238,10 +252,10 @@ describe('adjustmentDelta: the cashier picks add or remove and types a plain num
   });
 });
 
-describe('variantQtyText: a stock number in the item own unit', () => {
-  it('uses the variant unit', () => {
-    expect(variantQtyText(1250, { unitScale: 1000, unitLabel: 'kg' })).toBe('1.25 kg');
-    expect(variantQtyText(3, { unitScale: 1, unitLabel: 'pcs' })).toBe('3');
+describe('itemQtyText: a stock number in the item own unit', () => {
+  it('uses the item unit', () => {
+    expect(itemQtyText(1250, { unitScale: 1000, unitLabel: 'kg' })).toBe('1.25 kg');
+    expect(itemQtyText(3, { unitScale: 1, unitLabel: 'pcs' })).toBe('3');
   });
 });
 

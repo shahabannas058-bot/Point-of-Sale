@@ -2,6 +2,8 @@
 
 Date: 2026-10-18. Runner: vitest through npm (`npx vitest run …`, `npm run check`).
 
+> **Update 2026-11-21 (ADR-0011):** the mobile-shop demo was removed. `seedDemoData` now always seeds the kiryana shop, so the `businessType` argument and the "no option loads the mobile demo" test (row 9) no longer apply. The mock service (`?mock=1`) was deleted on 2026-10-18, and the first-load auto-seed in `service/runtime.ts` now loads the kiryana demo, so the two gaps below are closed. The phone, repair and warranty rows are historical.
+
 ## Source plan
 
 No `*.plan.md`. The journey comes from the previous session's "Exact Next Step" (kiryana demo data in

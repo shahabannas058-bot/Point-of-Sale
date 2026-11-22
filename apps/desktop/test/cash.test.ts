@@ -8,7 +8,6 @@ const zero = {
   cashRefunds: 0,
   udhaarCollected: 0,
   supplierPaid: 0,
-  repairCash: 0,
   expenses: 0,
   cashIn: 0,
   cashOut: 0,
@@ -28,11 +27,10 @@ describe('drawerRows', () => {
       cashRefunds: 1_000,
       udhaarCollected: 2_000,
       supplierPaid: 3_000,
-      repairCash: -400,
       expenses: 600,
       cashIn: 700,
       cashOut: 800,
-      expected: 7_400,
+      expected: 7_800,
     } as DrawerBreakdown;
     const rows = drawerRows(b);
     expect(rows.map((r) => [r.key, r.value])).toEqual([
@@ -41,7 +39,6 @@ describe('drawerRows', () => {
       ['cashRefunds', -1_000],
       ['udhaarCollected', 2_000],
       ['supplierPaid', -3_000],
-      ['repairCash', -400],
       ['expenses', -600],
       ['cashIn', 700],
       ['cashOut', -800],

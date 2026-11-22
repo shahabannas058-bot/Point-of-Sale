@@ -9,34 +9,69 @@ export interface SqlJsDriver extends SqlDriver {
 
 const PRAGMAS = 'PRAGMA foreign_keys=ON; PRAGMA recursive_triggers=ON;';
 
+/** Where the bytes go after each write, and how to rebuild the database from bytes saved earlier. */
+export interface SqlJsPersistence {
+  save(bytes: Uint8Array): Promise<void>;
+  reopen(bytes: Uint8Array): Database;
+}
+
 /**
  * SqlDriver over a sql.js Database. Pure and Vite-free so it can be unit-tested in Node.
  *
  * - `batch` is one atomic transaction (BEGIN IMMEDIATE ... COMMIT, ROLLBACK on any error).
- * - After every write, `persist(bytes)` is awaited, so a resolved sale is durable. Concurrent writes
+ * - After every write, `persist.save(bytes)` is awaited, so a resolved sale is durable. Concurrent writes
  *   are coalesced into a single export/put.
+ * - When a save fails, the in-memory database goes back to the last saved bytes before the error is thrown:
+ *   a write reported as failed must not be stored later by the next write (a retry would store it twice).
+ *   Writes waiting on that save are rejected as well, since their changes went with it.
  * - `db.export()` resets connection pragmas, so they are re-applied after each export.
  */
-export function createSqlJsDriver(
-  db: Database,
-  persist?: (bytes: Uint8Array) => Promise<void>,
-): SqlJsDriver {
+export function createSqlJsDriver(initial: Database, persist?: SqlJsPersistence): SqlJsDriver {
+  let db = initial;
   const applyPragmas = (): void => {
     db.exec(PRAGMAS);
   };
+  const exportNow = (): Uint8Array => {
+    const bytes = db.export();
+    applyPragmas();
+    return bytes;
+  };
   applyPragmas();
 
+  let saved = persist ? exportNow() : null; // the bytes the store holds (or will hold) as far as we know
+  let restores = 0;
   let chain: Promise<void> = Promise.resolve();
   let queued: Promise<void> | null = null;
+
+  /** Reopens before closing the old handle, so a failing reopen leaves the driver usable. */
+  const restoreSaved = (store: SqlJsPersistence, good: Uint8Array): void => {
+    const reopened = store.reopen(good);
+    db.close();
+    db = reopened;
+    applyPragmas();
+    restores += 1;
+    queued = null; // writes after the restore start a fresh save
+  };
 
   const persistNow = (): Promise<void> => {
     if (!persist) return Promise.resolve();
     if (queued) return queued;
+    const restoresAtQueue = restores;
     const run = chain.then(async () => {
       queued = null; // later writers start a fresh export so their changes are included
-      const bytes = db.export();
-      applyPragmas();
-      await persist(bytes);
+      if (restores !== restoresAtQueue) throw new Error('write undone: an earlier save failed');
+      const bytes = exportNow();
+      try {
+        await persist.save(bytes);
+        saved = bytes;
+      } catch (e) {
+        try {
+          if (saved) restoreSaved(persist, saved);
+        } catch {
+          // the reopen failed and the old handle stays open; the save error is the one the writer must see
+        }
+        throw e;
+      }
     });
     queued = run;
     chain = run.catch(() => undefined);
@@ -82,9 +117,7 @@ export function createSqlJsDriver(
       await persistNow();
     },
     exportBytes() {
-      const bytes = db.export();
-      applyPragmas();
-      return bytes;
+      return exportNow();
     },
     close() {
       db.close();

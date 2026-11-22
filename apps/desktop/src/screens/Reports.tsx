@@ -8,7 +8,7 @@ import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/
 import { dynKey, useT } from '../i18n';
 import { localDayRange, todayYmd } from '../lib/dates';
 import { formatRs } from '../lib/money';
-import { variantQtyText } from '../lib/qty';
+import { itemQtyText } from '../lib/qty';
 import { printPage } from '../lib/print';
 import { useServiceQuery } from '../service/use-query';
 import { useCan } from '../store/session';
@@ -218,13 +218,13 @@ export function Reports(): ReactNode {
                 </thead>
                 <tbody>
                   {s.lowStock.map((v) => (
-                    <tr key={v.variant.id}>
+                    <tr key={v.item.id}>
                       <td className="font-semibold">{v.label}</td>
-                      <td className="ltr font-mono text-xs">{v.variant.sku}</td>
+                      <td className="ltr font-mono text-xs">{v.item.sku}</td>
                       <td className="num font-bold text-[var(--danger-ink)]">
-                        {variantQtyText(v.onHand, v.variant)}
+                        {itemQtyText(v.onHand, v.item)}
                       </td>
-                      <td className="num">{variantQtyText(v.variant.reorderLevel, v.variant)}</td>
+                      <td className="num">{itemQtyText(v.item.reorderLevel, v.item)}</td>
                     </tr>
                   ))}
                 </tbody>

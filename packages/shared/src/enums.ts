@@ -1,17 +1,5 @@
 import { z } from 'zod';
 
-export const PRODUCT_KINDS = ['phone', 'accessory'] as const;
-export const ProductKindSchema = z.enum(PRODUCT_KINDS);
-export type ProductKind = z.infer<typeof ProductKindSchema>;
-
-export const PTA_STATUSES = ['approved', 'non_pta', 'jv'] as const;
-export const PtaStatusSchema = z.enum(PTA_STATUSES);
-export type PtaStatus = z.infer<typeof PtaStatusSchema>;
-
-export const PHONE_CONDITIONS = ['new', 'used', 'open_box'] as const;
-export const PhoneConditionSchema = z.enum(PHONE_CONDITIONS);
-export type PhoneCondition = z.infer<typeof PhoneConditionSchema>;
-
 export const STOCK_MOVEMENT_TYPES = [
   'sale',
   'purchase',
@@ -87,8 +75,7 @@ export const OUTBOX_ENTITY_TYPES = [
   'branch',
   'user',
   'product',
-  'phone_unit',
-  'accessory_variant',
+  'item',
   'customer',
   'supplier',
   'purchase',
@@ -96,11 +83,6 @@ export const OUTBOX_ENTITY_TYPES = [
   'stock_batch',
   'sale',
   'ledger_entry',
-  'repair_ticket',
-  'repair_status',
-  'repair_part',
-  'repair_payment',
-  'warranty',
   'cash_entry',
   'day_close',
 ] as const;

@@ -1,13 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { NewPhoneUnitInput } from '@pos/shared';
-import { isValidImei, imeiCheckDigit, luhnValid } from '../../src/service/catalog';
+import type { NewItemInput } from '@pos/shared';
 import {
   CHARGER_COST,
   CHARGER_PRICE,
-  IMEI_X,
-  IMEI_Y,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_PRICE,
   expectCode,
   first,
   makeService,
@@ -21,134 +17,50 @@ beforeEach(async () => {
   t = await makeService();
 });
 
-type PhoneInput = NewPhoneUnitInput & { openingStock?: boolean };
-const phoneInput = (over: Partial<PhoneInput> = {}): PhoneInput => ({
-  product: { brand: 'Infinix', name: 'Hot 40' },
-  imei1: IMEI_Y,
-  ptaStatus: 'approved',
-  condition: 'new',
-  costPrice: PHONE_COST,
-  salePrice: PHONE_PRICE,
+const itemInput = (over: Partial<NewItemInput> = {}): NewItemInput => ({
+  product: { brand: 'Shan', name: 'Biryani Masala' },
+  sku: 'SHAN-BIR',
+  costPrice: 9_000,
+  salePrice: 12_000,
   ...over,
 });
 
-describe('IMEI helpers', () => {
-  it('validates the Luhn check digit and length', () => {
-    expect(luhnValid(IMEI_X)).toBe(true);
-    expect(isValidImei(IMEI_X)).toBe(true);
-    expect(isValidImei(IMEI_Y)).toBe(true);
-    expect(isValidImei('356938035643808')).toBe(false);
-    expect(isValidImei('35693803564380')).toBe(false);
-    expect(isValidImei('35693803564380a')).toBe(false);
-    expect(imeiCheckDigit('35693803564380')).toBe('9');
-  });
-});
-
-describe('createPhoneUnit validation (spec 14)', () => {
-  it('a duplicate IMEI gives DUPLICATE {field: imei1} and writes nothing', async () => {
-    await t.loginAs('mgr');
-    const before = await snapshotCounts(t.driver);
-    const e = await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ imei1: IMEI_X })),
-      'DUPLICATE',
-    );
-    expect(e.details).toMatchObject({ field: 'imei1', value: IMEI_X });
-    expect(await snapshotCounts(t.driver)).toEqual(before);
-  });
-
-  it('an IMEI failing Luhn (or the wrong length) is VALIDATION', async () => {
-    await t.loginAs('mgr');
-    const bad = await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ imei1: '356938035643808' })),
-      'VALIDATION',
-    );
-    expect(bad.details).toMatchObject({ field: 'imei1' });
-    await expectCode(t.svc.catalog.createPhoneUnit(phoneInput({ imei1: '12345' })), 'VALIDATION');
-  });
-
+describe('createItem validation', () => {
   it('a non-integer price is MONEY_INVALID, a negative price VALIDATION', async () => {
     await t.loginAs('mgr');
-    await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ salePrice: 10.5 })),
-      'MONEY_INVALID',
-    );
-    await expectCode(
-      t.svc.catalog.createAccessory({
-        product: { brand: 'G', name: 'N' },
-        sku: 'S1',
-        costPrice: 10.5,
-        salePrice: 20,
-      }),
-      'MONEY_INVALID',
-    );
-    await expectCode(t.svc.catalog.createPhoneUnit(phoneInput({ costPrice: -1 })), 'VALIDATION');
+    await expectCode(t.svc.catalog.createItem(itemInput({ salePrice: 10.5 })), 'MONEY_INVALID');
+    await expectCode(t.svc.catalog.createItem(itemInput({ costPrice: 10.5 })), 'MONEY_INVALID');
+    await expectCode(t.svc.catalog.createItem(itemInput({ costPrice: -1 })), 'VALIDATION');
   });
 
-  it('needs an IMEI or a serial, a second IMEI needs the first, and the two must differ', async () => {
+  it('opening stock is a +qty adjustment; without it the item has no stock', async () => {
     await t.loginAs('mgr');
-    await expectCode(t.svc.catalog.createPhoneUnit(phoneInput({ imei1: null })), 'VALIDATION');
-    await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ imei1: null, imei2: IMEI_Y })),
-      'VALIDATION',
-    );
-    await expectCode(t.svc.catalog.createPhoneUnit(phoneInput({ imei2: IMEI_Y })), 'VALIDATION');
-    const serialOnly = await t.svc.catalog.createPhoneUnit(
-      phoneInput({ imei1: null, serial: 'SN-0001' }),
-    );
-    expect(serialOnly.unit.serial).toBe('SN-0001');
-    await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ imei1: null, serial: 'SN-0001' })),
-      'DUPLICATE',
-    );
-  });
+    const inStock = await t.svc.catalog.createItem(itemInput({ openingQty: 4 }));
+    expect(inStock.onHand).toBe(4);
+    expect(inStock.label).toContain('Biryani Masala');
+    expect(await stockSum(t.driver, { itemId: inStock.item.id })).toBe(4);
 
-  it('unknown PTA status / condition and an out-of-range battery are VALIDATION', async () => {
-    await t.loginAs('mgr');
-    await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ ptaStatus: 'maybe' as never })),
-      'VALIDATION',
-    );
-    await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ condition: 'broken' as never })),
-      'VALIDATION',
-    );
-    await expectCode(
-      t.svc.catalog.createPhoneUnit(phoneInput({ batteryHealthPct: 101 })),
-      'VALIDATION',
-    );
-  });
-
-  it('creates the unit with a +1 opening movement; openingStock:false leaves it out of stock', async () => {
-    await t.loginAs('mgr');
-    const inStock = await t.svc.catalog.createPhoneUnit(phoneInput());
-    expect(inStock.inStock).toBe(true);
-    expect(inStock.label).toContain('Hot 40');
-    expect(await stockSum(t.driver, { phoneUnitId: inStock.unit.id })).toBe(1);
-
-    const out = await t.svc.catalog.createPhoneUnit(
-      phoneInput({ imei1: null, serial: 'NOSTOCK-1', openingStock: false }),
-    );
-    expect(out.inStock).toBe(false);
+    const out = await t.svc.catalog.createItem(itemInput({ sku: 'SHAN-BIR-2' }));
+    expect(out.onHand).toBe(0);
+    expect(await stockSum(t.driver, { itemId: out.item.id })).toBe(0);
   });
 
   it('reuses the product for the same brand and name (case-insensitive)', async () => {
     await t.loginAs('mgr');
-    const a = await t.svc.catalog.createPhoneUnit(phoneInput({ imei1: null, serial: 'A1' }));
-    const b = await t.svc.catalog.createPhoneUnit(
-      phoneInput({ imei1: null, serial: 'A2', product: { brand: 'INFINIX', name: 'hot 40' } }),
+    const a = await t.svc.catalog.createItem(itemInput({ sku: 'A1' }));
+    const b = await t.svc.catalog.createItem(
+      itemInput({ sku: 'A2', product: { brand: 'SHAN', name: 'biryani masala' } }),
     );
     expect(b.product.id).toBe(a.product.id);
-    const rows = await t.driver.query<{ n: number }>(
-      "select count(*) as n from products where kind = 'phone'",
-    );
-    expect(rows[0]?.n).toBe(2); // Samsung (seed) + Infinix
+    const rows = await t.driver.query<{ n: number }>('select count(*) as n from products');
+    expect(rows[0]?.n).toBe(3); // Dalda + Generic (seed) + Shan
   });
 });
 
-describe('createAccessory, updates and stock adjustments', () => {
-  it('createAccessory books opening stock and low-stock flag follows on hand <= reorder level', async () => {
+describe('createItem, updates and stock adjustments', () => {
+  it('createItem books opening stock and low-stock flag follows on hand <= reorder level', async () => {
     await t.loginAs('mgr');
-    const v = await t.svc.catalog.createAccessory({
+    const v = await t.svc.catalog.createItem({
       product: { brand: 'Generic', name: 'Cable Type-C' },
       sku: 'CBL-1',
       barcode: '8961111111111',
@@ -161,7 +73,7 @@ describe('createAccessory, updates and stock adjustments', () => {
     });
     expect(v).toMatchObject({ onHand: 5, lowStock: true });
     const full = await t.svc.catalog.adjustStock({
-      variantId: v.variant.id,
+      itemId: v.item.id,
       delta: 1,
       reason: 'Found one',
     });
@@ -176,77 +88,109 @@ describe('createAccessory, updates and stock adjustments', () => {
       salePrice: 2,
     };
     const sku = await expectCode(
-      t.svc.catalog.createAccessory({ ...base, sku: 'CHG-25W' }),
+      t.svc.catalog.createItem({ ...base, sku: 'CHG-25W' }),
       'DUPLICATE',
     );
     expect(sku.details).toMatchObject({ field: 'sku' });
     const barcode = await expectCode(
-      t.svc.catalog.createAccessory({ ...base, sku: 'NEW-SKU', barcode: '8961234567890' }),
+      t.svc.catalog.createItem({ ...base, sku: 'NEW-SKU', barcode: '8961234567890' }),
       'DUPLICATE',
     );
     expect(barcode.details).toMatchObject({ field: 'barcode' });
   });
 
+  it('a scanner code is unique across SKU and barcode: one code finds one item', async () => {
+    await t.loginAs('mgr');
+    const before = await snapshotCounts(t.driver);
+    // barcode = the charger's SKU
+    const a = await expectCode(
+      t.svc.catalog.createItem(itemInput({ sku: 'CBL-1', barcode: 'CHG-25W' })),
+      'DUPLICATE',
+    );
+    expect(a.details).toMatchObject({ table: 'items', field: 'barcode' });
+    // SKU = the charger's barcode
+    const b = await expectCode(
+      t.svc.catalog.createItem(itemInput({ sku: '8961234567890' })),
+      'DUPLICATE',
+    );
+    expect(b.details).toMatchObject({ table: 'items', field: 'sku' });
+    expect(await snapshotCounts(t.driver)).toEqual(before);
+    const hits = await t.svc.catalog.search('CHG-25W');
+    expect(hits.filter((h) => h.matchedBy !== 'name')).toHaveLength(1);
+  });
+
+  it('updateItem refuses a barcode equal to another item SKU or barcode, but allows its own SKU', async () => {
+    await t.loginAs('mgr');
+    const e = await expectCode(
+      t.svc.catalog.updateItem(t.ids.cartonId, { barcode: 'CHG-25W' }),
+      'DUPLICATE',
+    );
+    expect(e.details).toMatchObject({ field: 'barcode' });
+    await expectCode(
+      t.svc.catalog.updateItem(t.ids.cartonId, { barcode: '8961234567890' }),
+      'DUPLICATE',
+    );
+    const own = await t.svc.catalog.updateItem(t.ids.cartonId, { barcode: 'GHEE-CTN' });
+    expect(own.item.barcode).toBe('GHEE-CTN');
+    const same = await t.svc.catalog.updateItem(t.ids.chargerId, { barcode: '8961234567890' });
+    expect(same.item.barcode).toBe('8961234567890');
+  });
+
   it('adjustStock needs a reason, refuses to go below zero and logs the movement', async () => {
     await t.loginAs('mgr');
     await expectCode(
-      t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: -1, reason: '  ' }),
+      t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: -1, reason: '  ' }),
       'VALIDATION',
     );
     await expectCode(
-      t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: 0, reason: 'x' }),
+      t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: 0, reason: 'x' }),
       'VALIDATION',
     );
     const e = await expectCode(
-      t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: -11, reason: 'Lost' }),
+      t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: -11, reason: 'Lost' }),
       'STOCK_INSUFFICIENT',
     );
     expect(e.details).toMatchObject({ onHand: 10, requested: 11 });
     const after = await t.svc.catalog.adjustStock({
-      variantId: t.ids.chargerId,
+      itemId: t.ids.chargerId,
       delta: -4,
       reason: 'Damaged in transit',
     });
     expect(after.onHand).toBe(6);
     const moves = await t.driver.query<{ type: string; quantity: number; reason: string }>(
-      'select type, quantity, reason from stock_movements where variant_id = ? and quantity < 0',
+      'select type, quantity, reason from stock_movements where item_id = ? and quantity < 0',
       [t.ids.chargerId],
     );
     expect(moves).toEqual([{ type: 'adjustment', quantity: -4, reason: 'Damaged in transit' }]);
     await expectCode(
-      t.svc.catalog.adjustStock({ variantId: t.newId(), delta: 1, reason: 'x' }),
+      t.svc.catalog.adjustStock({ itemId: t.newId(), delta: 1, reason: 'x' }),
       'NOT_FOUND',
     );
   });
 
-  it('updatePhoneUnit and updateVariant change prices without touching stock', async () => {
+  it('updateItem changes prices without touching stock', async () => {
     await t.loginAs('mgr');
-    const phone = await t.svc.catalog.updatePhoneUnit(t.ids.phoneId, {
+    const carton = await t.svc.catalog.updateItem(t.ids.cartonId, {
       salePrice: 9_000_000,
-      ptaStatus: 'non_pta',
-      note: 'Price up',
+      model: '16kg tin',
     });
-    expect(phone.unit).toMatchObject({
-      salePrice: 9_000_000,
-      ptaStatus: 'non_pta',
-      note: 'Price up',
-    });
-    expect(phone.inStock).toBe(true);
-    const variant = await t.svc.catalog.updateVariant(t.ids.chargerId, {
+    expect(carton.item).toMatchObject({ salePrice: 9_000_000, model: '16kg tin' });
+    expect(carton.onHand).toBe(1);
+    const item = await t.svc.catalog.updateItem(t.ids.chargerId, {
       salePrice: 160_000,
       reorderLevel: 8,
     });
-    expect(variant.variant).toMatchObject({ salePrice: 160_000, reorderLevel: 8 });
-    expect(variant.onHand).toBe(10);
+    expect(item.item).toMatchObject({ salePrice: 160_000, reorderLevel: 8 });
+    expect(item.onHand).toBe(10);
     await expectCode(
-      t.svc.catalog.updateVariant(t.ids.chargerId, { salePrice: 1.5 }),
+      t.svc.catalog.updateItem(t.ids.chargerId, { salePrice: 1.5 }),
       'MONEY_INVALID',
     );
-    await expectCode(t.svc.catalog.updatePhoneUnit(t.newId(), { salePrice: 1 }), 'NOT_FOUND');
+    await expectCode(t.svc.catalog.updateItem(t.newId(), { salePrice: 1 }), 'NOT_FOUND');
     // sold invoices keep the price at the time of sale
     await t.loginAs('owner');
     const preview = await t.svc.checkout.preview({
-      lines: [{ variantId: t.ids.chargerId, quantity: 1 }],
+      lines: [{ itemId: t.ids.chargerId, quantity: 1 }],
     });
     expect(preview.total).toBe(160_000);
   });
@@ -254,7 +198,7 @@ describe('createAccessory, updates and stock adjustments', () => {
   it('only edit_catalog roles may create or update; stock-entry hook is consulted', async () => {
     await t.loginAs('cash');
     await expectCode(
-      t.svc.catalog.createAccessory({
+      t.svc.catalog.createItem({
         product: { brand: 'G', name: 'N' },
         sku: 'Z1',
         costPrice: 1,
@@ -262,18 +206,17 @@ describe('createAccessory, updates and stock adjustments', () => {
       }),
       'FORBIDDEN',
     );
-    await expectCode(t.svc.catalog.updateVariant(t.ids.chargerId, { salePrice: 1 }), 'FORBIDDEN');
-    await expectCode(t.svc.catalog.updatePhoneUnit(t.ids.phoneId, { salePrice: 1 }), 'FORBIDDEN');
+    await expectCode(t.svc.catalog.updateItem(t.ids.chargerId, { salePrice: 1 }), 'FORBIDDEN');
     t.svc.auth.logout();
     await t.loginAs('mgr');
-    await t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: 1, reason: 'x' });
+    await t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: 1, reason: 'x' });
     expect(t.assertCanSell).toHaveBeenLastCalledWith(
       expect.objectContaining({ action: 'stock_entry' }),
     );
     t.assertCanSell.mockRejectedValueOnce(new Error('locked'));
     const before = await snapshotCounts(t.driver);
     await expectCode(
-      t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: 1, reason: 'x' }),
+      t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: 1, reason: 'x' }),
       'INTERNAL',
     );
     expect(await snapshotCounts(t.driver)).toEqual(before);
@@ -287,38 +230,38 @@ describe('search and listing', () => {
     expect(await t.svc.catalog.search('charger')).toHaveLength(1);
   });
 
-  it('a barcode scan returns exactly one exact hit; so do SKU and IMEI', async () => {
+  it('a barcode scan returns exactly one exact hit; so does a SKU', async () => {
     await t.loginAs('cash');
     const byBarcode = await t.svc.catalog.search('8961234567890');
     expect(byBarcode).toHaveLength(1);
-    expect(byBarcode[0]).toMatchObject({ kind: 'variant', matchedBy: 'barcode' });
-    const bySku = await t.svc.catalog.search('CHG-25W');
-    expect(bySku[0]).toMatchObject({ kind: 'variant', matchedBy: 'sku' });
-    const byImei = await t.svc.catalog.search(IMEI_X);
-    expect(byImei).toHaveLength(1);
-    expect(byImei[0]).toMatchObject({ kind: 'phone_unit', matchedBy: 'imei' });
+    expect(byBarcode[0]).toMatchObject({ kind: 'item', matchedBy: 'barcode' });
+    const bySku = await t.svc.catalog.search('GHEE-CTN');
+    expect(bySku).toHaveLength(1);
+    expect(bySku[0]).toMatchObject({ kind: 'item', matchedBy: 'sku' });
   });
 
   it('text search is multi-word, case-insensitive and honours inStockOnly and limit', async () => {
     await t.loginAs('cash');
-    expect((await t.svc.catalog.search('samsung a55')).map((h) => h.kind)).toEqual(['phone_unit']);
+    expect((await t.svc.catalog.search('dalda ghee')).map((h) => h.item.item.id)).toEqual([
+      t.ids.cartonId,
+    ]);
     expect(await t.svc.catalog.search('nokia')).toEqual([]);
     expect(await t.svc.catalog.search('   ')).toEqual([]);
     expect(await t.svc.catalog.search('%')).toEqual([]); // LIKE wildcards are escaped
     await t.loginAs('owner');
     await t.svc.checkout.commit({
-      lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1 }],
-      payments: [{ method: 'cash', amount: PHONE_PRICE }],
+      lines: [{ itemId: t.ids.cartonId, quantity: 1 }],
+      payments: [{ method: 'cash', amount: CARTON_PRICE }],
     });
-    expect(await t.svc.catalog.search('samsung', { inStockOnly: true })).toEqual([]);
-    expect(await t.svc.catalog.search('samsung')).toHaveLength(1);
+    expect(await t.svc.catalog.search('dalda', { inStockOnly: true })).toEqual([]);
+    expect(await t.svc.catalog.search('dalda')).toHaveLength(1);
     expect(await t.svc.catalog.search('e', { limit: 1 })).toHaveLength(1);
   });
 
   it('names that start with the typed text come first; prefixOnly drops the rest', async () => {
     await t.loginAs('mgr');
     const add = (brand: string, name: string, sku: string): Promise<unknown> =>
-      t.svc.catalog.createAccessory({
+      t.svc.catalog.createItem({
         product: { brand, name },
         sku,
         costPrice: 100,
@@ -330,7 +273,7 @@ describe('search and listing', () => {
     await add('Generic', 'Zinc Plate', 'ZP-1'); // a word starts with z
     await add('Zed', 'Cable', 'ZC-1'); // the whole label starts with z
     const skus = (hits: Awaited<ReturnType<typeof t.svc.catalog.search>>): string[] =>
-      hits.flatMap((h) => (h.kind === 'variant' ? [h.item.variant.sku] : []));
+      hits.map((h) => h.item.item.sku);
     expect(skus(await t.svc.catalog.search('z', { inStockOnly: true }))).toEqual([
       'ZC-1',
       'ZP-1',
@@ -341,34 +284,28 @@ describe('search and listing', () => {
     expect(skus(await t.svc.catalog.search('zi', { prefixOnly: true }))).toEqual(['ZP-1']);
   });
 
-  it('listPhones filters by stock, PTA and condition; listAccessories by low stock', async () => {
+  it('listItems filters by text and by low stock', async () => {
     await t.loginAs('mgr');
-    await t.svc.catalog.createPhoneUnit(
-      phoneInput({ imei1: null, serial: 'USED-1', ptaStatus: 'non_pta', condition: 'used' }),
-    );
-    expect(await t.svc.catalog.listPhones()).toHaveLength(2);
-    expect((await t.svc.catalog.listPhones({ pta: 'non_pta' })).map((p) => p.unit.serial)).toEqual([
-      'USED-1',
+    expect(await t.svc.catalog.listItems()).toHaveLength(2);
+    expect((await t.svc.catalog.listItems({ q: 'ghee' })).map((v) => v.item.id)).toEqual([
+      t.ids.cartonId,
     ]);
-    expect(await t.svc.catalog.listPhones({ condition: 'new' })).toHaveLength(1);
-    expect(await t.svc.catalog.listPhones({ inStock: false })).toEqual([]);
-    expect(await t.svc.catalog.listPhones({ q: 'galaxy' })).toHaveLength(1);
-
-    expect(await t.svc.catalog.listAccessories({ lowStockOnly: true })).toEqual([]);
+    // the carton (1 on hand, reorder level 0) is not low; neither is the charger (10 > 3)
+    expect(await t.svc.catalog.listItems({ lowStockOnly: true })).toEqual([]);
     await t.svc.catalog.adjustStock({
-      variantId: t.ids.chargerId,
+      itemId: t.ids.chargerId,
       delta: -7,
       reason: 'Sold elsewhere',
     });
-    const low = await t.svc.catalog.listAccessories({ lowStockOnly: true });
-    expect(low.map((v) => v.variant.id)).toEqual([t.ids.chargerId]);
+    const low = await t.svc.catalog.listItems({ lowStockOnly: true });
+    expect(low.map((v) => v.item.id)).toEqual([t.ids.chargerId]);
     expect(first(low)).toMatchObject({ onHand: 3, lowStock: true });
   });
 
   it('the seeded charger prices are what the tests assume', async () => {
-    await t.loginAs('cash');
-    const [v] = await t.svc.catalog.listAccessories();
-    expect(v?.variant).toMatchObject({
+    await t.loginAs('mgr'); // a cashier gets cost 0 (cost-visibility.test.ts)
+    const v = (await t.svc.catalog.listItems()).find((x) => x.item.id === t.ids.chargerId);
+    expect(v?.item).toMatchObject({
       costPrice: CHARGER_COST,
       salePrice: CHARGER_PRICE,
       reorderLevel: 3,

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { hasBadPick, remainingText, returnPick, returnPickList } from '../src/lib/return-qty';
+import {
+  hasBadPick,
+  remainingText,
+  returnBadgeKey,
+  returnPick,
+  returnPickList,
+} from '../src/lib/return-qty';
 
 const pieces = { unitScale: 1, remainingQty: 3 } as const;
 const weighed = { unitScale: 1000, remainingQty: 1500 } as const; // 1.5 kg left to return
@@ -96,5 +102,16 @@ describe('remainingText: the limit shown in the box', () => {
     expect(remainingText(pieces)).toBe('3');
     expect(remainingText(weighed)).toBe('1.5');
     expect(remainingText({ unitScale: 1000, remainingQty: 250 })).toBe('0.25');
+  });
+});
+
+describe('returnBadgeKey: the badge on a sale in the Sales list (S10)', () => {
+  it('says Returned once returns or a void cover the whole sale', () => {
+    expect(returnBadgeKey({ total: 10_000, returnedTotal: 10_000 })).toBe('sales.fullyReturned');
+  });
+
+  it('says Partly returned for a part, and nothing without returns', () => {
+    expect(returnBadgeKey({ total: 10_000, returnedTotal: 2_500 })).toBe('sales.partlyReturned');
+    expect(returnBadgeKey({ total: 10_000, returnedTotal: 0 })).toBeNull();
   });
 });

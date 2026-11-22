@@ -15,10 +15,20 @@ import {
 const read = <T>(name: string): T =>
   JSON.parse(readFileSync(new URL(`../../../testdata/${name}`, import.meta.url), 'utf8')) as T;
 
+/** The file keeps the hash payload's legacy line key "variantId" (see scripts/generate-vectors.ts); the contract says itemId. */
+type VectorInvoice = Omit<UnsealedInvoice, 'lines'> & { lines: Record<string, unknown>[] };
+const fromVectorData = (inv: VectorInvoice): UnsealedInvoice =>
+  ({
+    ...inv,
+    lines: inv.lines.map((l) =>
+      Object.fromEntries(Object.entries(l).map(([k, v]) => [k === 'variantId' ? 'itemId' : k, v])),
+    ),
+  }) as unknown as UnsealedInvoice;
+
 interface InvoiceVector {
   name: string;
   previous_hash: string;
-  unsealed_data: UnsealedInvoice;
+  unsealed_data: VectorInvoice;
   canonical: string;
   expected_hash: string;
 }
@@ -34,8 +44,10 @@ describe('golden invoice vectors (shared with C#)', () => {
   it.each(vectors.map((v) => [v.name, v] as const))(
     '%s: canonical form and hash are stable',
     (_n, v) => {
-      expect(canonicalize(invoiceHashPayload(v.unsealed_data))).toBe(v.canonical);
-      expect(computeInvoiceHash(v.previous_hash, v.unsealed_data)).toBe(v.expected_hash);
+      const unsealed = fromVectorData(v.unsealed_data);
+      expect(unsealed.lines.every((l) => typeof l.itemId === 'string')).toBe(true);
+      expect(canonicalize(invoiceHashPayload(unsealed))).toBe(v.canonical);
+      expect(computeInvoiceHash(v.previous_hash, unsealed)).toBe(v.expected_hash);
     },
   );
 

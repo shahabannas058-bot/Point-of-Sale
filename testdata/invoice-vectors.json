@@ -27,7 +27,6 @@
             "saleId": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Fast Charger 25W",
             "quantity": 2,
@@ -42,9 +41,8 @@
             "saleId": "0199c82c-c007-76a3-a3d0-fb1b2a2e50e7",
             "lineNo": 2,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": "0199c82c-c005-74ef-987f-fed73952b6db",
-            "variantId": null,
-            "description": "Galaxy A55 8/256 \u00b7 IMEI 356938035643809",
+            "variantId": "0199c82c-c005-74ef-987f-fed73952b6db",
+            "description": "Basmati Rice 5kg",
             "quantity": 1,
             "unitPrice": 199950,
             "costPrice": 149962,
@@ -72,12 +70,12 @@
           }
         ]
       },
-      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000060000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c007-76a3-a3d0-fb1b2a2e50e7\",\"invoiceNo\":\"A-000001\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":30000,\"createdAt\":1760000060000,\"description\":\"Fast Charger 25W\",\"discountAmount\":0,\"id\":\"0199c82c-c008-7647-a081-67a7bf22566c\",\"lineNo\":1,\"lineTotal\":100000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2,\"unitPrice\":50000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"},{\"costPrice\":149962,\"createdAt\":1760000060000,\"description\":\"Galaxy A55 8/256 \u00b7 IMEI 356938035643809\",\"discountAmount\":19995,\"id\":\"0199c82c-c009-741f-adb1-501b37dfefe2\",\"lineNo\":2,\"lineTotal\":179955,\"phoneUnitId\":\"0199c82c-c005-74ef-987f-fed73952b6db\",\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":199950,\"variantId\":null}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":179955,\"createdAt\":1760000060000,\"id\":\"0199c82c-c00a-752b-85c9-c231f9261957\",\"method\":\"cash\",\"reference\":null},{\"amount\":100000,\"createdAt\":1760000060000,\"id\":\"0199c82c-c00b-7421-a114-68567d8c8dda\",\"method\":\"khata\",\"reference\":null}],\"seq\":1,\"subtotal\":279955,\"total\":279955,\"v\":1}",
-      "expected_hash": "233fe105f884dabacfed7e8defc85a6d0f667e639832109957ae4fb5200b4f9f"
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000060000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c007-76a3-a3d0-fb1b2a2e50e7\",\"invoiceNo\":\"A-000001\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":30000,\"createdAt\":1760000060000,\"description\":\"Fast Charger 25W\",\"discountAmount\":0,\"id\":\"0199c82c-c008-7647-a081-67a7bf22566c\",\"lineNo\":1,\"lineTotal\":100000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2,\"unitPrice\":50000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"},{\"costPrice\":149962,\"createdAt\":1760000060000,\"description\":\"Basmati Rice 5kg\",\"discountAmount\":19995,\"id\":\"0199c82c-c009-741f-adb1-501b37dfefe2\",\"lineNo\":2,\"lineTotal\":179955,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":199950,\"variantId\":\"0199c82c-c005-74ef-987f-fed73952b6db\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":179955,\"createdAt\":1760000060000,\"id\":\"0199c82c-c00a-752b-85c9-c231f9261957\",\"method\":\"cash\",\"reference\":null},{\"amount\":100000,\"createdAt\":1760000060000,\"id\":\"0199c82c-c00b-7421-a114-68567d8c8dda\",\"method\":\"khata\",\"reference\":null}],\"seq\":1,\"subtotal\":279955,\"total\":279955,\"v\":1}",
+      "expected_hash": "8898789cfba380f8eaea81a01c2ab426e70ccc2f38740d1ff8b30ca5481a6e92"
     },
     {
       "name": "urdu-text",
-      "previous_hash": "233fe105f884dabacfed7e8defc85a6d0f667e639832109957ae4fb5200b4f9f",
+      "previous_hash": "8898789cfba380f8eaea81a01c2ab426e70ccc2f38740d1ff8b30ca5481a6e92",
       "unsealed_data": {
         "id": "0199c82c-c00c-7470-a0b5-b1801ffc8182",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -100,9 +98,8 @@
             "saleId": "0199c82c-c00c-7470-a0b5-b1801ffc8182",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": "0199c82c-c005-74ef-987f-fed73952b6db",
-            "variantId": null,
-            "description": "\u0633\u06cc\u0645\u0633\u0646\u06af \u06af\u0644\u06cc\u06a9\u0633\u06cc A55 (\u0646\u06cc\u0644\u0627, 8/256GB) \u00b7 IMEI 356938035643809",
+            "variantId": "0199c82c-c005-74ef-987f-fed73952b6db",
+            "description": "\u0628\u0627\u0633\u0645\u062a\u06cc \u0686\u0627\u0648\u0644 (\u0633\u067e\u0631 \u06a9\u0631\u0646\u0644, 5 \u06a9\u0644\u0648) \u00b7 \u0628\u0648\u0631\u06cc",
             "quantity": 1,
             "unitPrice": 8500000,
             "costPrice": 6375000,
@@ -122,12 +119,12 @@
           }
         ]
       },
-      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000120000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c00c-7470-a0b5-b1801ffc8182\",\"invoiceNo\":\"A-000002\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":6375000,\"createdAt\":1760000120000,\"description\":\"\u0633\u06cc\u0645\u0633\u0646\u06af \u06af\u0644\u06cc\u06a9\u0633\u06cc A55 (\u0646\u06cc\u0644\u0627, 8/256GB) \u00b7 IMEI 356938035643809\",\"discountAmount\":0,\"id\":\"0199c82c-c00d-7596-8c2b-50ee94d5e3f2\",\"lineNo\":1,\"lineTotal\":8500000,\"phoneUnitId\":\"0199c82c-c005-74ef-987f-fed73952b6db\",\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":8500000,\"variantId\":null}],\"note\":\"\u0646\u0642\u062f \u0627\u062f\u0627\u0626\u06cc\u06af\u06cc \u2014 \u0634\u06a9\u0631\u06cc\u06c1 \u2713\",\"originalSaleId\":null,\"payments\":[{\"amount\":8500000,\"createdAt\":1760000120000,\"id\":\"0199c82c-c00e-7242-aeae-dcc53b840880\",\"method\":\"cash\",\"reference\":null}],\"seq\":2,\"subtotal\":8500000,\"total\":8500000,\"v\":1}",
-      "expected_hash": "fc41630d087347c1646cf2d4e03684a28dcf4faf15478169b1980fe8c9236ad8"
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000120000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c00c-7470-a0b5-b1801ffc8182\",\"invoiceNo\":\"A-000002\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":6375000,\"createdAt\":1760000120000,\"description\":\"\u0628\u0627\u0633\u0645\u062a\u06cc \u0686\u0627\u0648\u0644 (\u0633\u067e\u0631 \u06a9\u0631\u0646\u0644, 5 \u06a9\u0644\u0648) \u00b7 \u0628\u0648\u0631\u06cc\",\"discountAmount\":0,\"id\":\"0199c82c-c00d-7596-8c2b-50ee94d5e3f2\",\"lineNo\":1,\"lineTotal\":8500000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":8500000,\"variantId\":\"0199c82c-c005-74ef-987f-fed73952b6db\"}],\"note\":\"\u0646\u0642\u062f \u0627\u062f\u0627\u0626\u06cc\u06af\u06cc \u2014 \u0634\u06a9\u0631\u06cc\u06c1 \u2713\",\"originalSaleId\":null,\"payments\":[{\"amount\":8500000,\"createdAt\":1760000120000,\"id\":\"0199c82c-c00e-7242-aeae-dcc53b840880\",\"method\":\"cash\",\"reference\":null}],\"seq\":2,\"subtotal\":8500000,\"total\":8500000,\"v\":1}",
+      "expected_hash": "cab429bc8563b09a3b157a3ba1013c247291e93101a4183861b0f63d30b8cb01"
     },
     {
       "name": "special-characters",
-      "previous_hash": "fc41630d087347c1646cf2d4e03684a28dcf4faf15478169b1980fe8c9236ad8",
+      "previous_hash": "cab429bc8563b09a3b157a3ba1013c247291e93101a4183861b0f63d30b8cb01",
       "unsealed_data": {
         "id": "0199c82c-c00f-71cf-a481-ddfaf108278f",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -150,7 +147,6 @@
             "saleId": "0199c82c-c00f-71cf-a481-ddfaf108278f",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Cable \"USB-C\" \\ 1m / <fast> & 'strong'",
             "quantity": 1,
@@ -173,11 +169,11 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000180000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":100,\"id\":\"0199c82c-c00f-71cf-a481-ddfaf108278f\",\"invoiceNo\":\"A-000003\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":72000,\"createdAt\":1760000180000,\"description\":\"Cable \\\"USB-C\\\" \\\\ 1m / <fast> & 'strong'\",\"discountAmount\":0,\"id\":\"0199c82c-c010-701c-ae27-9780e3d16267\",\"lineNo\":1,\"lineTotal\":120000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":120000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":\"line1\\nline2\\ttab \\u0001 ctrl, emoji \ud83d\ude00, DEL \u007f, LS \u2028, </script> & \\\"q\\\" \\\\ /\",\"originalSaleId\":null,\"payments\":[{\"amount\":119900,\"createdAt\":1760000180000,\"id\":\"0199c82c-c011-7447-8a82-4842f5a6c70b\",\"method\":\"cash\",\"reference\":\"REF \\\"A\\\\B\\\"\"}],\"seq\":3,\"subtotal\":120000,\"total\":119900,\"v\":1}",
-      "expected_hash": "e92b426ce36ccaf6e2327cd223be1adfc9fe3222d921b269de4fb40a5170f2a1"
+      "expected_hash": "a1f81a937930e879451729db8b2e6030fb29079efc59d337048d463911229ca2"
     },
     {
       "name": "null-customer-cash",
-      "previous_hash": "e92b426ce36ccaf6e2327cd223be1adfc9fe3222d921b269de4fb40a5170f2a1",
+      "previous_hash": "a1f81a937930e879451729db8b2e6030fb29079efc59d337048d463911229ca2",
       "unsealed_data": {
         "id": "0199c82c-c012-77a6-bfe2-bbd6bf283439",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -200,7 +196,6 @@
             "saleId": "0199c82c-c012-77a6-bfe2-bbd6bf283439",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Screen Guard",
             "quantity": 3,
@@ -223,11 +218,11 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000240000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c012-77a6-bfe2-bbd6bf283439\",\"invoiceNo\":\"A-000004\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":750,\"createdAt\":1760000240000,\"description\":\"Screen Guard\",\"discountAmount\":50,\"id\":\"0199c82c-c013-77ae-a76d-623d8a6aa327\",\"lineNo\":1,\"lineTotal\":3700,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":3,\"unitPrice\":1250,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":3700,\"createdAt\":1760000240000,\"id\":\"0199c82c-c014-75d7-846c-b7c1ba53ff5f\",\"method\":\"cash\",\"reference\":null}],\"seq\":4,\"subtotal\":3700,\"total\":3700,\"v\":1}",
-      "expected_hash": "2997bde73412fe7c770467556455f2200084f015926832531ec20e8ec1721944"
+      "expected_hash": "7dc2f35375e584cc4f588ca5f91bf747eef9038ea8f8c74abf833685bfc212e3"
     },
     {
       "name": "return-negative-discount",
-      "previous_hash": "2997bde73412fe7c770467556455f2200084f015926832531ec20e8ec1721944",
+      "previous_hash": "7dc2f35375e584cc4f588ca5f91bf747eef9038ea8f8c74abf833685bfc212e3",
       "unsealed_data": {
         "id": "0199c82c-c015-7152-a66a-5384c3187e40",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -241,7 +236,7 @@
         "subtotal": -179955,
         "discountTotal": -500,
         "total": -179455,
-        "note": "wapsi \u2014 screen crack",
+        "note": "wapsi \u2014 bori phati hui",
         "createdAt": 1760000300000,
         "hashVersion": 1,
         "lines": [
@@ -250,9 +245,8 @@
             "saleId": "0199c82c-c015-7152-a66a-5384c3187e40",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": "0199c82c-c005-74ef-987f-fed73952b6db",
-            "variantId": null,
-            "description": "Galaxy A55 8/256 \u00b7 IMEI 356938035643809",
+            "variantId": "0199c82c-c005-74ef-987f-fed73952b6db",
+            "description": "Basmati Rice 5kg",
             "quantity": -1,
             "unitPrice": 199950,
             "costPrice": 149962,
@@ -280,12 +274,12 @@
           }
         ]
       },
-      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000300000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":-500,\"id\":\"0199c82c-c015-7152-a66a-5384c3187e40\",\"invoiceNo\":\"A-000005\",\"kind\":\"return\",\"lines\":[{\"costPrice\":149962,\"createdAt\":1760000300000,\"description\":\"Galaxy A55 8/256 \u00b7 IMEI 356938035643809\",\"discountAmount\":-19995,\"id\":\"0199c82c-c016-7248-b1f1-10630e2bbbb7\",\"lineNo\":1,\"lineTotal\":-179955,\"phoneUnitId\":\"0199c82c-c005-74ef-987f-fed73952b6db\",\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":-1,\"unitPrice\":199950,\"variantId\":null}],\"note\":\"wapsi \u2014 screen crack\",\"originalSaleId\":\"0199c82c-c007-76a3-a3d0-fb1b2a2e50e7\",\"payments\":[{\"amount\":-79455,\"createdAt\":1760000300000,\"id\":\"0199c82c-c017-7616-996a-c06be4936015\",\"method\":\"cash\",\"reference\":null},{\"amount\":-100000,\"createdAt\":1760000300000,\"id\":\"0199c82c-c018-74e3-8368-02b636e2d5ed\",\"method\":\"khata\",\"reference\":null}],\"seq\":5,\"subtotal\":-179955,\"total\":-179455,\"v\":1}",
-      "expected_hash": "600ad683e0b922f067f12e0c6398f4f466005f0a5ab82187947b0a8e084cb12b"
+      "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000300000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":-500,\"id\":\"0199c82c-c015-7152-a66a-5384c3187e40\",\"invoiceNo\":\"A-000005\",\"kind\":\"return\",\"lines\":[{\"costPrice\":149962,\"createdAt\":1760000300000,\"description\":\"Basmati Rice 5kg\",\"discountAmount\":-19995,\"id\":\"0199c82c-c016-7248-b1f1-10630e2bbbb7\",\"lineNo\":1,\"lineTotal\":-179955,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":-1,\"unitPrice\":199950,\"variantId\":\"0199c82c-c005-74ef-987f-fed73952b6db\"}],\"note\":\"wapsi \u2014 bori phati hui\",\"originalSaleId\":\"0199c82c-c007-76a3-a3d0-fb1b2a2e50e7\",\"payments\":[{\"amount\":-79455,\"createdAt\":1760000300000,\"id\":\"0199c82c-c017-7616-996a-c06be4936015\",\"method\":\"cash\",\"reference\":null},{\"amount\":-100000,\"createdAt\":1760000300000,\"id\":\"0199c82c-c018-74e3-8368-02b636e2d5ed\",\"method\":\"khata\",\"reference\":null}],\"seq\":5,\"subtotal\":-179955,\"total\":-179455,\"v\":1}",
+      "expected_hash": "eaa7349acdac48dac6e29899d09af4358d0a06afa7300a51cf1b7a077ca58024"
     },
     {
       "name": "three-way-split-scrambled",
-      "previous_hash": "600ad683e0b922f067f12e0c6398f4f466005f0a5ab82187947b0a8e084cb12b",
+      "previous_hash": "eaa7349acdac48dac6e29899d09af4358d0a06afa7300a51cf1b7a077ca58024",
       "unsealed_data": {
         "id": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -308,7 +302,6 @@
             "saleId": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
             "lineNo": 2,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Earbuds",
             "quantity": 1,
@@ -323,7 +316,6 @@
             "saleId": "0199c82c-c019-734d-a24e-eaf34d4e17ef",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Back Cover",
             "quantity": 1,
@@ -362,11 +354,11 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000360000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":2500,\"id\":\"0199c82c-c019-734d-a24e-eaf34d4e17ef\",\"invoiceNo\":\"A-000006\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":180000,\"createdAt\":1760000360000,\"description\":\"Back Cover\",\"discountAmount\":0,\"id\":\"0199c82c-c01a-774c-9182-675d2fa0ba97\",\"lineNo\":1,\"lineTotal\":300000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":300000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"},{\"costPrice\":90000,\"createdAt\":1760000360000,\"description\":\"Earbuds\",\"discountAmount\":0,\"id\":\"0199c82c-c01b-76e4-b2e4-1d19e3bd686c\",\"lineNo\":2,\"lineTotal\":150000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1,\"unitPrice\":150000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":200000,\"createdAt\":1760000360000,\"id\":\"0199c82c-c01c-77a5-a366-bef3c86fbbb5\",\"method\":\"cash\",\"reference\":null},{\"amount\":150000,\"createdAt\":1760000360000,\"id\":\"0199c82c-c01d-7103-9110-46d797b06bdb\",\"method\":\"jazzcash\",\"reference\":\"TXN \\\"9\\\"\\\\77\"},{\"amount\":97500,\"createdAt\":1760000360000,\"id\":\"0199c82c-c01e-7747-b2d5-e5f4b82bf274\",\"method\":\"khata\",\"reference\":null}],\"seq\":6,\"subtotal\":450000,\"total\":447500,\"v\":1}",
-      "expected_hash": "0cc0fa90374f8017a1f13a3aa7c4e309b349a7aa50cbd31210f091641b02a359"
+      "expected_hash": "29ee67993635fa905cf394a23460e89250a683b8300dc3bbf7945a99bb978d85"
     },
     {
       "name": "large-amounts",
-      "previous_hash": "0cc0fa90374f8017a1f13a3aa7c4e309b349a7aa50cbd31210f091641b02a359",
+      "previous_hash": "29ee67993635fa905cf394a23460e89250a683b8300dc3bbf7945a99bb978d85",
       "unsealed_data": {
         "id": "0199c82c-c01f-7436-9697-48fef423f7aa",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -389,7 +381,6 @@
             "saleId": "0199c82c-c01f-7436-9697-48fef423f7aa",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Gold-plated charger",
             "quantity": 2,
@@ -412,11 +403,11 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000420000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c01f-7436-9697-48fef423f7aa\",\"invoiceNo\":\"A-000007\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":2400000000000000,\"createdAt\":1760000420000,\"description\":\"Gold-plated charger\",\"discountAmount\":0,\"id\":\"0199c82c-c020-7027-b648-bf0bd8f3ac62\",\"lineNo\":1,\"lineTotal\":8000000000000000,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2,\"unitPrice\":4000000000000000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":8000000000000000,\"createdAt\":1760000420000,\"id\":\"0199c82c-c021-75c6-bd95-b94a499f13f6\",\"method\":\"cash\",\"reference\":null}],\"seq\":7,\"subtotal\":8000000000000000,\"total\":8000000000000000,\"v\":1}",
-      "expected_hash": "e7b6fd45d5c511c6ac72a6db6d2e1b9a515b2c0629236d28677e3e89be5873b8"
+      "expected_hash": "a900464dca0747d8b04ad13b48e3201091d16c686b4754ced82860fa90adf4db"
     },
     {
       "name": "v2-piece-scale-one",
-      "previous_hash": "e7b6fd45d5c511c6ac72a6db6d2e1b9a515b2c0629236d28677e3e89be5873b8",
+      "previous_hash": "a900464dca0747d8b04ad13b48e3201091d16c686b4754ced82860fa90adf4db",
       "unsealed_data": {
         "id": "0199c82c-c022-7045-a212-ac11fc79c16d",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -439,7 +430,6 @@
             "saleId": "0199c82c-c022-7045-a212-ac11fc79c16d",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Pen",
             "quantity": 3,
@@ -463,11 +453,11 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000480000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c022-7045-a212-ac11fc79c16d\",\"invoiceNo\":\"A-000008\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":1500,\"createdAt\":1760000480000,\"description\":\"Pen\",\"discountAmount\":0,\"id\":\"0199c82c-c023-72f4-b99b-98af8759d489\",\"lineNo\":1,\"lineTotal\":7500,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":3,\"unitPrice\":2500,\"unitScale\":1,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":7500,\"createdAt\":1760000480000,\"id\":\"0199c82c-c024-7098-a7cf-f24283584cec\",\"method\":\"cash\",\"reference\":null}],\"seq\":8,\"subtotal\":7500,\"total\":7500,\"v\":2}",
-      "expected_hash": "938776b77596a5153b73b880976039e4f32e8bd77aa7405fcbfebdf398821ff9"
+      "expected_hash": "35571169cb7e1f2a261a6edf1f94875bc736b7f07d2959062fc9929cbc40b79a"
     },
     {
       "name": "v2-weighted-rounding-half-up",
-      "previous_hash": "938776b77596a5153b73b880976039e4f32e8bd77aa7405fcbfebdf398821ff9",
+      "previous_hash": "35571169cb7e1f2a261a6edf1f94875bc736b7f07d2959062fc9929cbc40b79a",
       "unsealed_data": {
         "id": "0199c82c-c025-7548-ae17-5dd42bc63203",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -490,7 +480,6 @@
             "saleId": "0199c82c-c025-7548-ae17-5dd42bc63203",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Chini (sugar) loose",
             "quantity": 1250,
@@ -506,7 +495,6 @@
             "saleId": "0199c82c-c025-7548-ae17-5dd42bc63203",
             "lineNo": 2,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Atta loose",
             "quantity": 333,
@@ -538,11 +526,11 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000540000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c025-7548-ae17-5dd42bc63203\",\"invoiceNo\":\"A-000009\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":22840,\"createdAt\":1760000540000,\"description\":\"Chini (sugar) loose\",\"discountAmount\":0,\"id\":\"0199c82c-c026-7032-962b-a5c935b70126\",\"lineNo\":1,\"lineTotal\":35688,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":1250,\"unitPrice\":28550,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"},{\"costPrice\":9600,\"createdAt\":1760000540000,\"description\":\"Atta loose\",\"discountAmount\":0,\"id\":\"0199c82c-c027-7412-9cce-b1704497380d\",\"lineNo\":2,\"lineTotal\":3996,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":333,\"unitPrice\":12000,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":\"kiryana: chini aur atta\",\"originalSaleId\":null,\"payments\":[{\"amount\":30000,\"createdAt\":1760000540000,\"id\":\"0199c82c-c028-722f-aa6e-23f0057945b5\",\"method\":\"cash\",\"reference\":null},{\"amount\":9684,\"createdAt\":1760000540000,\"id\":\"0199c82c-c029-77a3-a22f-335fb8fe6b90\",\"method\":\"khata\",\"reference\":null}],\"seq\":9,\"subtotal\":39684,\"total\":39684,\"v\":2}",
-      "expected_hash": "d1f0491d9abecd228f7dcd1d0cd806bdb2405fbb6ab5bc738828b4429f090e87"
+      "expected_hash": "887abf7ee70804567418247c5dd08c4f55976866571559ed88c4252a49d90d4f"
     },
     {
       "name": "v2-weighted-return-rounding",
-      "previous_hash": "d1f0491d9abecd228f7dcd1d0cd806bdb2405fbb6ab5bc738828b4429f090e87",
+      "previous_hash": "887abf7ee70804567418247c5dd08c4f55976866571559ed88c4252a49d90d4f",
       "unsealed_data": {
         "id": "0199c82c-c02a-7789-adb8-ba82d6b09bbf",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -565,7 +553,6 @@
             "saleId": "0199c82c-c02a-7789-adb8-ba82d6b09bbf",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Chini (sugar) loose",
             "quantity": -1250,
@@ -589,11 +576,11 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000600000,\"customerId\":\"0199c82c-c003-76c4-9f03-2d14f3ed2c2b\",\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c02a-7789-adb8-ba82d6b09bbf\",\"invoiceNo\":\"A-000010\",\"kind\":\"return\",\"lines\":[{\"costPrice\":22840,\"createdAt\":1760000600000,\"description\":\"Chini (sugar) loose\",\"discountAmount\":0,\"id\":\"0199c82c-c02b-743a-8133-67ea7d506736\",\"lineNo\":1,\"lineTotal\":-35688,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":-1250,\"unitPrice\":28550,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":\"wapsi: chini\",\"originalSaleId\":\"0199c82c-c025-7548-ae17-5dd42bc63203\",\"payments\":[{\"amount\":-35688,\"createdAt\":1760000600000,\"id\":\"0199c82c-c02c-7367-b078-c9a49713af85\",\"method\":\"khata\",\"reference\":null}],\"seq\":10,\"subtotal\":-35688,\"total\":-35688,\"v\":2}",
-      "expected_hash": "b0f568bec9157d9dc3e30957c4f6dd4b849b602684000de48f0ef72b2bfc0dc7"
+      "expected_hash": "1b4d7094192c548e497aa22378a696875d469cd3fd2cf35fbaf3af1cedccf5d6"
     },
     {
       "name": "v2-weighted-line-discount",
-      "previous_hash": "b0f568bec9157d9dc3e30957c4f6dd4b849b602684000de48f0ef72b2bfc0dc7",
+      "previous_hash": "1b4d7094192c548e497aa22378a696875d469cd3fd2cf35fbaf3af1cedccf5d6",
       "unsealed_data": {
         "id": "0199c82c-c02d-7007-9131-8204719c8c6a",
         "deviceId": "0199c82c-c000-744e-919e-631d2d5468eb",
@@ -616,7 +603,6 @@
             "saleId": "0199c82c-c02d-7007-9131-8204719c8c6a",
             "lineNo": 1,
             "productId": "0199c82c-c004-7496-998d-05e9ddf6ca06",
-            "phoneUnitId": null,
             "variantId": "0199c82c-c006-719a-9229-e65d0e665de9",
             "description": "Basmati chawal loose",
             "quantity": 2500,
@@ -640,7 +626,7 @@
         ]
       },
       "canonical": "{\"branchId\":\"0199c82c-c001-7000-a949-a9d74deb140a\",\"cashierId\":\"0199c82c-c002-75c5-aef7-d4467e2df999\",\"createdAt\":1760000660000,\"customerId\":null,\"deviceId\":\"0199c82c-c000-744e-919e-631d2d5468eb\",\"discountTotal\":0,\"id\":\"0199c82c-c02d-7007-9131-8204719c8c6a\",\"invoiceNo\":\"A-000011\",\"kind\":\"sale\",\"lines\":[{\"costPrice\":32800,\"createdAt\":1760000660000,\"description\":\"Basmati chawal loose\",\"discountAmount\":1025,\"id\":\"0199c82c-c02e-726c-94f9-ae3d3d48f4a7\",\"lineNo\":1,\"lineTotal\":101475,\"phoneUnitId\":null,\"productId\":\"0199c82c-c004-7496-998d-05e9ddf6ca06\",\"quantity\":2500,\"unitPrice\":41000,\"unitScale\":1000,\"variantId\":\"0199c82c-c006-719a-9229-e65d0e665de9\"}],\"note\":null,\"originalSaleId\":null,\"payments\":[{\"amount\":101475,\"createdAt\":1760000660000,\"id\":\"0199c82c-c02f-7167-ba27-a11c089ea293\",\"method\":\"cash\",\"reference\":null}],\"seq\":11,\"subtotal\":101475,\"total\":101475,\"v\":2}",
-      "expected_hash": "1a287055fc8d153694d7697e49955de32a4dcae7d780c53d8b1ad2582575714d"
+      "expected_hash": "0bf3ff9c58ffa46cb8e7bfbbd1ff1639702dff2ae14c1f1b1232de029bbdb7bc"
     }
   ]
 }

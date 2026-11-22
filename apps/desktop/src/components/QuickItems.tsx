@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Pin, Settings2, X, Zap } from 'lucide-react';
-import { MAX_QUICK_ITEMS, type VariantView } from '@pos/shared';
+import { MAX_QUICK_ITEMS, type ItemView } from '@pos/shared';
 import { useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
-import { perUnit, variantQtyText } from '../lib/qty';
+import { perUnit, itemQtyText } from '../lib/qty';
 import { useService } from '../service/context';
 import { toast } from '../store/toast';
 import { Badge } from './ui/Badge';
@@ -21,8 +21,8 @@ export function QuickItemsBar({
   onPick,
   onEdit,
 }: {
-  items: readonly VariantView[];
-  onPick: (item: VariantView) => void;
+  items: readonly ItemView[];
+  onPick: (item: ItemView) => void;
   /** Shown to users who may change the pins (manage_settings). */
   onEdit?: () => void;
 }): ReactNode {
@@ -56,7 +56,7 @@ export function QuickItemsBar({
         {items.map((v, i) => {
           const out = v.onHand <= 0;
           return (
-            <li key={v.variant.id} className="min-w-0">
+            <li key={v.item.id} className="min-w-0">
               <button
                 type="button"
                 disabled={out}
@@ -69,15 +69,15 @@ export function QuickItemsBar({
                   {i < QUICK_HOTKEYS ? <Kbd>{`Alt+${i + 1}`}</Kbd> : null}
                 </span>
                 <span className="whitespace-nowrap">
-                  <Money value={v.variant.salePrice} className="text-sm font-bold" />
+                  <Money value={v.item.salePrice} className="text-sm font-bold" />
                   <span className="ltr text-xs text-muted">
-                    {perUnit(v.variant.unitScale, v.variant.unitLabel)}
+                    {perUnit(v.item.unitScale, v.item.unitLabel)}
                   </span>
                 </span>
                 <Badge tone={out ? 'danger' : v.lowStock ? 'warning' : 'muted'}>
                   {out
                     ? t('billing.outOfStock')
-                    : t('inv.onHand', { n: variantQtyText(v.onHand, v.variant) })}
+                    : t('inv.onHand', { n: itemQtyText(v.onHand, v.item) })}
                 </Badge>
               </button>
             </li>
@@ -104,14 +104,14 @@ export function QuickItemsDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  items: readonly VariantView[];
-  onSaved: (items: VariantView[]) => void;
+  items: readonly ItemView[];
+  onSaved: (items: ItemView[]) => void;
 }): ReactNode {
   const t = useT();
   const service = useService();
-  const [pinned, setPinned] = useState<VariantView[]>([]);
+  const [pinned, setPinned] = useState<ItemView[]>([]);
   const [q, setQ] = useState('');
-  const [hits, setHits] = useState<VariantView[]>([]);
+  const [hits, setHits] = useState<ItemView[]>([]);
   const [busy, setBusy] = useState(false);
 
   // reset only when the dialog opens: a background refresh of `items` must not wipe unsaved pins
@@ -135,7 +135,7 @@ export function QuickItemsDialog({
       service.catalog
         .search(term, { limit: 12 })
         .then((r) => {
-          if (live) setHits(r.flatMap((h) => (h.kind === 'variant' ? [h.item] : [])));
+          if (live) setHits(r.flatMap((h) => (h.kind === 'item' ? [h.item] : [])));
         })
         .catch(() => undefined);
     }, 150);
@@ -145,9 +145,9 @@ export function QuickItemsDialog({
     };
   }, [q, service]);
 
-  const isPinned = (id: string): boolean => pinned.some((p) => p.variant.id === id);
-  const pin = (v: VariantView): void => {
-    if (isPinned(v.variant.id)) return;
+  const isPinned = (id: string): boolean => pinned.some((p) => p.item.id === id);
+  const pin = (v: ItemView): void => {
+    if (isPinned(v.item.id)) return;
     if (pinned.length >= MAX_QUICK_ITEMS) {
       toast.warning(t('quick.full', { max: String(MAX_QUICK_ITEMS) }));
       return;
@@ -158,7 +158,7 @@ export function QuickItemsDialog({
   const save = async (): Promise<void> => {
     setBusy(true);
     try {
-      const saved = await service.catalog.setQuickItems(pinned.map((p) => p.variant.id));
+      const saved = await service.catalog.setQuickItems(pinned.map((p) => p.item.id));
       toast.success(t('quick.saved'));
       onSaved(saved);
       onClose();
@@ -203,17 +203,17 @@ export function QuickItemsDialog({
           <ul className="mt-2 max-h-56 overflow-auto rounded-xl border border-line">
             {hits.map((v) => (
               <li
-                key={v.variant.id}
+                key={v.item.id}
                 className="flex items-center gap-3 border-b border-line px-3 py-2 last:border-0"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-semibold">{v.label}</span>
-                  <span className="ltr block text-xs text-muted">{v.variant.sku}</span>
+                  <span className="ltr block text-xs text-muted">{v.item.sku}</span>
                 </span>
                 <Button
                   size="sm"
-                  variant={isPinned(v.variant.id) ? 'ghost' : 'secondary'}
-                  disabled={isPinned(v.variant.id)}
+                  variant={isPinned(v.item.id) ? 'ghost' : 'secondary'}
+                  disabled={isPinned(v.item.id)}
                   onClick={() => pin(v)}
                 >
                   <Pin size={14} aria-hidden="true" />
@@ -234,7 +234,7 @@ export function QuickItemsDialog({
         <ol className="flex flex-col gap-1">
           {pinned.map((v, i) => (
             <li
-              key={v.variant.id}
+              key={v.item.id}
               className="flex items-center gap-2 rounded-lg border border-line px-3 py-1.5"
             >
               <span className="w-6 text-xs text-muted">{i + 1}</span>
@@ -264,7 +264,7 @@ export function QuickItemsDialog({
                 size="sm"
                 variant="ghost"
                 aria-label={t('common.remove')}
-                onClick={() => setPinned(pinned.filter((p) => p.variant.id !== v.variant.id))}
+                onClick={() => setPinned(pinned.filter((p) => p.item.id !== v.item.id))}
               >
                 <X size={14} aria-hidden="true" />
               </Button>

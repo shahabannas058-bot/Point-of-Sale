@@ -3,7 +3,7 @@ import { lineGross, type ReorderSuggestion } from '@pos/shared';
 import { PackageCheck, Printer } from 'lucide-react';
 import { useT } from '../i18n';
 import { printPage } from '../lib/print';
-import { variantQtyText } from '../lib/qty';
+import { itemQtyText } from '../lib/qty';
 import { useServiceQuery } from '../service/use-query';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -15,13 +15,13 @@ const COVER_DAYS = 14;
 
 /** Paisa for the suggested quantity: quantities are base units (grams for kg items), cost is per priced unit. */
 const orderCost = (r: ReorderSuggestion): number =>
-  r.unitCost === null ? 0 : lineGross(r.suggestedQty, r.unitCost, r.item.variant.unitScale);
+  r.unitCost === null ? 0 : lineGross(r.suggestedQty, r.unitCost, r.item.item.unitScale);
 
 /** sold per day in the item's own unit: "0.07" pieces, or "1.25 kg". */
 const perDayText = (r: ReorderSuggestion): string =>
-  r.item.variant.unitScale === 1
+  r.item.item.unitScale === 1
     ? r.dailyAvg.toFixed(2)
-    : variantQtyText(Math.round(r.dailyAvg), r.item.variant);
+    : itemQtyText(Math.round(r.dailyAvg), r.item.item);
 
 /** Purchase suggestion: what to reorder, how fast it sells and how much to buy. */
 export function ReorderPanel(): ReactNode {
@@ -46,7 +46,7 @@ export function ReorderPanel(): ReactNode {
           onChange={setWin}
           items={(['7', '30', '90'] as const).map((d) => ({
             value: d,
-            label: t('warranty.nDays', { n: d }),
+            label: t('common.nDays', { n: d }),
           }))}
         />
         <span className="text-sm text-muted">{t('reorder.rule', { n: COVER_DAYS })}</span>
@@ -91,20 +91,20 @@ export function ReorderPanel(): ReactNode {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.item.variant.id}>
+                  <tr key={r.item.item.id}>
                     <td>
                       <div className="font-medium">{r.item.label}</div>
-                      <div className="ltr text-xs text-muted">{r.item.variant.sku}</div>
+                      <div className="ltr text-xs text-muted">{r.item.item.sku}</div>
                     </td>
                     <td
                       className={`num font-semibold ${r.item.onHand <= 0 ? 'text-[var(--danger-ink)]' : ''}`}
                     >
-                      {variantQtyText(r.item.onHand, r.item.variant)}
+                      {itemQtyText(r.item.onHand, r.item.item)}
                     </td>
                     <td className="num text-muted">
-                      {variantQtyText(r.item.variant.reorderLevel, r.item.variant)}
+                      {itemQtyText(r.item.item.reorderLevel, r.item.item)}
                     </td>
-                    <td className="num">{variantQtyText(r.sold, r.item.variant)}</td>
+                    <td className="num">{itemQtyText(r.sold, r.item.item)}</td>
                     <td className="num">{perDayText(r)}</td>
                     <td className="num">
                       {r.daysLeft === null ? (
@@ -113,12 +113,12 @@ export function ReorderPanel(): ReactNode {
                         <Badge
                           tone={r.daysLeft <= 3 ? 'danger' : r.daysLeft <= 7 ? 'warning' : 'muted'}
                         >
-                          {t('warranty.nDays', { n: r.daysLeft })}
+                          {t('common.nDays', { n: r.daysLeft })}
                         </Badge>
                       )}
                     </td>
                     <td className="num text-lg font-bold text-[var(--primary-ink)]">
-                      {variantQtyText(r.suggestedQty, r.item.variant)}
+                      {itemQtyText(r.suggestedQty, r.item.item)}
                     </td>
                     {showCost ? (
                       <td className="num">

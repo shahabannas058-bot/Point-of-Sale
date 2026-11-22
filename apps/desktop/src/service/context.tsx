@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { BusinessType, PosService } from '@pos/shared';
+import type { PosService } from '@pos/shared';
 
 export interface AppRuntime {
   service: PosService;
@@ -15,8 +15,8 @@ export interface AppRuntime {
    * Absent in the desktop shell, which owns pos.db and restores backups itself.
    */
   restore?: (bytes: Uint8Array) => Promise<void>;
-  /** First-run only: fills an empty database with the demo shop ('kiryana' = grocery demo, else mobile shop). */
-  loadDemo: (businessType?: BusinessType) => Promise<void>;
+  /** First-run only: fills an empty database with the kiryana demo shop. */
+  loadDemo: () => Promise<void>;
 }
 
 const Ctx = createContext<AppRuntime | null>(null);

@@ -14,8 +14,7 @@ const settings: ShopSettings = {
 const shop = { branchName: 'Main' };
 
 interface LineIn {
-  variantId?: string | null;
-  phoneUnitId?: string | null;
+  itemId: string;
   description: string;
   quantity: number;
   unitScale: 1 | 1000;
@@ -37,8 +36,6 @@ const view = (kind: 'sale' | 'return', lines: LineIn[]): InvoiceView => {
       total,
       lines: lines.map((l, i) => ({
         id: `l${i}`,
-        variantId: null,
-        phoneUnitId: null,
         discountAmount: 0,
         ...l,
       })),
@@ -55,7 +52,7 @@ describe('buildReceiptModel with units', () => {
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'pens',
+          itemId: 'pens',
           description: 'Pen',
           quantity: 3,
           unitScale: 1,
@@ -80,7 +77,7 @@ describe('buildReceiptModel with units', () => {
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'chini',
+          itemId: 'chini',
           description: 'Chini loose',
           quantity: 1250,
           unitScale: 1000,
@@ -100,11 +97,11 @@ describe('buildReceiptModel with units', () => {
     });
   });
 
-  it('uses the unit label of the variant when it is known (litres)', () => {
+  it('uses the unit label of the item when it is known (litres)', () => {
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'oil',
+          itemId: 'oil',
           description: 'Cooking oil loose',
           quantity: 500,
           unitScale: 1000,
@@ -114,7 +111,6 @@ describe('buildReceiptModel with units', () => {
       ]),
       shop,
       settings,
-      {},
       { oil: 'L' },
     );
     expect(m.items[0]?.unitLabel).toBe('L');
@@ -124,7 +120,7 @@ describe('buildReceiptModel with units', () => {
     const m = buildReceiptModel(
       view('return', [
         {
-          variantId: 'chini',
+          itemId: 'chini',
           description: 'Chini loose',
           quantity: -500,
           unitScale: 1000,
@@ -138,26 +134,6 @@ describe('buildReceiptModel with units', () => {
     expect(m.items[0]).toMatchObject({ qty: 500, total: 14_275, unitScale: 1000 });
     expect(m.total).toBe(14_275);
   });
-
-  it('a phone line is always pieces, whatever the label map says', () => {
-    const m = buildReceiptModel(
-      view('sale', [
-        {
-          phoneUnitId: 'u1',
-          description: 'Galaxy A55',
-          quantity: 1,
-          unitScale: 1,
-          unitPrice: 8_500_000,
-          lineTotal: 8_500_000,
-        },
-      ]),
-      shop,
-      settings,
-      { u1: '356938035643809' },
-      { u1: 'kg' },
-    );
-    expect(m.items[0]).toMatchObject({ unitLabel: 'pcs', sub: '356938035643809' });
-  });
 });
 
 describe('buildReceiptModel: a weight round-off is not printed as a discount', () => {
@@ -166,7 +142,7 @@ describe('buildReceiptModel: a weight round-off is not printed as a discount', (
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'chawal',
+          itemId: 'chawal',
           description: 'Chawal Basmati',
           quantity: 1316,
           unitScale: 1000,
@@ -188,7 +164,7 @@ describe('buildReceiptModel: a weight round-off is not printed as a discount', (
     const m = buildReceiptModel(
       view('sale', [
         {
-          variantId: 'chawal',
+          itemId: 'chawal',
           description: 'Chawal Basmati',
           quantity: 2000,
           unitScale: 1000,

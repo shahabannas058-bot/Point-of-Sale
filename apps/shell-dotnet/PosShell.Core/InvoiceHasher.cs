@@ -17,8 +17,10 @@ public static class InvoiceHasher
             ["id"] = l.Id,
             ["lineNo"] = l.LineNo,
             ["productId"] = l.ProductId,
-            ["phoneUnitId"] = l.PhoneUnitId,
-            ["variantId"] = l.VariantId,
+            // Legacy key from the mobile-shop era: every stored hash includes it, so it stays forever as null.
+            ["phoneUnitId"] = null,
+            // Legacy key name: items were "variants" when the chain began; renaming it would change every stored hash.
+            ["variantId"] = l.ItemId,
             ["description"] = l.Description,
             ["quantity"] = l.Quantity,
             ["unitPrice"] = l.UnitPrice,

@@ -84,7 +84,6 @@ export function Receipt({
           <Fragment key={i}>
             <div className="r-item">
               <div className="r-b">{it.name}</div>
-              {it.sub ? <div className="r-rate">IMEI/SN: {it.sub}</div> : null}
               {it.discount > 0 ? (
                 <div className="r-rate">
                   {col(lang, 'receipt.discount')} -{money(it.discount)}

@@ -10,7 +10,7 @@ public sealed class ServiceException(
 }
 
 public sealed record InvoiceLine(
-    string Id, string SaleId, int LineNo, string ProductId, string? PhoneUnitId, string? VariantId,
+    string Id, string SaleId, int LineNo, string ProductId, string ItemId,
     string Description, long Quantity, long UnitPrice, long CostPrice, long DiscountAmount, long LineTotal,
     long CreatedAt);
 

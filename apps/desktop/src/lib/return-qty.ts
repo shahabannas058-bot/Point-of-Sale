@@ -1,4 +1,5 @@
 import { formatQuantity, parseQuantity, type ReturnableLine } from '@pos/shared';
+import type { TKey } from '../i18n';
 
 type Line = Pick<ReturnableLine, 'unitScale' | 'remainingQty'>;
 
@@ -49,3 +50,9 @@ export const hasBadPick = (picks: Record<string, ReturnPick>): boolean =>
 /** How much of a line can still go back, in the unit the cashier types: "3" pieces, or "1.5" (kg / L). */
 export const remainingText = (line: Line): string =>
   formatQuantity(line.remainingQty, line.unitScale);
+
+/** The return badge of a sale: Returned once returns (or a void) cover all of it, Partly returned before that. */
+export function returnBadgeKey(i: { total: number; returnedTotal: number }): TKey | null {
+  if (i.returnedTotal <= 0) return null;
+  return i.returnedTotal >= i.total ? 'sales.fullyReturned' : 'sales.partlyReturned';
+}

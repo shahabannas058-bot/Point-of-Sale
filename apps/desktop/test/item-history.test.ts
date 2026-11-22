@@ -11,6 +11,7 @@ import {
   SUMMARY_ROWS,
   batchText,
   cartLineItemRef,
+  fetchItemHistory,
   historyDateRange,
   historyKindKey,
   historyKindTone,
@@ -22,7 +23,7 @@ import {
 import { RuntimeProvider } from '../src/service/context';
 
 const t: TFn = (key, params) => translate('en', key, params);
-const KINDS: ItemHistoryKind[] = ['sale', 'return', 'purchase', 'adjustment', 'repair', 'transfer'];
+const KINDS: ItemHistoryKind[] = ['sale', 'return', 'purchase', 'adjustment', 'transfer'];
 
 const entry = (over: Partial<ItemHistoryEntry> = {}): ItemHistoryEntry => ({
   id: 'm1',
@@ -51,7 +52,6 @@ describe('historyKindKey / historyKindTone', () => {
     expect(historyKindTone('purchase')).toBe('success');
     expect(historyKindTone('return')).toBe('success');
     expect(historyKindTone('sale')).toBe('danger');
-    expect(historyKindTone('repair')).toBe('danger');
     expect(historyKindTone('adjustment')).toBe('warning');
     expect(historyKindTone('transfer')).toBe('muted');
   });
@@ -90,12 +90,6 @@ describe('referenceText', () => {
       'Supplier Mandi · ref 123',
     );
     expect(referenceText(entry({ ref: { ...ref, referenceNo: null } }), t)).toBe('Supplier Mandi');
-  });
-
-  it('repair: ticket number', () => {
-    expect(
-      referenceText(entry({ ref: { kind: 'repair', ticketId: 'r1', ticketNo: 'R-0004' } }), t),
-    ).toBe('Ticket R-0004');
   });
 
   it('adjustment: the reason, or a dash', () => {
@@ -155,16 +149,37 @@ describe('historyDateRange', () => {
   });
 });
 
+describe('fetchItemHistory', () => {
+  const PAGE = {
+    entries: [],
+    nextBefore: null,
+    summary: { purchased: 0, sold: 0, returned: 0, adjusted: 0, onHand: 5 },
+  };
+
+  it('a to day before the from day finds nothing without asking the service (QA#19b)', async () => {
+    const itemHistory = vi.fn(() => Promise.resolve(PAGE));
+    const range = historyDateRange('2026-11-10', '2026-11-01');
+    await expect(fetchItemHistory({ itemHistory }, { itemId: 'a' }, range)).resolves.toBeNull();
+    expect(itemHistory).not.toHaveBeenCalled();
+  });
+
+  it('asks the service for a normal or open range', async () => {
+    const itemHistory = vi.fn(() => Promise.resolve(PAGE));
+    const range = historyDateRange('2026-11-01', '2026-11-01');
+    await expect(fetchItemHistory({ itemHistory }, { itemId: 'a' }, range)).resolves.toBe(PAGE);
+    await expect(fetchItemHistory({ itemHistory }, { itemId: 'a' }, {})).resolves.toBe(PAGE);
+    expect(itemHistory).toHaveBeenCalledWith({ itemId: 'a' }, range);
+  });
+});
+
 describe('itemRefKey / cartLineItemRef / SUMMARY_ROWS', () => {
-  it('keys tell variants from phone units', () => {
-    expect(itemRefKey({ variantId: 'a' })).toBe('v:a');
-    expect(itemRefKey({ phoneUnitId: 'a' })).toBe('p:a');
+  it('keys are stable per item', () => {
+    expect(itemRefKey({ itemId: 'a' })).toBe('v:a');
+    expect(itemRefKey({ itemId: 'b' })).not.toBe(itemRefKey({ itemId: 'a' }));
   });
 
   it('cart lines map to their item', () => {
-    expect(cartLineItemRef({ variantId: 'v1' })).toEqual({ variantId: 'v1' });
-    expect(cartLineItemRef({ phoneUnitId: 'p1' })).toEqual({ phoneUnitId: 'p1' });
-    expect(cartLineItemRef({})).toBeNull();
+    expect(cartLineItemRef({ itemId: 'v1' })).toEqual({ itemId: 'v1' });
   });
 
   it('summary chips are in Abuzar order and all labelled', () => {
@@ -238,7 +253,7 @@ describe('ItemHistoryDialog rendering', () => {
       withRuntime(
         fakeService(),
         createElement(ItemHistoryDialog, {
-          item: { variantId: 'v1' },
+          item: { itemId: 'v1' },
           label: 'Shan Masala 50 g',
           unitScale: 1,
           unitLabel: 'pcs',

@@ -13,8 +13,6 @@ import { labelFor } from './qty';
 
 export interface ReceiptItem {
   name: string;
-  /** IMEI / serial for phones, null for accessories */
-  sub: string | null;
   /** base units: pieces, or grams / millilitres when unitScale is 1000 */
   qty: number;
   unitScale: UnitScale;
@@ -51,14 +49,12 @@ export interface ReceiptModel {
 /**
  * Pure: InvoiceView + shop data -> everything a printer needs. No formatting here (the renderer formats),
  * so the same model can later feed an ESC/POS encoder in Rust.
- * `imeis` maps phoneUnitId -> IMEI/serial text (not part of the invoice snapshot).
  */
 export function buildReceiptModel(
   view: InvoiceView,
   shop: Pick<ShopInfo, 'branchName'>,
   settings: ShopSettings,
-  imeis: Readonly<Record<string, string>> = {},
-  /** variantId -> unit label; an invoice line only stores its scale, so loose goods default to kg */
+  /** itemId -> unit label; an invoice line only stores its scale, so loose goods default to kg */
   unitLabels: Readonly<Record<string, UnitLabel>> = {},
 ): ReceiptModel {
   const inv = view.invoice;
@@ -79,10 +75,9 @@ export function buildReceiptModel(
     customer: view.customerName,
     items: inv.lines.map((l) => ({
       name: l.description,
-      sub: l.phoneUnitId ? (imeis[l.phoneUnitId] ?? null) : null,
       qty: Math.abs(l.quantity),
       unitScale: l.unitScale,
-      unitLabel: l.variantId === null ? 'pcs' : (unitLabels[l.variantId] ?? labelFor(l.unitScale)),
+      unitLabel: unitLabels[l.itemId] ?? labelFor(l.unitScale),
       unitPrice: l.unitPrice,
       discount: shownDiscount(l),
       total: Math.abs(l.lineTotal) + shownDiscount(l),
@@ -103,25 +98,13 @@ export async function loadReceiptModel(service: PosService, idOrNo: string): Pro
     service.setup.getShop(),
     service.settings.get(),
   ]);
-  const imeis: Record<string, string> = {};
-  if (view.invoice.lines.some((l) => l.phoneUnitId)) {
-    try {
-      for (const p of await service.catalog.listPhones()) {
-        const id = p.unit.imei1 ?? p.unit.serial;
-        if (id) imeis[p.unit.id] = id;
-      }
-    } catch {
-      /* without view_catalog the receipt simply omits IMEIs */
-    }
-  }
   const unitLabels: Record<string, UnitLabel> = {};
   if (view.invoice.lines.some((l) => l.unitScale !== 1)) {
     try {
-      for (const v of await service.catalog.listAccessories())
-        unitLabels[v.variant.id] = v.variant.unitLabel;
+      for (const v of await service.catalog.listItems()) unitLabels[v.item.id] = v.item.unitLabel;
     } catch {
       /* without view_catalog the receipt simply says kg */
     }
   }
-  return buildReceiptModel(view, shop, settings, imeis, unitLabels);
+  return buildReceiptModel(view, shop, settings, unitLabels);
 }

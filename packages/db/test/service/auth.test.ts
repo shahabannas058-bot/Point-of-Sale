@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '@pos/shared';
-import { IMEI_Y, PINS, expectCode, makeService, type TestService, type TestUser } from './helpers';
+import { PINS, expectCode, makeService, type TestService, type TestUser } from './helpers';
 
 let t: TestService;
 beforeEach(async () => {
@@ -112,7 +112,7 @@ describe('login (spec 10)', () => {
     // the old token is gone, so a discount needing approval still asks for it
     await expectCode(
       t.svc.checkout.commit({
-        lines: [{ phoneUnitId: t.ids.phoneId, quantity: 1, discountAmount: 1_000_000 }],
+        lines: [{ itemId: t.ids.cartonId, quantity: 1, discountAmount: 1_000_000 }],
         payments: [{ method: 'cash', amount: 7_500_000 }],
         approvalToken: grant.token,
       }),
@@ -153,11 +153,35 @@ describe('approval requests', () => {
   });
 });
 
+describe('changePin throttle (same lock as login)', () => {
+  it('5 wrong current PINs lock it: the 6th, even correct, is LOGIN_LOCKED; 30 s later it works', async () => {
+    await t.loginAs('cash');
+    for (let i = 0; i < 5; i += 1)
+      await expectCode(t.svc.auth.changePin(String(1000 + i), '9999'), 'INVALID_CREDENTIALS');
+    const locked = await expectCode(t.svc.auth.changePin(PINS.cash, '9999'), 'LOGIN_LOCKED');
+    expect(locked.details.retryAfterMs as number).toBeGreaterThan(0);
+    // the lock is the user's login lock: guessing here also blocks guessing at the login screen
+    await expectCode(t.svc.auth.login('cash', PINS.cash), 'LOGIN_LOCKED');
+    t.clock.advance(30_000);
+    await t.svc.auth.changePin(PINS.cash, '9999');
+    await t.svc.auth.login('cash', '9999');
+  });
+
+  it('a correct current PIN resets the failure counter', async () => {
+    await t.loginAs('cash');
+    for (let i = 0; i < 4; i += 1)
+      await expectCode(t.svc.auth.changePin('0000', '9999'), 'INVALID_CREDENTIALS');
+    await t.svc.auth.changePin(PINS.cash, '9999');
+    await expectCode(t.svc.auth.changePin('0000', '8888'), 'INVALID_CREDENTIALS');
+    await t.svc.auth.changePin('9999', '8888');
+  });
+});
+
 describe('roles and permissions (spec 10)', () => {
   it('without a session everything is NOT_AUTHENTICATED', async () => {
     await expectCode(t.svc.checkout.preview({ lines: [] }), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.catalog.search('x'), 'NOT_AUTHENTICATED');
-    await expectCode(t.svc.catalog.listPhones(), 'NOT_AUTHENTICATED');
+    await expectCode(t.svc.catalog.listItems(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.settings.get(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.auth.listUsers(), 'NOT_AUTHENTICATED');
     await expectCode(t.svc.integrity.verifyChain(), 'NOT_AUTHENTICATED');
@@ -165,14 +189,12 @@ describe('roles and permissions (spec 10)', () => {
     await expectCode(t.svc.auth.changePin('1234', '5555'), 'NOT_AUTHENTICATED');
   });
 
-  it('a cashier cannot create phones, summarise reports, adjust stock, manage users or settings', async () => {
+  it('a cashier cannot create items, summarise reports, adjust stock, manage users or settings', async () => {
     await t.loginAs('cash');
     await expectCode(
-      t.svc.catalog.createPhoneUnit({
+      t.svc.catalog.createItem({
         product: { brand: 'X', name: 'Y' },
-        imei1: IMEI_Y,
-        ptaStatus: 'approved',
-        condition: 'new',
+        sku: 'X-Y',
         costPrice: 1,
         salePrice: 2,
       }),
@@ -180,7 +202,7 @@ describe('roles and permissions (spec 10)', () => {
     );
     await expectCode(t.svc.reports.summary({ fromMs: 0, toMs: 1 }), 'FORBIDDEN');
     await expectCode(
-      t.svc.catalog.adjustStock({ variantId: t.ids.chargerId, delta: 1, reason: 'x' }),
+      t.svc.catalog.adjustStock({ itemId: t.ids.chargerId, delta: 1, reason: 'x' }),
       'FORBIDDEN',
     );
     await expectCode(t.svc.auth.listUsers(), 'FORBIDDEN');

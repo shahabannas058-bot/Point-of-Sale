@@ -1,7 +1,7 @@
 import type { SettingsApi, ShopSettings } from '@pos/shared';
 import { WriteBatch } from './batch';
 import { requirePermission, requireSession, type Ctx } from './deps';
-import { guardApi, intIn, invalid, optText, reqText } from './errors';
+import { assertObject, guardApi, intIn, invalid, optText, reqText } from './errors';
 import { META, deleteMeta, loadShop, upsertMeta } from './meta';
 
 export function createSettingsApi(ctx: Ctx): SettingsApi {
@@ -15,6 +15,7 @@ export function createSettingsApi(ctx: Ctx): SettingsApi {
 
     async update(patch) {
       requirePermission(ctx, 'manage_settings');
+      assertObject(patch, 'patch');
       await loadShop(ctx.driver); // NOT_SETUP guard
       await ctx.lock(async () => {
         const b = new WriteBatch(ctx.newId, ctx.clock());

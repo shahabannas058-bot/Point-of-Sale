@@ -203,7 +203,7 @@ export function StockImportDialog({
   const { busy, run: runImport } = useBusyAction(async (): Promise<void> => {
     setProgress(0);
     const done = await runStockImport(
-      (input) => service.catalog.createAccessory(input),
+      (input) => service.catalog.createItem(input),
       rows,
       setProgress,
     );

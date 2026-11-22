@@ -31,17 +31,16 @@ export interface CashEntry {
   createdAt: number;
 }
 
-/** Where the drawer's cash came from and went to in one period. All amounts are positive magnitudes except repairCash. */
+/** Where the drawer's cash came from and went to in one period. All amounts are positive magnitudes. */
 export interface DrawerBreakdown {
   opening: Paisa; // what the previous close left in the drawer
   cashSales: Paisa; // cash taken on sale invoices
   cashRefunds: Paisa; // cash given back on returns / voids
   udhaarCollected: Paisa; // customers paying their udhaar in cash
   supplierPaid: Paisa; // cash paid to suppliers (pay now on a purchase, or a later payment)
-  repairCash: Paisa; // signed: repair advances and balances minus repair refunds
   expenses: Paisa; // net of reversals
   cashIn: Paisa;
   cashOut: Paisa;
-  /** opening + cashSales - cashRefunds + udhaarCollected - supplierPaid + repairCash - expenses + cashIn - cashOut */
+  /** opening + cashSales - cashRefunds + udhaarCollected - supplierPaid - expenses + cashIn - cashOut */
   expected: Paisa;
 }

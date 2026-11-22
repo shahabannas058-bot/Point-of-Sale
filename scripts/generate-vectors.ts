@@ -66,13 +66,12 @@ const ids = {
   cashier: newId(),
   customer: newId(),
   product: newId(),
-  phone: newId(),
-  variant: newId(),
+  item2: newId(),
+  item: newId(),
 };
 
 interface LineIn {
-  phoneUnitId: string | null;
-  variantId: string | null;
+  itemId: string;
   description: string;
   quantity: number;
   /** Omitted = 1 (pieces). Only written into the data of hashVersion 2 invoices. */
@@ -102,28 +101,27 @@ interface Spec {
   scramble?: boolean;
 }
 
-const accessory = (
+const pieceItem = (
   description: string,
   quantity: number,
   unitPrice: number,
   discountAmount = 0,
 ): LineIn => ({
-  phoneUnitId: null,
-  variantId: ids.variant,
+  itemId: ids.item,
   description,
   quantity,
   unitPrice,
   costPrice: Math.floor(unitPrice * 0.6),
   discountAmount,
 });
-const phone = (
+/** A second piece item, so one invoice can carry two different items. */
+const secondItem = (
   description: string,
   quantity: number,
   unitPrice: number,
   discountAmount = 0,
 ): LineIn => ({
-  phoneUnitId: ids.phone,
-  variantId: null,
+  itemId: ids.item2,
   description,
   quantity,
   unitPrice,
@@ -138,8 +136,7 @@ const weighted = (
   pricePerKg: number,
   discountAmount = 0,
 ): LineIn => ({
-  phoneUnitId: null,
-  variantId: ids.variant,
+  itemId: ids.item,
   description,
   quantity: grams,
   unitScale: 1000,
@@ -207,8 +204,8 @@ const specs: Spec[] = [
     note: null,
     invoiceDiscount: 0,
     lines: [
-      accessory('Fast Charger 25W', 2, 50_000),
-      phone('Galaxy A55 8/256 · IMEI 356938035643809', 1, 199_950, 19_995),
+      pieceItem('Fast Charger 25W', 2, 50_000),
+      secondItem('Basmati Rice 5kg', 1, 199_950, 19_995),
     ],
     payments: [
       { method: 'cash', amount: 179_955, reference: null },
@@ -221,7 +218,7 @@ const specs: Spec[] = [
     customerId: ids.customer,
     note: 'نقد ادائیگی — شکریہ ✓',
     invoiceDiscount: 0,
-    lines: [phone('سیمسنگ گلیکسی A55 (نیلا, 8/256GB) · IMEI 356938035643809', 1, 8_500_000)],
+    lines: [secondItem('باسمتی چاول (سپر کرنل, 5 کلو) · بوری', 1, 8_500_000)],
     payments: [{ method: 'cash', amount: 8_500_000, reference: null }],
   },
   {
@@ -230,7 +227,7 @@ const specs: Spec[] = [
     customerId: ids.customer,
     note: 'line1\nline2\ttab \u0001 ctrl, emoji 😀, DEL \u007f, LS  , </script> & "q" \\ /',
     invoiceDiscount: 100,
-    lines: [accessory('Cable "USB-C" \\ 1m / <fast> & \'strong\'', 1, 120_000)],
+    lines: [pieceItem('Cable "USB-C" \\ 1m / <fast> & \'strong\'', 1, 120_000)],
     payments: [{ method: 'cash', amount: 119_900, reference: 'REF "A\\B"' }],
   },
   {
@@ -239,7 +236,7 @@ const specs: Spec[] = [
     customerId: null,
     note: null,
     invoiceDiscount: 0,
-    lines: [accessory('Screen Guard', 3, 1_250, 50)],
+    lines: [pieceItem('Screen Guard', 3, 1_250, 50)],
     payments: [{ method: 'cash', amount: 3_700, reference: null }],
   },
   {
@@ -247,9 +244,9 @@ const specs: Spec[] = [
     kind: 'return',
     originalSaleId: 'FIRST', // replaced below with the id of the first invoice
     customerId: ids.customer,
-    note: 'wapsi — screen crack',
+    note: 'wapsi — bori phati hui',
     invoiceDiscount: -500,
-    lines: [phone('Galaxy A55 8/256 · IMEI 356938035643809', -1, 199_950, -19_995)],
+    lines: [secondItem('Basmati Rice 5kg', -1, 199_950, -19_995)],
     payments: [
       { method: 'cash', amount: -79_455, reference: null },
       { method: 'khata', amount: -100_000, reference: null },
@@ -262,7 +259,7 @@ const specs: Spec[] = [
     note: null,
     invoiceDiscount: 2_500,
     scramble: true,
-    lines: [accessory('Back Cover', 1, 300_000), accessory('Earbuds', 1, 150_000)],
+    lines: [pieceItem('Back Cover', 1, 300_000), pieceItem('Earbuds', 1, 150_000)],
     payments: [
       { method: 'cash', amount: 200_000, reference: null },
       { method: 'jazzcash', amount: 150_000, reference: 'TXN "9"\\77' },
@@ -275,7 +272,7 @@ const specs: Spec[] = [
     customerId: null,
     note: null,
     invoiceDiscount: 0,
-    lines: [accessory('Gold-plated charger', 2, 4_000_000_000_000_000)],
+    lines: [pieceItem('Gold-plated charger', 2, 4_000_000_000_000_000)],
     payments: [{ method: 'cash', amount: 8_000_000_000_000_000, reference: null }],
   },
   // ---- hashVersion 2 (ADR-0008): every line carries unitScale in the hashed data ----
@@ -286,7 +283,7 @@ const specs: Spec[] = [
     customerId: null,
     note: null,
     invoiceDiscount: 0,
-    lines: [accessory('Pen', 3, 2_500)],
+    lines: [pieceItem('Pen', 3, 2_500)],
     payments: [{ method: 'cash', amount: 7_500, reference: null }],
   },
   {
@@ -327,10 +324,28 @@ const specs: Spec[] = [
   },
 ];
 
+/**
+ * The vectors file keeps the line key "variantId" (the hash payload's legacy key) instead of the contract's
+ * "itemId", so the file stays byte-identical across the item rename and the C# test keeps reading it by that name.
+ * Key order is kept, so the JSON text does not move either.
+ */
+type VectorInvoice = Omit<UnsealedInvoice, 'lines'> & { lines: Record<string, unknown>[] };
+const renameLineKey = (line: object, from: string, to: string): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(line).map(([k, v]) => [k === from ? to : k, v as unknown]));
+const toVectorData = (inv: UnsealedInvoice): VectorInvoice => ({
+  ...inv,
+  lines: inv.lines.map((l) => renameLineKey(l, 'itemId', 'variantId')),
+});
+const fromVectorData = (inv: VectorInvoice): UnsealedInvoice =>
+  ({
+    ...inv,
+    lines: inv.lines.map((l) => renameLineKey(l, 'variantId', 'itemId')),
+  }) as unknown as UnsealedInvoice;
+
 interface InvoiceVector {
   name: string;
   previous_hash: string;
-  unsealed_data: UnsealedInvoice;
+  unsealed_data: VectorInvoice;
   canonical: string;
   expected_hash: string;
 }
@@ -353,7 +368,7 @@ for (const spec of specs) {
   vectors.push({
     name: spec.name,
     previous_hash: prev,
-    unsealed_data: unsealed,
+    unsealed_data: toVectorData(unsealed),
     canonical: canonicalize(invoiceHashPayload(unsealed)),
     expected_hash: sealed.hash,
   });
@@ -615,7 +630,7 @@ writeFileSync(
 
 const back = JSON.parse(invoiceFile) as { vectors: InvoiceVector[] };
 for (const v of back.vectors) {
-  const again = computeInvoiceHash(v.previous_hash, v.unsealed_data);
+  const again = computeInvoiceHash(v.previous_hash, fromVectorData(v.unsealed_data));
   if (again !== v.expected_hash) throw new Error(`round-trip mismatch in ${v.name}`);
 }
 

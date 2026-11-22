@@ -11,40 +11,6 @@ async function freshDriver() {
 }
 
 describe('seedDemoData', () => {
-  it('seeds 12 phones, 25 accessories, 5 customers, 3 suppliers and 6 invoices; chain verifies; shop is flagged demo', async () => {
-    const driver = await freshDriver();
-    const summary = await seedDemoData({ driver, pinIterations: 1000 });
-    expect(summary).toEqual({ phones: 12, accessories: 25, customers: 5, suppliers: 3, sales: 6 });
-
-    const svc = createPosService({ driver, pinIterations: 1000 });
-    expect(await svc.setup.isSetUp()).toBe(true);
-    const shop = await svc.setup.getShop();
-    expect(shop.isDemo).toBe(true);
-    expect(shop.invoicePrefix).toBe('A');
-
-    expect((await svc.auth.listLoginUsers()).map((u) => u.username)).toEqual([
-      'owner',
-      'manager',
-      'cashier',
-    ]);
-    await svc.auth.login('owner', '1234');
-    const chain = await svc.integrity.verifyChain();
-    expect(chain).toMatchObject({ ok: true, count: 6, headSeq: 6 });
-    expect(await svc.integrity.checks()).toMatchObject({
-      salePaymentMismatch: 0,
-      saleLineMismatch: 0,
-      badPhoneUnits: 0,
-    });
-
-    expect(await svc.catalog.listPhones()).toHaveLength(12);
-    expect(await svc.catalog.listAccessories()).toHaveLength(25);
-    expect(await svc.khata.listCustomers()).toHaveLength(5);
-    expect(await svc.purchasing.listSuppliers()).toHaveLength(3);
-    const kinds = (await svc.checkout.listInvoices()).map((i) => i.kind).sort();
-    expect(kinds).toEqual(['return', 'sale', 'sale', 'sale', 'sale', 'sale']);
-    driver.close();
-  });
-
   it('a second seed throws ALREADY_SETUP and changes nothing', async () => {
     const driver = await freshDriver();
     await seedDemoData({ driver, pinIterations: 1000 });
@@ -61,33 +27,20 @@ describe('seedDemoData', () => {
     await expectCode(seedDemoData({ driver: t.driver, pinIterations: 1000 }), 'ALREADY_SETUP');
   });
 
-  it('is deterministic: two seeded databases get the same device id and IMEIs', async () => {
-    const a = await freshDriver();
-    const b = await freshDriver();
-    await seedDemoData({ driver: a, pinIterations: 1000 });
-    await seedDemoData({ driver: b, pinIterations: 1000 });
-    const imeis = (d: typeof a) =>
-      d.query<{ imei1: string }>('select imei1 from phone_units order by imei1');
-    expect(await imeis(a)).toEqual(await imeis(b));
-    const dev = (d: typeof a) =>
-      d.query<{ value: string }>("select value from app_meta where key = 'device_id'");
-    expect(await dev(a)).toEqual(await dev(b));
-    a.close();
-    b.close();
-  });
-
   it('the seeded cashier is subject to the 5 % discount limit', async () => {
     const driver = await freshDriver();
     await seedDemoData({ driver, pinIterations: 1000 });
     const svc = createPosService({ driver, pinIterations: 1000 });
     await svc.auth.login('cashier', '3456');
-    const phone = (await svc.catalog.listPhones({ inStock: true }))[0];
-    expect(phone).toBeDefined();
-    const gross = phone?.unit.salePrice ?? 0;
+    const item = (await svc.catalog.listItems()).find(
+      (i) => i.item.unitScale === 1 && i.onHand > 0,
+    );
+    expect(item).toBeDefined();
+    const gross = item?.item.salePrice ?? 0;
     const preview = await svc.checkout.preview({
       lines: [
         {
-          phoneUnitId: phone?.unit.id ?? '',
+          itemId: item?.item.id ?? '',
           quantity: 1,
           discountAmount: Math.floor(gross * 0.06),
         },
@@ -160,7 +113,7 @@ describe('setup and settings', () => {
     const t = await makeService();
     await t.loginAs('owner');
     expect(await t.svc.settings.get()).toEqual({
-      shopName: 'Test Mobile Centre',
+      shopName: 'Test Kiryana Store',
       address: null,
       phone: null,
       receiptFooter: null,
@@ -169,14 +122,14 @@ describe('setup and settings', () => {
       allowNegativeStock: false,
     });
     const updated = await t.svc.settings.update({
-      shopName: 'Al-Madina Mobiles',
+      shopName: 'Bismillah Kiryana',
       address: 'Hall Road, Lahore',
       receiptFooter: 'Thank you',
       receiptFooterUr: 'شکریہ',
       cashierMaxDiscountBps: 300,
     });
     expect(updated).toMatchObject({
-      shopName: 'Al-Madina Mobiles',
+      shopName: 'Bismillah Kiryana',
       address: 'Hall Road, Lahore',
       receiptFooterUr: 'شکریہ',
       cashierMaxDiscountBps: 300,

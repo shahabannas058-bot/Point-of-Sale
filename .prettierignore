@@ -7,3 +7,4 @@ package-lock.json
 *.sql
 *.md
 .claude
+qa-bug-hunt

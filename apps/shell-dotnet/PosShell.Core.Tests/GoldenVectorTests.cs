@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using PosShell.Core;
 using Xunit;
 
@@ -47,8 +48,27 @@ public class InvoiceVectorTests
     private static (Invoice Unsealed, string Prev, JsonElement Vector) Read(string name)
     {
         var v = Vectors.ByName("invoice-vectors.json", "vectors", name);
-        var inv = v.GetProperty("unsealed_data").Deserialize<Invoice>(Json)!;
+        var inv = WithItemIds(JsonNode.Parse(v.GetProperty("unsealed_data").GetRawText())!).Deserialize<Invoice>(Json)!;
         return (inv, v.GetProperty("previous_hash").GetString()!, v);
+    }
+
+    /// <summary>
+    /// The vectors keep the legacy line key "variantId" (it is what the hash payload contains); the model calls it
+    /// ItemId. Same mapping as the TS core test: rename the key on read, the file itself never changes.
+    /// </summary>
+    private static JsonNode WithItemIds(JsonNode invoice)
+    {
+        foreach (var line in invoice["lines"]!.AsArray())
+        {
+            var obj = line!.AsObject();
+            if (obj.TryGetPropertyValue("variantId", out var legacy) && !obj.ContainsKey("itemId"))
+            {
+                var id = legacy?.GetValue<string>();
+                obj.Remove("variantId");
+                obj["itemId"] = id;
+            }
+        }
+        return invoice;
     }
 
     [Theory]

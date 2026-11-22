@@ -25,15 +25,12 @@ export function TillInfo({
   customerId: string | null;
 }): ReactNode {
   const t = useT();
+  // only ask once there is a real item id: an empty id must never reach the service
+  const itemId = line?.itemId ? line.itemId : null;
   const q = useServiceQuery(
-    (s) =>
-      s.insights.item({
-        variantId: line?.variantId,
-        phoneUnitId: line?.phoneUnitId,
-        customerId,
-      }),
-    [line?.variantId, line?.phoneUnitId, customerId],
-    line !== undefined,
+    (s) => (itemId === null ? Promise.resolve(null) : s.insights.item({ itemId, customerId })),
+    [itemId, customerId],
+    itemId !== null,
   );
   if (!line) return null;
   const d = q.data;
@@ -56,13 +53,14 @@ export function TillInfo({
         <dl className="m-0">
           <Row label={t('till.stock')}>
             <span className={`num ${d.onHand <= 0 ? 'text-[var(--danger-ink)]' : ''}`}>
-              {line.kind === 'phone'
-                ? d.onHand > 0
-                  ? t('inv.inStock')
-                  : t('inv.sold')
-                : qty(d.onHand)}
+              {qty(d.onHand)}
             </span>
           </Row>
+          {d.expiredOnHand > 0 ? (
+            <Row label={t('till.expired')}>
+              <span className="num text-[var(--danger-ink)]">{qty(d.expiredOnHand)}</span>
+            </Row>
+          ) : null}
           {d.lastPurchase ? (
             <Row label={t('till.lastCost')}>
               <Money value={d.lastPurchase.unitCost} />

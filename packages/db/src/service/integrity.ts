@@ -95,10 +95,6 @@ export function createIntegrityApi(ctx: Ctx): IntegrityApi {
       return {
         salePaymentMismatch: await count('SELECT COUNT(*) AS n FROM v_sale_payment_mismatch'),
         saleLineMismatch: await count('SELECT COUNT(*) AS n FROM v_sale_line_mismatch'),
-        badPhoneUnits: await count(
-          `SELECT COUNT(*) AS n FROM (SELECT phone_unit_id FROM stock_movements
-             WHERE phone_unit_id IS NOT NULL GROUP BY phone_unit_id HAVING SUM(quantity) NOT BETWEEN 0 AND 1)`,
-        ),
         unsentOutbox: await count('SELECT COUNT(*) AS n FROM outbox WHERE sent_at IS NULL'),
       };
     },

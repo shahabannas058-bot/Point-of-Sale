@@ -15,10 +15,8 @@ export const UserIdSchema = brandedId<'UserId'>();
 export type UserId = z.infer<typeof UserIdSchema>;
 export const ProductIdSchema = brandedId<'ProductId'>();
 export type ProductId = z.infer<typeof ProductIdSchema>;
-export const PhoneUnitIdSchema = brandedId<'PhoneUnitId'>();
-export type PhoneUnitId = z.infer<typeof PhoneUnitIdSchema>;
-export const VariantIdSchema = brandedId<'VariantId'>();
-export type VariantId = z.infer<typeof VariantIdSchema>;
+export const ItemIdSchema = brandedId<'ItemId'>();
+export type ItemId = z.infer<typeof ItemIdSchema>;
 export const CustomerIdSchema = brandedId<'CustomerId'>();
 export type CustomerId = z.infer<typeof CustomerIdSchema>;
 export const SupplierIdSchema = brandedId<'SupplierId'>();
@@ -54,7 +52,6 @@ export const QuantitySchema = z.number().int().safe();
 export const GENESIS_HASH = '0'.repeat(64);
 export const Sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/, 'Expected lowercase SHA-256 hex');
 
-export const ImeiSchema = z.string().regex(/^\d{15}$/, 'IMEI must be 15 digits');
 export const CnicSchema = z.string().regex(/^\d{13}$/, 'CNIC must be 13 digits, no dashes');
 export const PhoneNumberSchema = z.string().regex(/^\+?[0-9]{7,15}$/, 'Invalid phone number');
 

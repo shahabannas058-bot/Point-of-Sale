@@ -1,8 +1,8 @@
 import initSqlJs from 'sql.js';
 import { describe, expect, it } from 'vitest';
-import { migrate, migrationsFromFiles } from '@pos/db';
+import { migrate, migrationsFromFiles, type SqlDriver } from '@pos/db';
 import { createPosService } from '@pos/db/service';
-import { isServiceError, pktDate, type BusinessType, type PosService } from '@pos/shared';
+import { isServiceError, pktDate, type PosService } from '@pos/shared';
 import { createSqlJsDriver } from '../src/db/sqljs-driver';
 
 /**
@@ -15,7 +15,7 @@ const files = import.meta.glob<string>('../../../packages/db/migrations/*.sql', 
   eager: true,
 });
 
-async function shopOf(type: BusinessType): Promise<PosService> {
+async function shopOf(): Promise<{ svc: PosService; driver: SqlDriver }> {
   const SQL = await initSqlJs();
   const driver = createSqlJsDriver(new SQL.Database());
   await migrate(driver, migrationsFromFiles(files));
@@ -25,16 +25,16 @@ async function shopOf(type: BusinessType): Promise<PosService> {
     branchName: 'Main',
     invoicePrefix: 'K',
     owner: { username: 'owner', displayName: 'Owner', pin: '1234' },
-    businessType: type,
+    businessType: 'kiryana',
   });
   await svc.auth.login('owner', '1234');
-  return svc;
+  return { svc, driver };
 }
 
 describe('kiryana on sql.js', () => {
   it('migrates to version 6 and sells loose goods by weight with exact, rounded totals', async () => {
-    const svc = await shopOf('kiryana');
-    const chini = await svc.catalog.createAccessory({
+    const { svc } = await shopOf();
+    const chini = await svc.catalog.createItem({
       product: { brand: 'Loose', name: 'Chini (sugar)' },
       sku: 'CHINI',
       costPrice: 25_000,
@@ -42,9 +42,9 @@ describe('kiryana on sql.js', () => {
       openingQty: 50_000,
       unit: 'kg',
     });
-    expect(chini.variant).toMatchObject({ unitScale: 1000, unitLabel: 'kg' });
+    expect(chini.item).toMatchObject({ unitScale: 1000, unitLabel: 'kg' });
 
-    const lines = [{ variantId: chini.variant.id, quantity: 1250 }];
+    const lines = [{ itemId: chini.item.id, quantity: 1250 }];
     const preview = await svc.checkout.preview({ lines });
     expect(preview.total).toBe(35_688); // 1.25 kg x Rs 285.50 = 35,687.5 paisa, half away from zero
     const invoice = await svc.checkout.commit({
@@ -62,7 +62,7 @@ describe('kiryana on sql.js', () => {
     });
     expect(ret.total).toBe(-14_275);
 
-    const after = await svc.catalog.listAccessories({ q: 'CHINI' });
+    const after = await svc.catalog.listItems({ q: 'CHINI' });
     expect(after[0]?.onHand).toBe(49_250);
     expect(await svc.integrity.verifyChain()).toMatchObject({ ok: true, count: 2 });
     expect(await svc.integrity.checks()).toMatchObject({
@@ -72,8 +72,8 @@ describe('kiryana on sql.js', () => {
   });
 
   it('sells the batch that expires first, skips an expired one, and returns goods to their batch', async () => {
-    const svc = await shopOf('kiryana');
-    const milk = await svc.catalog.createAccessory({
+    const { svc } = await shopOf();
+    const milk = await svc.catalog.createItem({
       product: { brand: 'Olpers', name: 'Milk 1L' },
       sku: 'MILK',
       costPrice: 29_000,
@@ -82,22 +82,21 @@ describe('kiryana on sql.js', () => {
     const day = (n: number): string => pktDate(Date.now() + n * 86_400_000);
     const supplier = await svc.purchasing.createSupplier({ name: 'Dairy' });
     const line = (quantity: number, days: number, batchNo: string) => ({
-      variantId: milk.variant.id,
+      itemId: milk.item.id,
       quantity,
       unitCost: 29_000,
       batch: { batchNo, expiryDate: day(days) },
     });
     await svc.purchasing.receive({
       supplierId: supplier.id,
-      phones: [],
-      accessories: [line(5, -2, 'OLD'), line(10, 20, 'LATE'), line(4, 5, 'SOON')],
+      items: [line(5, -2, 'OLD'), line(10, 20, 'LATE'), line(4, 5, 'SOON')],
     });
 
     const sale = await svc.checkout.preview({
-      lines: [{ variantId: milk.variant.id, quantity: 6 }],
+      lines: [{ itemId: milk.item.id, quantity: 6 }],
     });
     const invoice = await svc.checkout.commit({
-      lines: [{ variantId: milk.variant.id, quantity: 6 }],
+      lines: [{ itemId: milk.item.id, quantity: 6 }],
       payments: [{ method: 'cash', amount: sale.total }],
     });
     const left = async (): Promise<Record<string, number>> =>
@@ -115,7 +114,7 @@ describe('kiryana on sql.js', () => {
     expect(await left()).toEqual({ OLD: 5, SOON: 4, LATE: 9 });
 
     const short = await svc.checkout
-      .preview({ lines: [{ variantId: milk.variant.id, quantity: 14 }] })
+      .preview({ lines: [{ itemId: milk.item.id, quantity: 14 }] })
       .then(
         () => null,
         (e: unknown) => e,
@@ -125,8 +124,9 @@ describe('kiryana on sql.js', () => {
   });
 
   it('refuses modules the shop does not own', async () => {
-    const svc = await shopOf('kiryana');
-    const refused = await svc.repairs.list().then(
+    const { svc, driver } = await shopOf();
+    await driver.exec("update app_meta set value = 'weight_units' where key = 'modules'");
+    const refused = await svc.batches.list().then(
       () => null,
       (e: unknown) => e,
     );

@@ -16,7 +16,7 @@ import { BarList, ChartLegend, TrendChart } from '../components/dashboard/TrendC
 import { dynKey, useT } from '../i18n';
 import { formatDateTime, todayYmd } from '../lib/dates';
 import { formatRs } from '../lib/money';
-import { variantQtyText } from '../lib/qty';
+import { itemQtyText } from '../lib/qty';
 import {
   DASH_PERIODS,
   OVERDUE_DAYS,
@@ -363,14 +363,14 @@ export function Dashboard(): ReactNode {
             {s && s.lowStock.length > 0 ? (
               <ul className="mt-4 divide-y divide-[var(--border)] border-t border-line text-sm">
                 {s.lowStock.slice(0, 4).map((v) => (
-                  <li key={v.variant.id} className="flex justify-between gap-3 py-2">
+                  <li key={v.item.id} className="flex justify-between gap-3 py-2">
                     <span className="truncate">{v.label}</span>
                     <span
                       className={`num shrink-0 font-semibold ${v.onHand <= 0 ? 'text-[var(--danger-ink)]' : 'text-[var(--warning-ink)]'}`}
                     >
                       {v.onHand <= 0
                         ? t('dash.out')
-                        : t('dash.left', { qty: variantQtyText(v.onHand, v.variant) })}
+                        : t('dash.left', { qty: itemQtyText(v.onHand, v.item) })}
                     </span>
                   </li>
                 ))}

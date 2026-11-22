@@ -21,15 +21,12 @@ import {
   type CartPreview,
   type CatalogHit,
   type PaymentInput,
-  type PhoneUnitView,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { CustomerPicker } from '../components/CustomerPicker';
-import { ImeiPicker } from '../components/ImeiPicker';
 import { ItemHistoryDialog } from '../components/ItemHistoryDialog';
 import { PaymentPanel } from '../components/PaymentPanel';
-import { ConditionBadge, PtaBadge } from '../components/ProductBadges';
 import { QUICK_HOTKEYS, QuickItemsBar, QuickItemsDialog } from '../components/QuickItems';
 import { ReceiptDialog } from '../components/ReceiptDialog';
 import { TillInfo } from '../components/TillInfo';
@@ -39,13 +36,12 @@ import { Dialog } from '../components/ui/Dialog';
 import { Field, Input } from '../components/ui/Field';
 import { Empty, Kbd, Money } from '../components/ui/misc';
 import { useT, type TKey } from '../i18n';
-import { nicheKey } from '../i18n/niche';
-import { useShopModules } from '../service/use-modules';
 import { errorMessage } from '../i18n/errors';
 import { cartLineItemRef } from '../lib/item-history';
 import { formatRs, paisaToInput, parseRupees, percentDiscount } from '../lib/money';
 import { printReceipt } from '../lib/print';
 import { loadReceiptModel } from '../lib/receipt-model';
+import { pickableHit } from '../lib/search-pick';
 import { useHotkeys } from '../lib/shortcuts';
 import { useService } from '../service/context';
 import {
@@ -63,10 +59,11 @@ import { formatTime } from '../lib/dates';
 import {
   QUICK_AMOUNTS,
   perUnit,
+  minusQty,
   qtyStep,
   qtyText,
   quickLabel,
-  variantQtyText,
+  itemQtyText,
   weightForAmount,
 } from '../lib/qty';
 
@@ -363,9 +360,41 @@ function InvoiceDiscountDialog({
 // ---------------------------------------------------------------- main screen
 const REASON_FALLBACK: ApprovalReason = 'discount';
 
+/** "Clear the whole bill?" confirm. Cancel has the focus: an Enter from a barcode scanner must not wipe the bill. */
+export function ClearBillDialog({
+  open,
+  onClose,
+  onClear,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onClear: () => void;
+}): ReactNode {
+  const t = useT();
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      width={400}
+      title={t('billing.clearCart')}
+      footer={
+        <>
+          <Button onClick={onClose} data-autofocus>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="danger" onClick={onClear}>
+            {t('billing.clearCart')}
+          </Button>
+        </>
+      }
+    >
+      <p>{t('billing.clearConfirm')}</p>
+    </Dialog>
+  );
+}
+
 export function Billing(): ReactNode {
   const t = useT();
-  const hasImei = useShopModules().has('imei');
   const service = useService();
   const cart = useCart();
   const nav = useNavigate();
@@ -375,11 +404,12 @@ export function Billing(): ReactNode {
   const searchRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<CatalogHit[]>([]);
+  // the search text the current hits were found for: Enter may only pick a hit of the text in the box
+  const [hitsFor, setHitsFor] = useState('');
   const [dropOpen, setDropOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  const [imeiUnits, setImeiUnits] = useState<PhoneUnitView[] | null>(null);
   const can = useCan();
-  const [quick, setQuick] = useState<VariantView[]>([]);
+  const [quick, setQuick] = useState<ItemView[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
 
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -399,7 +429,17 @@ export function Billing(): ReactNode {
   const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null);
   const pendingPayments = useRef<PaymentInput[] | null>(null);
 
-  const focusSearch = useCallback(() => searchRef.current?.focus(), []);
+  // Next frame: a dialog closing in the same render hands focus back to its opener, which would win.
+  // After a mouse pick in a dialog Chrome can report the box as focused while keys go nowhere, so a
+  // box that already holds focus is blurred first; the scanner's keystrokes then land in it.
+  const focusSearch = useCallback(() => {
+    requestAnimationFrame(() => {
+      const box = searchRef.current;
+      if (!box) return;
+      if (document.activeElement === box) box.blur();
+      box.focus();
+    });
+  }, []);
   useEffect(focusSearch, [focusSearch]);
 
   // ---- live preview (debounced) ----
@@ -451,12 +491,7 @@ export function Billing(): ReactNode {
   );
   const addHit = useCallback(
     (h: CatalogHit): void => {
-      if (h.kind === 'phone_unit') report(useCart.getState().addPhone(h.item));
-      else
-        report(
-          useCart.getState().addVariant(h.item),
-          variantQtyText(h.item.onHand, h.item.variant),
-        );
+      report(useCart.getState().addItem(h.item), itemQtyText(h.item.onHand, h.item.item));
       setQ('');
       setHits([]);
       setDropOpen(false);
@@ -478,7 +513,7 @@ export function Billing(): ReactNode {
     };
   }, [service, version]);
   const addQuick = useCallback(
-    (v: VariantView): void => addHit({ kind: 'variant', matchedBy: 'sku', item: v }),
+    (v: ItemView): void => addHit({ kind: 'item', matchedBy: 'sku', item: v }),
     [addHit],
   );
   const quickKeys = Object.fromEntries(
@@ -507,6 +542,7 @@ export function Billing(): ReactNode {
         .then((r) => {
           if (!live) return;
           setHits(r);
+          setHitsFor(term);
           setDropOpen(r.length > 0);
           setActive(-1);
         })
@@ -521,8 +557,9 @@ export function Billing(): ReactNode {
   const submitSearch = async (): Promise<void> => {
     const term = q.trim();
     if (!term) return;
-    if (dropOpen && active >= 0 && hits[active]) {
-      addHit(hits[active]);
+    const picked = pickableHit({ hits, active, open: dropOpen, hitsFor, term });
+    if (picked) {
+      addHit(picked);
       return;
     }
     try {
@@ -531,17 +568,8 @@ export function Billing(): ReactNode {
       const single = exact.length === 1 ? exact[0] : res.length === 1 ? res[0] : undefined;
       if (single) return addHit(single);
       if (res.length === 0) return toast.error(t('billing.notFound', { q: term }));
-      const phones = res.filter(
-        (h): h is Extract<CatalogHit, { kind: 'phone_unit' }> => h.kind === 'phone_unit',
-      );
-      if (
-        phones.length === res.length &&
-        new Set(phones.map((p) => p.item.product.id)).size === 1
-      ) {
-        setImeiUnits(phones.map((p) => p.item));
-        return;
-      }
       setHits(res);
+      setHitsFor(term);
       setDropOpen(true);
       setActive(0);
     } catch (e) {
@@ -642,7 +670,7 @@ export function Billing(): ReactNode {
             .catch((e: unknown) => toast.error(errorMessage(e, t)));
       },
       'Ctrl+H': () => {
-        if (selectedLine && cartLineItemRef(selectedLine)) setHistoryLine(selectedLine);
+        if (selectedLine) setHistoryLine(selectedLine);
         else toast.info(t('hist.noLineSelected'));
       },
       Escape: () => {
@@ -671,10 +699,8 @@ export function Billing(): ReactNode {
           );
       },
       '-': () => {
-        if (selectedLine) {
-          const step = qtyStep(lineScale(selectedLine));
-          cart.setQty(selectedLine.key, Math.max(step, selectedLine.qty - step));
-        }
+        if (selectedLine)
+          cart.setQty(selectedLine.key, minusQty(selectedLine.qty, lineScale(selectedLine)));
       },
     },
     true,
@@ -728,8 +754,8 @@ export function Billing(): ReactNode {
             inputMode="search"
             autoComplete="off"
             spellCheck={false}
-            placeholder={t(nicheKey(hasImei, 'billing.searchPlaceholder'))}
-            aria-label={t(nicheKey(hasImei, 'billing.searchPlaceholder'))}
+            placeholder={t('billing.searchPlaceholder')}
+            aria-label={t('billing.searchPlaceholder')}
             role="combobox"
             aria-expanded={dropOpen}
             aria-controls="search-results"
@@ -760,7 +786,7 @@ export function Billing(): ReactNode {
             >
               {hits.map((h, i) => (
                 <li
-                  key={h.kind === 'phone_unit' ? h.item.unit.id : h.item.variant.id}
+                  key={h.item.item.id}
                   id={`hit-${i}`}
                   role="option"
                   aria-selected={i === active}
@@ -771,35 +797,19 @@ export function Billing(): ReactNode {
                   }}
                   className={`flex min-h-12 cursor-pointer items-center gap-3 border-b border-line px-4 py-2 last:border-0 ${i === active ? 'bg-primary-soft' : ''}`}
                 >
-                  {h.kind === 'phone_unit' ? (
-                    <>
-                      <span className="flex-1">
-                        <span className="block font-semibold">{h.item.label}</span>
-                        <span className="ltr block font-mono text-xs text-muted">
-                          {h.item.unit.imei1 ?? h.item.unit.serial} · {h.item.unit.colour ?? ''}
-                        </span>
-                      </span>
-                      <PtaBadge status={h.item.unit.ptaStatus} />
-                      <ConditionBadge condition={h.item.unit.condition} />
-                      <Money value={h.item.unit.salePrice} className="font-semibold" />
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex-1">
-                        <span className="block font-semibold">{h.item.label}</span>
-                        <span className="ltr block text-xs text-muted">{h.item.variant.sku}</span>
-                      </span>
-                      <Badge tone={h.item.lowStock ? 'warning' : 'muted'}>
-                        {t('inv.onHand', { n: variantQtyText(h.item.onHand, h.item.variant) })}
-                      </Badge>
-                      <span className="whitespace-nowrap">
-                        <Money value={h.item.variant.salePrice} className="font-semibold" />
-                        <span className="ltr text-xs text-muted">
-                          {perUnit(h.item.variant.unitScale, h.item.variant.unitLabel)}
-                        </span>
-                      </span>
-                    </>
-                  )}
+                  <span className="flex-1">
+                    <span className="block font-semibold">{h.item.label}</span>
+                    <span className="ltr block text-xs text-muted">{h.item.item.sku}</span>
+                  </span>
+                  <Badge tone={h.item.lowStock ? 'warning' : 'muted'}>
+                    {t('inv.onHand', { n: itemQtyText(h.item.onHand, h.item.item) })}
+                  </Badge>
+                  <span className="whitespace-nowrap">
+                    <Money value={h.item.item.salePrice} className="font-semibold" />
+                    <span className="ltr text-xs text-muted">
+                      {perUnit(h.item.item.unitScale, h.item.item.unitLabel)}
+                    </span>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -817,7 +827,7 @@ export function Billing(): ReactNode {
             <Empty
               icon={<ShoppingCart size={28} aria-hidden="true" />}
               title={t('billing.emptyTitle')}
-              hint={t(nicheKey(hasImei, 'billing.emptyHint'))}
+              hint={t('billing.emptyHint')}
               action={
                 <Button variant="secondary" size="sm" onClick={() => setHelpOpen(true)}>
                   <Keyboard size={14} aria-hidden="true" />
@@ -853,9 +863,7 @@ export function Billing(): ReactNode {
                       {l.sub ? <div className="ltr text-xs text-muted">{l.sub}</div> : null}
                     </td>
                     <td className="cart-qty">
-                      {l.kind === 'phone' ? (
-                        <div className="text-center font-semibold">1</div>
-                      ) : lineScale(l) !== 1 ? (
+                      {lineScale(l) !== 1 ? (
                         <WeightCell line={l} onResult={report} />
                       ) : (
                         <div className="flex items-center justify-center gap-1">
@@ -1092,19 +1100,6 @@ export function Billing(): ReactNode {
         items={quick}
         onSaved={setQuick}
       />
-      <ImeiPicker
-        units={imeiUnits}
-        onClose={() => {
-          setImeiUnits(null);
-          focusSearch();
-        }}
-        onPick={(u) => {
-          report(cart.addPhone(u));
-          setImeiUnits(null);
-          setQ('');
-          focusSearch();
-        }}
-      />
       <CustomerPicker
         open={customerOpen}
         onClose={() => {
@@ -1218,30 +1213,15 @@ export function Billing(): ReactNode {
         </dl>
       </Dialog>
 
-      <Dialog
+      <ClearBillDialog
         open={clearOpen}
         onClose={() => setClearOpen(false)}
-        width={400}
-        title={t('billing.clearCart')}
-        footer={
-          <>
-            <Button onClick={() => setClearOpen(false)}>{t('common.cancel')}</Button>
-            <Button
-              variant="danger"
-              data-autofocus
-              onClick={() => {
-                cart.clear();
-                setClearOpen(false);
-                focusSearch();
-              }}
-            >
-              {t('billing.clearCart')}
-            </Button>
-          </>
-        }
-      >
-        <p>{t('billing.clearConfirm')}</p>
-      </Dialog>
+        onClear={() => {
+          cart.clear();
+          setClearOpen(false);
+          focusSearch();
+        }}
+      />
 
       <ItemHistoryDialog
         item={historyLine ? cartLineItemRef(historyLine) : null}

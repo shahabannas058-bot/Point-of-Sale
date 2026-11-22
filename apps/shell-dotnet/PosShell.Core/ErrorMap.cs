@@ -21,11 +21,9 @@ public static class ErrorMap
     {
         static bool Has(string text, string needle) => text.Contains(needle, StringComparison.Ordinal);
 
-        if (Has(msg, "phone unit on-hand must stay within 0..1"))
-            return new("UNIT_NOT_IN_STOCK", "This phone is not in stock", null, inner);
         if (Has(msg, "seq must be previous seq + 1") || Has(msg, "prev_hash must equal"))
             return new("CHAIN_CONFLICT", "The invoice chain moved; please retry", null, inner);
-        if (Has(msg, "khata requires a sale with a customer") || Has(msg, "khata requires a ticket with a customer"))
+        if (Has(msg, "khata requires a sale with a customer"))
             return new("KHATA_NEEDS_CUSTOMER", "Khata needs a customer", null, inner);
         if (Has(msg, "original_sale_id must reference"))
             return new("RETURN_NOT_ALLOWED", "Only a sale invoice can be returned", null, inner);
@@ -40,6 +38,10 @@ public static class ErrorMap
 
         if (Has(msg, "FOREIGN KEY constraint failed"))
             return new("NOT_FOUND", "A referenced record was not found", null, inner);
+        // triggers of migration 0009: "items: unit_scale must match unit_label", "sale_lines: unit_scale must match the
+        // item", "items: unit cannot change once stock exists"
+        if (Has(msg, "unit_scale must match") || Has(msg, "unit cannot change once stock exists"))
+            return new("DB_CONSTRAINT", "The unit of this item cannot be used or changed this way", null, inner);
         if (Has(msg, "CHECK constraint failed") || Has(msg, "NOT NULL constraint failed"))
             return new("DB_CONSTRAINT", "The data was rejected by a database rule", null, inner);
 

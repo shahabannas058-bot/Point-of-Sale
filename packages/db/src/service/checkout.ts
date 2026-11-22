@@ -10,6 +10,7 @@ import {
   pktDate,
   roundOffOf,
   type ApprovalReason,
+  type CartLineInput,
   type CartPreview,
   type CheckoutApi,
   type CheckoutDraft,
@@ -45,10 +46,13 @@ import {
   type Allocation,
 } from './batches';
 import { lookupApproval } from './auth';
+import { cashStamp } from './cash-book';
+import { invoiceForSession } from './cost-mask';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, mapError, money, optText } from './errors';
-import { phoneLabel, type Raw } from './mappers';
+import type { Raw } from './mappers';
 import { loadShop, type ShopMeta } from './meta';
+import { olderThan } from './page-cursor';
 import {
   customerBalance,
   insertInvoice,
@@ -57,10 +61,8 @@ import {
   loadCustomerRec,
   loadHead,
   loadInvoiceBy,
-  loadPhoneView,
-  loadVariantView,
+  loadItemView,
   likePattern,
-  phoneUnitInStock,
   requireInvoice,
   type CustomerRec,
 } from './queries';
@@ -69,8 +71,7 @@ import type { SqlDriver, SqlValue } from '../types';
 // ---------- shared invoice writer (used by sales, returns and voids) ----------
 export interface LineSpec {
   productId: string;
-  phoneUnitId: string | null;
-  variantId: string | null;
+  itemId: string;
   description: string;
   /** Signed base units (pieces, or grams / millilitres): positive on a sale, negative on a return/void. */
   quantity: number;
@@ -137,8 +138,8 @@ export async function writeInvoice(
       const head = await loadHead(ctx.driver, shop.deviceId);
       const seq = (head?.seq ?? 0) + 1;
       const prevHash = head?.hash ?? GENESIS_HASH;
-      // invoices never go back in time, even if the system clock does
-      const createdAt = Math.max(ctx.clock(), head?.createdAt ?? 0);
+      // invoices never go back in time, even if the system clock does, and never fall into a closed day
+      const createdAt = Math.max(await cashStamp(ctx, shop.branchId), head?.createdAt ?? 0);
       const unsealed = {
         id: spec.saleId,
         deviceId: shop.deviceId,
@@ -160,8 +161,7 @@ export async function writeInvoice(
           saleId: spec.saleId,
           lineNo: i + 1,
           productId: l.productId,
-          phoneUnitId: l.phoneUnitId,
-          variantId: l.variantId,
+          itemId: l.itemId,
           description: l.description,
           quantity: l.quantity,
           unitScale: l.unitScale,
@@ -194,11 +194,11 @@ export async function writeInvoice(
       const restored = new Map<string | null, number>();
       for (const l of invoice.lines) {
         let parts: Allocation[] = [{ batchId: null, quantity: Math.abs(l.quantity) }];
-        if (batched && l.variantId !== null && (await hasBatches(ctx.driver, l.variantId))) {
+        if (batched && (await hasBatches(ctx.driver, l.itemId))) {
           if (spec.kind === 'sale')
             parts = await allocateSale(
               ctx.driver,
-              l.variantId,
+              l.itemId,
               shop.branchId,
               l.quantity,
               today,
@@ -208,7 +208,7 @@ export async function writeInvoice(
             parts = await allocateReturn(
               ctx.driver,
               spec.originalSaleId,
-              l.variantId,
+              l.itemId,
               -l.quantity,
               restored,
             );
@@ -218,8 +218,7 @@ export async function writeInvoice(
             id: ctx.newId(),
             branchId: shop.branchId,
             type: spec.kind === 'sale' ? 'sale' : 'return',
-            phoneUnitId: l.phoneUnitId,
-            variantId: l.variantId,
+            itemId: l.itemId,
             batchId: p.batchId,
             quantity: l.quantity > 0 ? -p.quantity : p.quantity,
             unitCost: l.costPrice,
@@ -307,6 +306,20 @@ interface PricedCart {
   balance: number;
 }
 
+/**
+ * One line per item: a return is matched to its sale line by item, so a second line of the same item (with another
+ * discount) could be refunded twice. The desktop cart merges a rescan into the existing line.
+ */
+function assertOneLinePerItem(lines: readonly CartLineInput[]): void {
+  const seen = new Set<string>();
+  for (const [idx, l] of lines.entries()) {
+    if (typeof l.itemId !== 'string') throw invalid(`lines.${idx}`, 'Each line needs an itemId');
+    if (seen.has(l.itemId))
+      throw invalid(`lines.${idx}.itemId`, 'This item is already on another line of the bill');
+    seen.add(l.itemId);
+  }
+}
+
 async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promise<PricedCart> {
   if (!Array.isArray(draft.lines) || draft.lines.length === 0)
     throw new ServiceError('EMPTY_CART', 'The cart is empty');
@@ -323,100 +336,45 @@ async function priceCart(ctx: Ctx, shop: ShopMeta, draft: CheckoutDraft): Promis
     balance = await customerBalance(ctx.driver, customer.id);
   }
 
-  // total requested per accessory variant across all lines (a variant may appear on several lines)
-  const requested = new Map<string, number>();
-  for (const l of draft.lines)
-    if (l.variantId !== undefined)
-      requested.set(
-        l.variantId,
-        (requested.get(l.variantId) ?? 0) + (Number.isSafeInteger(l.quantity) ? l.quantity : 0),
-      );
-
+  assertOneLinePerItem(draft.lines);
   const items: PricedItem[] = [];
-  const usedUnits = new Set<string>();
-  const cumulative = new Map<string, number>();
   for (const [idx, l] of draft.lines.entries()) {
     const lineNo = idx + 1;
     const field = `lines.${idx}`;
-    if ((l.phoneUnitId === undefined) === (l.variantId === undefined))
-      throw invalid(field, 'Each line needs exactly one of phoneUnitId / variantId');
     const quantity = intIn(l.quantity, `${field}.quantity`, 1, MAX_QUANTITY_ANY);
     const discount = discountMoney(l.discountAmount ?? 0, `${field}.discountAmount`);
 
-    if (l.phoneUnitId !== undefined) {
-      if (quantity !== 1) throw invalid(`${field}.quantity`, 'A phone unit is sold one at a time');
-      const view = await loadPhoneView(ctx.driver, l.phoneUnitId);
-      if (view === null) throw new ServiceError('NOT_FOUND', 'Phone unit not found', { lineNo });
-      if (
-        usedUnits.has(l.phoneUnitId) ||
-        !(await phoneUnitInStock(ctx.driver, l.phoneUnitId, shop.branchId))
-      )
-        throw new ServiceError('UNIT_NOT_IN_STOCK', 'This phone is not in stock', {
-          lineNo,
-          phoneUnitId: l.phoneUnitId,
-        });
-      usedUnits.add(l.phoneUnitId);
-      const id =
-        view.unit.imei1 !== null ? `IMEI ${view.unit.imei1}` : `SN ${view.unit.serial ?? ''}`;
-      items.push({
-        lineNo,
-        onHand: 1,
-        spec: {
-          productId: view.unit.productId,
-          phoneUnitId: l.phoneUnitId,
-          variantId: null,
-          description: `${phoneLabel(view.product, view.unit)} · ${id}`.slice(0, 200),
-          quantity: 1,
-          unitScale: 1,
-          unitPrice: view.unit.salePrice,
-          costPrice: view.unit.costPrice,
-          discountAmount: discount,
-        },
-      });
-    } else {
-      const view = await loadVariantView(ctx.driver, l.variantId ?? '', shop.branchId);
-      if (view === null || !view.variant.isActive)
-        throw new ServiceError('NOT_FOUND', 'Accessory not found', { lineNo });
-      if (quantity > maxQuantity(view.variant.unitScale))
-        throw invalid(`${field}.quantity`, 'Quantity is larger than this item allows');
-      const cum = (cumulative.get(view.variant.id) ?? 0) + quantity;
-      cumulative.set(view.variant.id, cum);
-      // Module batch_expiry: stock in batches past their expiry date cannot be sold
-      let expired = 0;
-      if (
-        hasModule(shop.modules, 'batch_expiry') &&
-        (await hasBatches(ctx.driver, view.variant.id))
-      )
-        expired = await expiredOnHand(
-          ctx.driver,
-          view.variant.id,
-          shop.branchId,
-          pktDate(ctx.clock()),
-        );
-      const sellable = view.onHand - expired;
-      if (!shop.settings.allowNegativeStock && cum > sellable)
-        throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
-          onHand: sellable,
-          requested: requested.get(view.variant.id) ?? cum,
-          lineNo,
-          ...(expired > 0 ? { expiredOnHand: expired } : {}),
-        });
-      items.push({
-        lineNo,
+    const view = await loadItemView(ctx.driver, l.itemId, shop.branchId);
+    if (view === null || !view.item.isActive)
+      throw new ServiceError('NOT_FOUND', 'Item not found', { lineNo });
+    if (quantity > maxQuantity(view.item.unitScale))
+      throw invalid(`${field}.quantity`, 'Quantity is larger than this item allows');
+    // Module batch_expiry: stock in batches past their expiry date cannot be sold
+    let expired = 0;
+    if (hasModule(shop.modules, 'batch_expiry') && (await hasBatches(ctx.driver, view.item.id)))
+      expired = await expiredOnHand(ctx.driver, view.item.id, shop.branchId, pktDate(ctx.clock()));
+    const sellable = view.onHand - expired;
+    if (!shop.settings.allowNegativeStock && quantity > sellable)
+      throw new ServiceError('STOCK_INSUFFICIENT', 'Not enough stock', {
         onHand: sellable,
-        spec: {
-          productId: view.variant.productId,
-          phoneUnitId: null,
-          variantId: view.variant.id,
-          description: view.label.slice(0, 200),
-          quantity,
-          unitScale: view.variant.unitScale,
-          unitPrice: view.variant.salePrice,
-          costPrice: view.variant.costPrice,
-          discountAmount: discount,
-        },
+        requested: quantity,
+        lineNo,
+        ...(expired > 0 ? { expiredOnHand: expired } : {}),
       });
-    }
+    items.push({
+      lineNo,
+      onHand: sellable,
+      spec: {
+        productId: view.item.productId,
+        itemId: view.item.id,
+        description: view.label.slice(0, 200),
+        quantity,
+        unitScale: view.item.unitScale,
+        unitPrice: view.item.salePrice,
+        costPrice: view.item.costPrice,
+        discountAmount: discount,
+      },
+    });
   }
 
   const priced = items.map((it): PricedLine => ({
@@ -519,7 +477,7 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
           const existing = await loadInvoiceBy(ctx.driver, 'id', input.saleId); // 2. idempotency
           if (existing !== null) {
             assertSameSale(existing, input);
-            return existing;
+            return invoiceForSession(ctx, existing);
           }
         }
         const cart = await priceCart(ctx, shop, input); // 1 (empty cart) + 3 stock
@@ -568,13 +526,14 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
         });
         if (approvedBy !== null && input.approvalToken !== undefined)
           ctx.approvals.delete(input.approvalToken); // consumed only after the batch succeeded
-        return invoice;
+        return invoiceForSession(ctx, invoice);
       });
     },
 
     async getInvoice(idOrInvoiceNo: string): Promise<InvoiceView> {
       requireSession(ctx);
-      return toInvoiceView(ctx.driver, await requireInvoice(ctx.driver, idOrInvoiceNo));
+      const invoice = await requireInvoice(ctx.driver, idOrInvoiceNo);
+      return toInvoiceView(ctx.driver, invoiceForSession(ctx, invoice));
     },
 
     async listInvoices(f = {}): Promise<InvoiceSummary[]> {
@@ -598,12 +557,12 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
         params.push(f.kind);
       }
       if (f.q !== undefined && f.q.trim() !== '') {
-        const like = likePattern(f.q.trim());
-        conds.push(`(s.invoice_no LIKE ? ESCAPE '\\' OR EXISTS (
-          SELECT 1 FROM sale_lines l JOIN phone_units pu ON pu.id = l.phone_unit_id
-          WHERE l.sale_id = s.id AND (pu.imei1 LIKE ? ESCAPE '\\' OR pu.imei2 LIKE ? ESCAPE '\\')))`);
-        params.push(like, like, like);
+        conds.push("s.invoice_no LIKE ? ESCAPE '\\'");
+        params.push(likePattern(f.q.trim()));
       }
+      const older = olderThan(f, 's.');
+      conds.push(older.sql);
+      params.push(...older.params);
       const limit = Math.min(Math.max(f.limit ?? 100, 1), 500);
       params.push(limit);
       const rows = await ctx.driver.query<Raw>(
@@ -611,8 +570,8 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
            s.total,
            COALESCE((SELECT -SUM(r.total) FROM sales r WHERE r.original_sale_id = s.id), 0) AS returned_total
          FROM sales s LEFT JOIN customers c ON c.id = s.customer_id JOIN users u ON u.id = s.cashier_id
-         ${conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : ''}
-         ORDER BY s.seq DESC LIMIT ?`,
+         WHERE ${conds.join(' AND ')}
+         ORDER BY s.created_at DESC, s.id DESC LIMIT ?`,
         params,
       );
       return rows.map((r): InvoiceSummary => ({
@@ -629,6 +588,10 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
   });
 }
 
+/** Order-free, sign-free fingerprint of a payment list, for comparing a replay with the stored invoice. */
+export const paymentsKey = (ps: readonly { method: string; amount: number }[]): string =>
+  JSON.stringify(ps.map((p) => `${p.method}:${Math.abs(p.amount)}`).sort());
+
 /**
  * A replayed saleId must describe the same sale. A retry after a timeout sends the identical draft and gets the
  * stored invoice back; a changed cart under an old id would otherwise be "accepted" while the stored invoice is
@@ -637,15 +600,14 @@ export function createCheckoutPart(ctx: Ctx): CheckoutPart {
 function assertSameSale(existing: Invoice, input: CommitSaleInput): void {
   const tally = (
     lines: readonly {
-      phoneUnitId?: string | null;
-      variantId?: string | null;
+      itemId?: string | null;
       quantity: number;
       discountAmount?: number;
     }[],
   ): string => {
     const acc = new Map<string, { qty: number; disc: number }>();
     for (const l of lines) {
-      const key = l.phoneUnitId ? `p:${l.phoneUnitId}` : `v:${l.variantId ?? ''}`;
+      const key = l.itemId ?? '';
       const cur = acc.get(key) ?? { qty: 0, disc: 0 };
       acc.set(key, {
         qty: cur.qty + Math.abs(l.quantity),
@@ -654,11 +616,10 @@ function assertSameSale(existing: Invoice, input: CommitSaleInput): void {
     }
     return JSON.stringify([...acc.entries()].sort(([a], [b]) => (a < b ? -1 : 1)));
   };
-  const pay = (ps: readonly { method: string; amount: number }[]): string =>
-    JSON.stringify(ps.map((p) => `${p.method}:${Math.abs(p.amount)}`).sort());
   const sameLines = tally(existing.lines) === tally(Array.isArray(input.lines) ? input.lines : []);
   const samePay =
-    pay(existing.payments) === pay(Array.isArray(input.payments) ? input.payments : []);
+    paymentsKey(existing.payments) ===
+    paymentsKey(Array.isArray(input.payments) ? input.payments : []);
   const sameCustomer = (existing.customerId ?? null) === (input.customerId ?? null);
   if (sameLines && samePay && sameCustomer) return;
   throw new ServiceError('SALE_ID_REUSED', 'This saleId already belongs to a different invoice', {

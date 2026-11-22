@@ -23,7 +23,7 @@ const NOTE_MAX = 500;
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 
 /**
- * Cash totals of one branch over [from, to). Sales and repairs carry their own payment rows; udhaar and supplier
+ * Cash totals of one branch over [from, to). Sales carry their own payment rows; udhaar and supplier
  * payments are ledger entries; everything else is in cash_entries. Only method = 'cash' moves the drawer.
  */
 async function breakdown(
@@ -51,15 +51,13 @@ async function breakdown(
            (SELECT COALESCE(-SUM(amount), 0) FROM ledger_entries
              WHERE supplier_id IS NOT NULL AND type = 'payment_made' AND method = 'cash'
                AND created_at >= ? AND created_at < ?) AS supplier_paid,
-           (SELECT COALESCE(SUM(amount), 0) FROM repair_payments
-             WHERE method = 'cash' AND created_at >= ? AND created_at < ?) AS repair_cash,
            (SELECT COALESCE(SUM(CASE WHEN type = 'expense' THEN amount END), 0) FROM cash_entries
              WHERE branch_id = ? AND created_at >= ? AND created_at < ?) AS expenses,
            (SELECT COALESCE(SUM(CASE WHEN type = 'cash_in' THEN amount END), 0) FROM cash_entries
              WHERE branch_id = ? AND created_at >= ? AND created_at < ?) AS cash_in,
            (SELECT COALESCE(SUM(CASE WHEN type = 'cash_out' THEN amount END), 0) FROM cash_entries
              WHERE branch_id = ? AND created_at >= ? AND created_at < ?) AS cash_out`,
-        [...bft, ...bft, ...ft, ...ft, ...ft, ...bft, ...bft, ...bft],
+        [...bft, ...bft, ...ft, ...ft, ...bft, ...bft, ...bft],
       )
     )[0] ?? {};
   const b = {
@@ -67,7 +65,6 @@ async function breakdown(
     cashRefunds: num(r.cash_refunds),
     udhaarCollected: num(r.udhaar_collected),
     supplierPaid: num(r.supplier_paid),
-    repairCash: num(r.repair_cash),
     expenses: num(r.expenses),
     cashIn: num(r.cash_in),
     cashOut: num(r.cash_out),
@@ -77,8 +74,7 @@ async function breakdown(
     b.cashSales -
     b.cashRefunds +
     b.udhaarCollected -
-    b.supplierPaid +
-    b.repairCash -
+    b.supplierPaid -
     b.expenses +
     b.cashIn -
     b.cashOut;
@@ -88,7 +84,6 @@ async function breakdown(
     cashRefunds: paisa(b.cashRefunds),
     udhaarCollected: paisa(b.udhaarCollected),
     supplierPaid: paisa(b.supplierPaid),
-    repairCash: paisa(b.repairCash),
     expenses: paisa(b.expenses),
     cashIn: paisa(b.cashIn),
     cashOut: paisa(b.cashOut),
@@ -100,7 +95,10 @@ const CLOSE_SQL = `SELECT dc.*, u.display_name AS closed_by_name
   FROM day_closes dc JOIN users u ON u.id = dc.closed_by`;
 
 function toDayClose(row: Raw): DayClose {
-  const c = mapRow<Omit<DayClose, 'difference'>>(row);
+  // day_closes.repair_cash is a legacy column from the mobile-shop era, always 0 now: not part of the contract
+  const { repairCash: _legacy, ...c } = mapRow<
+    Omit<DayClose, 'difference'> & { repairCash: number }
+  >(row);
   return { ...c, difference: paisa(c.counted - c.expected) };
 }
 
@@ -137,14 +135,24 @@ async function periodEntries(
 const clockBehind = (): ServiceError =>
   invalid('clock', 'The PC clock is behind the last day close; fix the date and time');
 
-/** An entry stamped before the last close would fall into a closed period and never be counted. */
-async function assertClockAfterLastClose(
-  driver: SqlDriver,
-  branchId: string,
-  at: number,
-): Promise<void> {
-  const last = await lastClose(driver, branchId);
-  if (last !== null && at < last.closedAt) throw clockBehind();
+/** The earliest time a cash write may be stamped at: just after the last day close (0 when there is none). */
+const firstOpenStamp = (last: DayClose | null): number => (last === null ? 0 : last.closedAt + 1);
+
+/**
+ * The (exclusive) end of the open period: the PC clock, but always past the earliest stamp, so writes that cashStamp
+ * moved past a clock that is behind the last close are counted at once. closeDay refuses while the clock is below it.
+ */
+const openPeriodEnd = (now: number, last: DayClose | null): number =>
+  Math.max(now, firstOpenStamp(last) + 1);
+
+/**
+ * The time to stamp a write that moves cash (sale, refund, udhaar or supplier payment, cash book entry): the PC clock,
+ * but never at or before the last day close. A write stamped inside a closed period would never be counted in any
+ * drawer; after a small clock step back it lands in the open period instead.
+ */
+export async function cashStamp(ctx: Ctx, branchId: string): Promise<number> {
+  const last = await lastClose(ctx.driver, branchId);
+  return Math.max(ctx.clock(), firstOpenStamp(last));
 }
 
 function insertEntry(b: WriteBatch, e: CashEntry): void {
@@ -172,7 +180,7 @@ export function createCashApi(ctx: Ctx): CashApi {
       const shop = await loadShop(ctx.driver);
       const last = await lastClose(ctx.driver, shop.branchId);
       const from = last?.closedAt ?? 0;
-      const asOf = ctx.clock();
+      const asOf = openPeriodEnd(ctx.clock(), last);
       const totals = await breakdown(
         ctx.driver,
         shop.branchId,
@@ -205,8 +213,7 @@ export function createCashApi(ctx: Ctx): CashApi {
       const note = optText(i.note, 'note', NOTE_MAX);
       return ctx.lock(async () => {
         const shop = await loadShop(ctx.driver);
-        const at = ctx.clock();
-        await assertClockAfterLastClose(ctx.driver, shop.branchId, at);
+        const at = await cashStamp(ctx, shop.branchId);
         const entry: CashEntry = {
           id: ctx.newId(),
           branchId: shop.branchId,
@@ -246,7 +253,7 @@ export function createCashApi(ctx: Ctx): CashApi {
         const last = await lastClose(ctx.driver, original.branchId);
         if (last !== null && original.createdAt < last.closedAt)
           throw invalid('entryId', 'The day of this entry is already closed');
-        const at = ctx.clock();
+        const at = await cashStamp(ctx, original.branchId);
         const entry: CashEntry = {
           ...original,
           id: ctx.newId(),
@@ -276,7 +283,7 @@ export function createCashApi(ctx: Ctx): CashApi {
         const last = await lastClose(ctx.driver, shop.branchId);
         const from = last?.closedAt ?? 0;
         const at = ctx.clock();
-        if (at < from) throw clockBehind();
+        if (at < openPeriodEnd(at, last)) throw clockBehind();
         const totals = await breakdown(
           ctx.driver,
           shop.branchId,
@@ -314,7 +321,7 @@ export function createCashApi(ctx: Ctx): CashApi {
             rec.cashRefunds,
             rec.udhaarCollected,
             rec.supplierPaid,
-            rec.repairCash,
+            0, // legacy repair_cash column
             rec.expenses,
             rec.cashIn,
             rec.cashOut,

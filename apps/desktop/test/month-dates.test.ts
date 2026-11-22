@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { daysSince, formatMonth, localMonthRange, monthYm, shiftMonth } from '../src/lib/dates';
+import {
+  daysSince,
+  formatMonth,
+  inclusiveBounds,
+  localMonthRange,
+  monthYm,
+  shiftMonth,
+} from '../src/lib/dates';
 
 describe('month helpers (PKT has no DST, local midnight is exact)', () => {
   it('monthYm names the month a timestamp falls in', () => {
@@ -13,6 +20,13 @@ describe('month helpers (PKT has no DST, local midnight is exact)', () => {
     expect(new Date(r.toMs).toString()).toBe(new Date(2026, 10, 1).toString());
     const dec = localMonthRange('2026-12');
     expect(new Date(dec.toMs).getFullYear()).toBe(2027);
+  });
+
+  it('inclusiveBounds ends one ms before the next month, so 1st 00:00 is in one month only (QA#17)', () => {
+    const oct = inclusiveBounds(localMonthRange('2026-10'));
+    const novStart = localMonthRange('2026-11').fromMs;
+    expect(oct).toEqual({ from: localMonthRange('2026-10').fromMs, to: novStart - 1 });
+    expect(novStart <= oct.to).toBe(false);
   });
 
   it('shiftMonth rolls over the year both ways', () => {

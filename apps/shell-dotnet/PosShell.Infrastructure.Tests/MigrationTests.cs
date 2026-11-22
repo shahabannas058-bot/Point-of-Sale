@@ -32,14 +32,16 @@ public class MigrationTests
                 var tables = Names(db, "table");
                 string[] expected =
                 [
-                    "accessory_variants", "app_meta", "branches", "cash_entries", "customers", "day_closes",
-                    "ledger_entries", "outbox", "payments",
-                    "phone_units", "products", "purchases", "repair_parts", "repair_payments", "repair_status_history",
-                    "repair_tickets", "sale_lines", "sales", "schema_migrations", "stock_batches", "stock_movements",
-                    "suppliers", "users", "warranties",
+                    "app_meta", "branches", "cash_entries", "customers", "day_closes", "items",
+                    "ledger_entries", "outbox", "payments", "products", "purchases",
+                    "sale_lines", "sales", "schema_migrations", "stock_batches", "stock_movements",
+                    "suppliers", "users",
                 ];
-                Assert.Equal(expected, tables); // 23 business tables + schema_migrations
-                Assert.Contains("v_variant_on_hand", Names(db, "view"));
+                Assert.Equal(expected, tables); // 17 business tables + schema_migrations (0009 dropped the mobile-shop ones)
+                var views = Names(db, "view");
+                Assert.Contains("v_item_on_hand", views);
+                Assert.Contains("v_sale_line_mismatch", views);
+                Assert.DoesNotContain("v_variant_on_hand", views);
                 Assert.True(Names(db, "trigger").Count >= 10, "immutability / chain triggers must exist");
             }
         }
@@ -53,9 +55,9 @@ public class MigrationTests
         try
         {
             using var db = new SqliteDatabase(file);
-            Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8 }, Migrator.Apply(db));
+            Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, Migrator.Apply(db));
             Assert.Empty(Migrator.Apply(db));
-            Assert.Equal(8, db.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
+            Assert.Equal(9, db.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
         }
         finally { Cleanup(file); }
     }
@@ -184,7 +186,7 @@ public class MigrationTests
 
             using var restored = new SqliteDatabase(Path.Combine(dir, "pos-2026-10-13.db")); // a backup is a usable database
             Assert.Equal("ok", restored.QuickCheck());
-            Assert.Equal(8, restored.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
+            Assert.Equal(9, restored.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
     }
@@ -202,16 +204,10 @@ public class MigrationTests
         var delete = Assert.Throws<ServiceException>(() => fx.Db.Batch([new SqlStatement("DELETE FROM stock_movements")]));
         Assert.Equal("IMMUTABLE_RECORD", delete.Code);
 
-        Assert.Equal("UNIT_NOT_IN_STOCK", Assert.Throws<ServiceException>(() => fx.Db.Batch([
-            new SqlStatement("""
-                INSERT INTO stock_movements (id, branch_id, type, phone_unit_id, quantity, created_by, created_at)
-                VALUES (?, ?, 'purchase', ?, 1, ?, 1)
-                """, [fx.Ids.Next(), fx.S.BranchId, fx.S.PhoneUnitId, fx.S.OwnerId])])).Code); // already on hand 1
-
         var dup = Assert.Throws<ServiceException>(() => fx.Db.Batch([
-            new SqlStatement("UPDATE phone_units SET imei1 = (SELECT imei1 FROM phone_units WHERE id = ?) WHERE id = ?",
-                [fx.S.PhoneUnitId, fx.S.SecondPhoneUnitId])]));
+            new SqlStatement("UPDATE items SET sku = (SELECT sku FROM items WHERE id = ?) WHERE id = ?",
+                [fx.S.ItemId, fx.S.CableItemId])]));
         Assert.Equal("DUPLICATE", dup.Code);
-        Assert.Equal("imei1", dup.Details!["field"]);
+        Assert.Equal("sku", dup.Details!["field"]);
     }
 }

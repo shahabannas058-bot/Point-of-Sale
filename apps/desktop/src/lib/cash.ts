@@ -7,20 +7,13 @@ export interface DrawerRow {
   value: number;
 }
 
-const IN: readonly DrawerRowKey[] = [
-  'opening',
-  'cashSales',
-  'udhaarCollected',
-  'repairCash',
-  'cashIn',
-];
+const IN: readonly DrawerRowKey[] = ['opening', 'cashSales', 'udhaarCollected', 'cashIn'];
 const ORDER: readonly DrawerRowKey[] = [
   'opening',
   'cashSales',
   'cashRefunds',
   'udhaarCollected',
   'supplierPaid',
-  'repairCash',
   'expenses',
   'cashIn',
   'cashOut',

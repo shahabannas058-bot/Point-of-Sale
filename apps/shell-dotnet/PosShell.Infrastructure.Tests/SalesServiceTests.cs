@@ -21,13 +21,13 @@ public sealed class SalesServiceTests : IDisposable
     private ServiceException Fails(string json, string? cashierId = null) =>
         Assert.Throws<ServiceException>(() => Commit(json, cashierId));
 
-    /// <summary>One accessory line + one payment. Every argument is raw JSON so tests can send wrong types on purpose.</summary>
+    /// <summary>One item line + one payment. Every argument is raw JSON so tests can send wrong types on purpose.</summary>
     private string Cart(string quantity = "1", string? discount = null, string amount = "50000",
         string method = "\"cash\"", string? top = null)
     {
         var d = discount is null ? "" : ", \"discountAmount\": " + discount;
         var t = top is null ? "" : top + ", ";
-        return "{ " + t + "\"lines\": [ { \"variantId\": \"" + _fx.S.VariantId + "\", \"quantity\": " + quantity + d + " } ], " +
+        return "{ " + t + "\"lines\": [ { \"itemId\": \"" + _fx.S.ItemId + "\", \"quantity\": " + quantity + d + " } ], " +
                "\"payments\": [ { \"method\": " + method + ", \"amount\": " + amount + " } ] }";
     }
 
@@ -50,8 +50,8 @@ public sealed class SalesServiceTests : IDisposable
         Assert.Equal(1, _fx.Count("sale_lines"));
         Assert.Equal(1, _fx.Count("payments"));
         Assert.Equal(0, _fx.Count("ledger_entries"));
-        Assert.Equal(4, _fx.Count("stock_movements")); // 3 opening + 1 sale
-        Assert.Equal(8, _fx.OnHandVariant());          // stock is a ledger: 10 - 2
+        Assert.Equal(3, _fx.Count("stock_movements")); // 2 opening + 1 sale
+        Assert.Equal(8, _fx.OnHandItem());          // stock is a ledger: 10 - 2
         Assert.Equal(2, _fx.Count("outbox"));          // 'sale' + 'stock_movement'
         Assert.Equal(1, _fx.Licence.Calls);
 
@@ -77,19 +77,21 @@ public sealed class SalesServiceTests : IDisposable
     }
 
     [Fact]
-    public void Phone_sale_with_discount_and_split_cash_khata_writes_the_ledger_entry()
+    public void Item_sale_with_discount_and_split_cash_khata_writes_the_ledger_entry()
     {
         var json = $$"""
             { "customerId": "{{_fx.S.CustomerId}}",
-              "lines": [ { "phoneUnitId": "{{_fx.S.PhoneUnitId}}", "quantity": 1, "discountAmount": 19995 } ],
+              "lines": [ { "itemId": "{{_fx.S.CableItemId}}", "quantity": 1, "discountAmount": 19995 } ],
               "payments": [ { "method": "cash", "amount": 79955 }, { "method": "khata", "amount": 100000 } ] }
             """;
         var inv = Commit(json, _fx.S.ManagerId); // 10 % discount is above a cashier's limit
 
-        Assert.Equal(179_955, inv.Total);
-        Assert.Equal("Samsung Galaxy A55 (Blue, 8/256GB) · IMEI 356938035643809", inv.Lines[0].Description);
-        Assert.Equal(0, _fx.OnHandPhone(_fx.S.PhoneUnitId));
-        Assert.Equal(1, _fx.OnHandPhone(_fx.S.SecondPhoneUnitId));
+        Assert.Equal(ShopFixture.CablePrice - 19_995, inv.Total);
+        Assert.Equal("Generic Braided Cable 2m (USB-C, Grey)", inv.Lines[0].Description);
+        Assert.Equal(_fx.S.CableItemId, inv.Lines[0].ItemId);
+        Assert.Equal(0, _fx.OnHandOf(_fx.S.CableItemId));
+        Assert.Equal(10, _fx.OnHandItem());
+        Assert.Equal(_fx.S.CableItemId, _fx.Db.Query("SELECT item_id FROM sale_lines").Single().Str("item_id"));
 
         var ledger = _fx.Db.Query("SELECT type, amount, sale_id FROM ledger_entries").Single();
         Assert.Equal("sale_credit", ledger.Str("type"));
@@ -108,7 +110,7 @@ public sealed class SalesServiceTests : IDisposable
         Assert.Equal(a.Hash, b.Hash);
         Assert.Equal(id, b.Id);
         Assert.Equal(1, _fx.Count("sales"));
-        Assert.Equal(8, _fx.OnHandVariant());
+        Assert.Equal(8, _fx.OnHandItem());
         Assert.Equal(1, _fx.Licence.Calls);
 
         var bad = Fails(_fx.CashSaleOfChargers(1, "not-a-uuid"));
@@ -122,38 +124,24 @@ public sealed class SalesServiceTests : IDisposable
         Assert.Equal("STOCK_INSUFFICIENT", Fails(_fx.CashSaleOfChargers(11)).Code);
         _fx.Db.Batch([new SqlStatement("INSERT INTO app_meta (key, value) VALUES (?, ?)", ["allow_negative_stock", "1"])]);
         Commit(_fx.CashSaleOfChargers(11));
-        Assert.Equal(-1, _fx.OnHandVariant());
+        Assert.Equal(-1, _fx.OnHandItem());
     }
 
-    // ---- stock and IMEI ---------------------------------------------------------------------------------------------
+    // ---- stock -------------------------------------------------------------------------------------------------------
     [Fact]
-    public void The_same_phone_twice_in_one_cart_is_UNIT_NOT_IN_STOCK_on_the_second_line()
+    public void The_last_item_once_sold_cannot_be_sold_again()
     {
         var json = $$"""
-            { "lines": [ { "phoneUnitId": "{{_fx.S.PhoneUnitId}}", "quantity": 1 }, { "phoneUnitId": "{{_fx.S.PhoneUnitId}}", "quantity": 1 } ],
-              "payments": [ { "method": "cash", "amount": 399900 } ] }
-            """;
-        var e = Fails(json);
-        Assert.Equal("UNIT_NOT_IN_STOCK", e.Code);
-        Assert.Equal(2, e.Details!["lineNo"]);
-        Assert.Equal(_fx.S.PhoneUnitId, e.Details["phoneUnitId"]);
-        Assert.Equal(0, _fx.Count("sales"));
-    }
-
-    [Fact]
-    public void A_phone_that_was_already_sold_cannot_be_sold_again()
-    {
-        var json = $$"""
-            { "lines": [ { "phoneUnitId": "{{_fx.S.SecondPhoneUnitId}}", "quantity": 1 } ],
-              "payments": [ { "method": "cash", "amount": 199950 } ] }
+            { "lines": [ { "itemId": "{{_fx.S.CableItemId}}", "quantity": 1 } ],
+              "payments": [ { "method": "cash", "amount": {{ShopFixture.CablePrice}} } ] }
             """;
         Commit(json);
-        Assert.Equal("UNIT_NOT_IN_STOCK", Fails(json).Code);
+        Assert.Equal("STOCK_INSUFFICIENT", Fails(json).Code);
         Assert.Equal(1, _fx.Count("sales"));
     }
 
     [Fact]
-    public void Overselling_an_accessory_is_STOCK_INSUFFICIENT_with_the_numbers()
+    public void Overselling_an_item_is_STOCK_INSUFFICIENT_with_the_numbers()
     {
         var e = Fails(_fx.CashSaleOfChargers(11));
         Assert.Equal("STOCK_INSUFFICIENT", e.Code);
@@ -166,11 +154,11 @@ public sealed class SalesServiceTests : IDisposable
     }
 
     [Fact]
-    public void The_same_variant_on_two_lines_is_counted_cumulatively()
+    public void The_same_item_on_two_lines_is_counted_cumulatively()
     {
-        var v = _fx.S.VariantId;
+        var v = _fx.S.ItemId;
         var json = $$"""
-            { "lines": [ { "variantId": "{{v}}", "quantity": 6 }, { "variantId": "{{v}}", "quantity": 6 } ],
+            { "lines": [ { "itemId": "{{v}}", "quantity": 6 }, { "itemId": "{{v}}", "quantity": 6 } ],
               "payments": [ { "method": "cash", "amount": 600000 } ] }
             """;
         var e = Fails(json);
@@ -185,33 +173,29 @@ public sealed class SalesServiceTests : IDisposable
         string One(string line, string? top = null) =>
             "{ " + (top is null ? "" : top + ", ") + "\"lines\": [ " + line + " ], \"payments\": [ { \"method\": \"cash\", \"amount\": 50000 } ] }";
 
-        var unknownVariant = Fails(One("{ \"variantId\": \"" + _fx.Ids.Next() + "\", \"quantity\": 1 }"));
-        Assert.Equal("NOT_FOUND", unknownVariant.Code);
-        Assert.Equal("Accessory not found", unknownVariant.Message);
-        Assert.Equal(1, unknownVariant.Details!["lineNo"]);
+        var unknownItem = Fails(One("{ \"itemId\": \"" + _fx.Ids.Next() + "\", \"quantity\": 1 }"));
+        Assert.Equal("NOT_FOUND", unknownItem.Code);
+        Assert.Equal("Item not found", unknownItem.Message);
+        Assert.Equal(1, unknownItem.Details!["lineNo"]);
 
-        Assert.Equal("Accessory not found", Fails(One("{ \"variantId\": \"" + _fx.S.InactiveVariantId + "\", \"quantity\": 1 }")).Message);
-        Assert.Equal("Phone unit not found", Fails(One("{ \"phoneUnitId\": \"" + _fx.Ids.Next() + "\", \"quantity\": 1 }")).Message);
+        Assert.Equal("Item not found", Fails(One("{ \"itemId\": \"" + _fx.S.InactiveItemId + "\", \"quantity\": 1 }")).Message);
 
-        var line = "{ \"variantId\": \"" + _fx.S.VariantId + "\", \"quantity\": 1 }";
+        var line = "{ \"itemId\": \"" + _fx.S.ItemId + "\", \"quantity\": 1 }";
         Assert.Equal("Customer not found", Fails(One(line, "\"customerId\": \"" + _fx.Ids.Next() + "\"")).Message);
         Assert.Equal("Customer not found", Fails(One(line, "\"customerId\": \"" + _fx.S.InactiveCustomerId + "\"")).Message);
     }
 
     [Fact]
-    public void A_line_needs_exactly_one_of_phoneUnitId_or_variantId()
+    public void A_line_needs_an_itemId()
     {
-        var both = Fails("{ \"lines\": [ { \"phoneUnitId\": \"" + _fx.S.PhoneUnitId + "\", \"variantId\": \"" + _fx.S.VariantId +
-                         "\", \"quantity\": 1 } ], \"payments\": [] }");
-        Assert.Equal("VALIDATION", both.Code);
-        Assert.Equal("Each line needs exactly one of phoneUnitId / variantId", both.Message);
-        Assert.Equal("lines.0", Field(both));
+        var missing = Fails("{ \"lines\": [ { \"quantity\": 1 } ], \"payments\": [] }");
+        Assert.Equal("VALIDATION", missing.Code);
+        Assert.Equal("Each line needs an itemId", missing.Message);
+        Assert.Equal("lines.0", Field(missing));
 
-        Assert.Equal("Each line needs exactly one of phoneUnitId / variantId",
-            Fails("{ \"lines\": [ { \"quantity\": 1 } ], \"payments\": [] }").Message);
-
-        var phoneQty = Fails("{ \"lines\": [ { \"phoneUnitId\": \"" + _fx.S.PhoneUnitId + "\", \"quantity\": 2 } ], \"payments\": [] }");
-        Assert.Equal("A phone unit is sold one at a time", phoneQty.Message);
+        // a line from the old mobile-shop UI (a phone unit, no itemId) is refused the same way
+        Assert.Equal("Each line needs an itemId",
+            Fails("{ \"lines\": [ { \"phoneUnitId\": \"" + _fx.Ids.Next() + "\", \"quantity\": 1 } ], \"payments\": [] }").Message);
     }
 
     // ---- JsonElement validation parity (the TS helper rules) ----------------------------------------------------------
@@ -235,7 +219,7 @@ public sealed class SalesServiceTests : IDisposable
     [Fact]
     public void A_missing_quantity_is_VALIDATION_too()
     {
-        var e = Fails("{ \"lines\": [ { \"variantId\": \"" + _fx.S.VariantId + "\" } ], \"payments\": [] }");
+        var e = Fails("{ \"lines\": [ { \"itemId\": \"" + _fx.S.ItemId + "\" } ], \"payments\": [] }");
         Assert.Equal("VALIDATION", e.Code);
         Assert.Equal("lines.0.quantity", Field(e));
     }
@@ -303,7 +287,7 @@ public sealed class SalesServiceTests : IDisposable
         Assert.Equal("EMPTY_CART", Fails("{ \"payments\": [] }").Code);
         Assert.Equal("EMPTY_CART", Fails("{ \"lines\": \"x\", \"payments\": [] }").Code);
 
-        var noPayments = Fails("{ \"lines\": [ { \"variantId\": \"" + _fx.S.VariantId + "\", \"quantity\": 1 } ] }");
+        var noPayments = Fails("{ \"lines\": [ { \"itemId\": \"" + _fx.S.ItemId + "\", \"quantity\": 1 } ] }");
         Assert.Equal("VALIDATION", noPayments.Code);
         Assert.Equal("payments", Field(noPayments));
         Assert.Equal("payments are required", noPayments.Message);
@@ -434,7 +418,7 @@ public sealed class SalesServiceTests : IDisposable
             Assert.Equal(i == 0 ? InvoiceHasher.Genesis : ordered[i - 1].Hash, ordered[i].PrevHash);
             Assert.Equal(ordered[i].Hash, InvoiceHasher.Hash(ordered[i].PrevHash, ordered[i] with { Hash = "" }));
         }
-        Assert.Equal(0, _fx.OnHandVariant());
+        Assert.Equal(0, _fx.OnHandItem());
         Assert.Equal("STOCK_INSUFFICIENT", Fails(_fx.CashSaleOfChargers(1)).Code);
     }
 }

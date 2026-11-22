@@ -8,13 +8,12 @@ import {
   NonNegativePaisaSchema,
   PaisaSchema,
   PaymentIdSchema,
-  PhoneUnitIdSchema,
   ProductIdSchema,
   SaleIdSchema,
   SaleLineIdSchema,
   Sha256HexSchema,
   UserIdSchema,
-  VariantIdSchema,
+  ItemIdSchema,
   makeIssue,
 } from './primitives';
 import { UnitScaleSchema, lineGross } from './units';
@@ -36,8 +35,7 @@ export const SaleLineSchema = z
     saleId: SaleIdSchema,
     lineNo: z.number().int().positive(),
     productId: ProductIdSchema,
-    phoneUnitId: PhoneUnitIdSchema.nullable(),
-    variantId: VariantIdSchema.nullable(),
+    itemId: ItemIdSchema,
     description: z.string().min(1).max(200), // name snapshot at time of sale
     /** Base units (pieces, or grams / millilitres when unitScale is 1000). */
     quantity: z
@@ -47,7 +45,8 @@ export const SaleLineSchema = z
       .refine((n) => n !== 0, 'Quantity cannot be zero'),
     /** Per priced unit (per piece, or per kg / litre). */
     unitPrice: NonNegativePaisaSchema,
-    costPrice: NonNegativePaisaSchema, // snapshot for profit reports, per priced unit
+    /** Snapshot for profit reports, per priced unit. 0 in service output without view_cost (the stored row keeps it). */
+    costPrice: NonNegativePaisaSchema,
     discountAmount: PaisaSchema, // same sign as quantity * unitPrice
     lineTotal: PaisaSchema,
     /** Snapshot of the item's unit scale. Part of the hash from hashVersion 2; always 1 on hashVersion 1. */
@@ -56,12 +55,6 @@ export const SaleLineSchema = z
   })
   .superRefine((l, ctx) => {
     const issue = makeIssue(ctx);
-    if ((l.phoneUnitId === null) === (l.variantId === null))
-      issue(['variantId'], 'Exactly one of phoneUnitId / variantId is required');
-    if (l.phoneUnitId !== null && Math.abs(l.quantity) !== 1)
-      issue(['quantity'], 'Phone units are sold one at a time');
-    if (l.phoneUnitId !== null && l.unitScale !== 1)
-      issue(['unitScale'], 'Phone units are always counted in pieces');
     if (l.lineTotal !== lineGross(l.quantity, l.unitPrice, l.unitScale) - l.discountAmount)
       issue(
         ['lineTotal'],

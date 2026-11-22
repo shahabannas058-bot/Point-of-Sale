@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AccessoryVariantSchema,
+  ItemSchema,
   InvoiceSchema,
   MODULE_IDS,
   MODULE_PRESETS,
@@ -96,22 +96,16 @@ describe('formatQuantity / parseQuantity', () => {
 });
 
 describe('modules', () => {
-  it('presets only name known modules, and custom owns all of them', () => {
+  it('presets only name known modules, and a kiryana shop owns all of them', () => {
     for (const list of Object.values(MODULE_PRESETS))
       for (const m of list) expect(MODULE_IDS).toContain(m);
-    expect([...MODULE_PRESETS.custom].sort()).toEqual([...MODULE_IDS].sort());
-  });
-
-  it('a kiryana shop has no phone modules, a mobile shop has no weight units', () => {
+    expect([...MODULE_PRESETS.kiryana].sort()).toEqual([...MODULE_IDS].sort());
     expect(hasModule(MODULE_PRESETS.kiryana, 'weight_units')).toBe(true);
-    for (const m of ['imei', 'repair', 'warranty'] as const)
-      expect(hasModule(MODULE_PRESETS.kiryana, m)).toBe(false);
-    expect(hasModule(MODULE_PRESETS.mobile, 'weight_units')).toBe(false);
-    expect(hasModule(MODULE_PRESETS.mobile, 'imei')).toBe(true);
+    expect(hasModule([], 'batch_expiry')).toBe(false);
   });
 
   it('parseModuleList drops unknown ids so an older app survives a newer licence', () => {
-    expect(parseModuleList('imei, bogus ,repair,,')).toEqual(['imei', 'repair']);
+    expect(parseModuleList('imei, bogus ,weight_units,,')).toEqual(['weight_units']);
     expect(parseModuleList('')).toEqual([]);
   });
 
@@ -122,13 +116,12 @@ describe('modules', () => {
 });
 
 describe('schemas carry the unit', () => {
-  const variantLine = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  const itemLine = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
     id: id(1),
     saleId: id(2),
     lineNo: 1,
     productId: id(3),
-    phoneUnitId: null,
-    variantId: id(4),
+    itemId: id(4),
     description: 'Chini (sugar) loose',
     quantity: 1250,
     unitScale: 1000,
@@ -141,16 +134,16 @@ describe('schemas carry the unit', () => {
   });
 
   it('accepts a weighted line whose total uses the rounded rule', () => {
-    expect(SaleLineSchema.safeParse(variantLine()).success).toBe(true);
+    expect(SaleLineSchema.safeParse(itemLine()).success).toBe(true);
   });
 
   it('rejects a weighted line priced with the piece formula or rounded the wrong way', () => {
-    expect(SaleLineSchema.safeParse(variantLine({ lineTotal: 35_687 })).success).toBe(false);
-    expect(SaleLineSchema.safeParse(variantLine({ lineTotal: 35_687_500 })).success).toBe(false);
+    expect(SaleLineSchema.safeParse(itemLine({ lineTotal: 35_687 })).success).toBe(false);
+    expect(SaleLineSchema.safeParse(itemLine({ lineTotal: 35_687_500 })).success).toBe(false);
   });
 
   it('defaults a missing unitScale to 1 (older payloads)', () => {
-    const { unitScale: _omit, ...rest } = variantLine({
+    const { unitScale: _omit, ...rest } = itemLine({
       quantity: 2,
       unitPrice: 500,
       lineTotal: 1000,
@@ -159,10 +152,8 @@ describe('schemas carry the unit', () => {
     expect(parsed.unitScale).toBe(1);
   });
 
-  it('rejects a phone unit sold by weight', () => {
-    const r = SaleLineSchema.safeParse(
-      variantLine({ phoneUnitId: id(5), variantId: null, quantity: 1, lineTotal: 28 }),
-    );
+  it('rejects a line without a item', () => {
+    const r = SaleLineSchema.safeParse(itemLine({ itemId: null }));
     expect(r.success).toBe(false);
   });
 
@@ -184,7 +175,7 @@ describe('schemas carry the unit', () => {
     hashVersion,
     prevHash: '0'.repeat(64),
     hash: HASH,
-    lines: [variantLine()],
+    lines: [itemLine()],
     payments: [
       {
         id: id(6),
@@ -204,7 +195,7 @@ describe('schemas carry the unit', () => {
     expect(JSON.stringify(v1.error?.issues)).toContain('hashVersion 1');
   });
 
-  const variant = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  const item = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
     id: id(4),
     productId: id(3),
     sku: 'CHINI-LOOSE',
@@ -222,18 +213,16 @@ describe('schemas carry the unit', () => {
     ...over,
   });
 
-  it('a variant label and scale must agree', () => {
-    expect(AccessoryVariantSchema.safeParse(variant()).success).toBe(true);
-    expect(AccessoryVariantSchema.safeParse(variant({ unitLabel: 'L' })).success).toBe(true);
-    expect(AccessoryVariantSchema.safeParse(variant({ unitScale: 1 })).success).toBe(false);
-    expect(
-      AccessoryVariantSchema.safeParse(variant({ unitLabel: 'pcs', unitScale: 1000 })).success,
-    ).toBe(false);
+  it('a item label and scale must agree', () => {
+    expect(ItemSchema.safeParse(item()).success).toBe(true);
+    expect(ItemSchema.safeParse(item({ unitLabel: 'L' })).success).toBe(true);
+    expect(ItemSchema.safeParse(item({ unitScale: 1 })).success).toBe(false);
+    expect(ItemSchema.safeParse(item({ unitLabel: 'pcs', unitScale: 1000 })).success).toBe(false);
   });
 
-  it('a variant without unit fields is a piece item', () => {
-    const { unitScale: _s, unitLabel: _l, ...old } = variant();
-    const parsed = AccessoryVariantSchema.parse(old);
+  it('a item without unit fields is a piece item', () => {
+    const { unitScale: _s, unitLabel: _l, ...old } = item();
+    const parsed = ItemSchema.parse(old);
     expect(parsed).toMatchObject({ unitScale: 1, unitLabel: 'pcs' });
     expect(unitScaleFor('pcs')).toBe(1);
     expect(unitScaleFor('kg')).toBe(1000);

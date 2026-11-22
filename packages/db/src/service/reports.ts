@@ -9,9 +9,9 @@ import {
 } from '@pos/shared';
 import { canDo, requirePermission, type Ctx } from './deps';
 import { guardApi } from './errors';
-import { toVariantView, type Raw } from './mappers';
+import { toItemView, type Raw } from './mappers';
 import { loadShop } from './meta';
-import { VARIANT_VIEW_SQL } from './queries';
+import { ITEM_VIEW_SQL } from './queries';
 import { assertBuckets, loadDashboard } from './dashboard';
 import { queryStockLog } from './stock-log';
 import { ROUND_OFF_SQL, grossSql } from './report-sql';
@@ -87,7 +87,7 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
       const netRevenue = netSales - returnsTotal;
       const cogs = num(lines.cogs);
       const low = await ctx.driver.query<Raw>(
-        `${VARIANT_VIEW_SQL} WHERE av.is_active = 1 AND on_hand <= av.reorder_level ORDER BY p.brand, p.name, av.sku`,
+        `${ITEM_VIEW_SQL} WHERE it.is_active = 1 AND on_hand <= it.reorder_level ORDER BY p.brand, p.name, it.sku`,
         [shop.branchId],
       );
       return {
@@ -106,7 +106,7 @@ export function createReportsApi(ctx: Ctx): ReportsApi {
         estimatedProfit: paisa(netRevenue - cogs),
         expenses: paisa(expenses),
         netProfit: paisa(netRevenue - cogs - expenses),
-        lowStock: low.map(toVariantView),
+        lowStock: low.map(toItemView),
       };
     },
 

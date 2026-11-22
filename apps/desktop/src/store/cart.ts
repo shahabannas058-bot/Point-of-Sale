@@ -4,17 +4,14 @@ import { uuidv7 } from '@pos/core';
 import {
   lineGross,
   type CheckoutDraft,
-  type PhoneUnitView,
   type UnitLabel,
   type UnitScale,
-  type VariantView,
+  type ItemView,
 } from '@pos/shared';
 
 export interface CartLine {
   key: string;
-  kind: 'phone' | 'accessory';
-  phoneUnitId?: string;
-  variantId?: string;
+  itemId: string;
   label: string;
   sub: string;
   /** per piece, or per kg / litre for loose goods (integer paisa) */
@@ -24,7 +21,7 @@ export interface CartLine {
   unitLabel: UnitLabel;
   /** in base units: pieces, or grams / millilitres for loose goods */
   qty: number;
-  /** accessory on-hand at the time it was added; null for phones (qty fixed at 1) */
+  /** on-hand at the time it was added; null when there is no cap */
   maxQty: number | null;
   /** discount on the whole line, integer paisa */
   discount: number;
@@ -52,6 +49,8 @@ export interface HeldBill {
   invoiceDiscount: number;
   /** the attempt id the bill had when it was held; bills saved by an older version lack it */
   saleId?: string;
+  /** the bill's note; bills saved by an older version lack it */
+  note?: string;
 }
 
 /** 'weighed' = a loose item that is already on the bill: its weight is edited, not added to. */
@@ -71,8 +70,7 @@ interface CartState {
   note: string;
   selected: number;
   held: HeldBill[];
-  addPhone: (v: PhoneUnitView) => AddResult;
-  addVariant: (v: VariantView, qty?: number) => AddResult;
+  addItem: (v: ItemView, qty?: number) => AddResult;
   setQty: (key: string, qty: number) => AddResult;
   remove: (key: string) => void;
   setLineDiscount: (key: string, paisa: number) => void;
@@ -87,11 +85,62 @@ interface CartState {
   deleteHeld: (id: string) => void;
 }
 
-const phoneLabel = (v: PhoneUnitView): string => v.label;
-const phoneSub = (v: PhoneUnitView): string =>
-  [v.unit.imei1 ?? v.unit.serial, v.unit.colour].filter(Boolean).join(' · ');
-const variantSub = (v: VariantView): string =>
-  [v.variant.model, v.variant.colour, v.variant.sku].filter(Boolean).join(' · ');
+const itemSub = (v: ItemView): string =>
+  [v.item.model, v.item.colour, v.item.sku].filter(Boolean).join(' · ');
+
+/** The bill's subtotal: every line's gross less its discount (what the invoice discount may not exceed). */
+const subtotalOf = (lines: readonly CartLine[]): number =>
+  lines.reduce((sum, l) => sum + lineGrossOf(l) - l.discount, 0);
+
+/** v0 = the mobile-shop build, v1 = `variantId` lines, v2 = `itemId` lines. */
+const HELD_BILLS_VERSION = 2;
+
+type Stored = Record<string, unknown>;
+
+const isRecord = (x: unknown): x is Stored =>
+  typeof x === 'object' && x !== null && !Array.isArray(x);
+
+/**
+ * One held line from an older version, or null when it cannot be sold any more.
+ * v0 and v1 lines name their item `variantId`; v0 phone lines have none (they hold a phoneUnitId) and a `kind` tag.
+ */
+function migrateLine(line: unknown): CartLine | null {
+  if (!isRecord(line)) return null;
+  const { kind: _kind, phoneUnitId: _phoneUnitId, variantId, ...rest } = line;
+  const itemId = typeof rest.itemId === 'string' ? rest.itemId : variantId;
+  if (typeof itemId !== 'string' || itemId === '') return null;
+  return { ...rest, itemId } as unknown as CartLine;
+}
+
+/**
+ * A held bill from an older version. A bill left with no lines is dropped. When some lines were dropped the
+ * stored total is wrong, so it becomes 0, and the old attempt id is left out: reusing it could replay the
+ * invoice of the full, older bill.
+ */
+function migrateBill(bill: unknown): HeldBill[] {
+  if (!isRecord(bill) || !Array.isArray(bill.lines)) return [];
+  const stored: unknown[] = bill.lines;
+  const lines = stored.flatMap((l) => {
+    const m = migrateLine(l);
+    return m ? [m] : [];
+  });
+  if (lines.length === 0) return [];
+  if (lines.length === stored.length) return [{ ...bill, lines } as unknown as HeldBill];
+  const { saleId: _saleId, ...rest } = bill;
+  return [{ ...rest, lines, total: 0 } as unknown as HeldBill];
+}
+
+/** zustand persist `migrate`: maps held bills saved by an older version to the current shape. Never throws. */
+export function migrateHeldBills(persisted: unknown, version: number): { held: HeldBill[] } {
+  try {
+    const stored = isRecord(persisted) ? persisted.held : undefined;
+    if (!Array.isArray(stored)) return { held: [] };
+    if (version >= HELD_BILLS_VERSION) return { held: stored as HeldBill[] };
+    return { held: stored.flatMap(migrateBill) };
+  } catch {
+    return { held: [] };
+  }
+}
 
 const empty = {
   lines: [] as CartLine[],
@@ -110,31 +159,11 @@ export const useCart = create<CartState>()(
     (set, get) => ({
       ...fresh(),
       held: [],
-      addPhone: (v) => {
-        if (!v.inStock) return 'out';
-        const { lines } = get();
-        if (lines.some((l) => l.phoneUnitId === v.unit.id)) return 'duplicate';
-        const line: CartLine = {
-          key: `p:${v.unit.id}`,
-          kind: 'phone',
-          phoneUnitId: v.unit.id,
-          label: phoneLabel(v),
-          sub: phoneSub(v),
-          unitPrice: v.unit.salePrice,
-          unitScale: 1,
-          unitLabel: 'pcs',
-          qty: 1,
-          maxQty: null,
-          discount: 0,
-        };
-        set({ lines: [...lines, line], selected: lines.length, approvalToken: null });
-        return 'added';
-      },
-      addVariant: (v, qty) => {
+      addItem: (v, qty) => {
         if (v.onHand <= 0) return 'out';
-        const scale = v.variant.unitScale;
+        const scale = v.item.unitScale;
         const { lines } = get();
-        const idx = lines.findIndex((l) => l.variantId === v.variant.id);
+        const idx = lines.findIndex((l) => l.itemId === v.item.id);
         if (idx >= 0) {
           const cur = lines[idx];
           if (!cur) return 'out';
@@ -155,14 +184,13 @@ export const useCart = create<CartState>()(
         // loose goods start at 1 kg (1000 g); the cashier then types the real weight
         const start = qty ?? (scale === 1 ? 1 : 1000);
         const line: CartLine = {
-          key: `v:${v.variant.id}`,
-          kind: 'accessory',
-          variantId: v.variant.id,
+          key: `v:${v.item.id}`,
+          itemId: v.item.id,
           label: v.label,
-          sub: variantSub(v),
-          unitPrice: v.variant.salePrice,
+          sub: itemSub(v),
+          unitPrice: v.item.salePrice,
           unitScale: scale,
-          unitLabel: v.variant.unitLabel,
+          unitLabel: v.item.unitLabel,
           qty: Math.min(start, v.onHand),
           maxQty: v.onHand,
           discount: 0,
@@ -172,37 +200,50 @@ export const useCart = create<CartState>()(
       },
       setQty: (key, qty) => {
         const line = get().lines.find((l) => l.key === key);
-        if (!line || line.kind === 'phone') return 'duplicate';
+        if (!line) return 'duplicate';
         const max = line.maxQty ?? Number.MAX_SAFE_INTEGER;
         const next = Math.max(1, Math.min(Math.trunc(qty), max));
         // keep the line discount below the new gross so the service never sees discount > gross
         const gross = lineGross(next, line.unitPrice, lineScale(line));
+        const lines = get().lines.map((l) =>
+          l.key === key ? { ...l, qty: next, discount: Math.min(l.discount, gross) } : l,
+        );
         set({
-          lines: get().lines.map((l) =>
-            l.key === key ? { ...l, qty: next, discount: Math.min(l.discount, gross) } : l,
-          ),
+          lines,
+          invoiceDiscount: Math.min(get().invoiceDiscount, subtotalOf(lines)),
           approvalToken: null,
         });
         return qty > max ? 'capped' : 'added';
       },
       remove: (key) => {
-        const lines = get().lines.filter((l) => l.key !== key);
+        const { lines: before, selected } = get();
+        const removed = before.findIndex((l) => l.key === key);
+        const lines = before.filter((l) => l.key !== key);
         set({
           lines,
-          selected: Math.min(get().selected, lines.length - 1),
+          // a line above the selection moved it up one row: follow the same line
+          selected: Math.min(
+            removed >= 0 && removed < selected ? selected - 1 : selected,
+            lines.length - 1,
+          ),
+          invoiceDiscount: Math.min(get().invoiceDiscount, subtotalOf(lines)),
           approvalToken: null,
           // an emptied cart ends the attempt: whatever is rung up next is a new sale
           ...(lines.length === 0 ? { saleId: uuidv7() } : {}),
         });
       },
-      setLineDiscount: (key, paisa) =>
+      setLineDiscount: (key, paisa) => {
+        const lines = get().lines.map((l) =>
+          l.key === key ? { ...l, discount: Math.max(0, Math.min(paisa, lineGrossOf(l))) } : l,
+        );
         set({
-          lines: get().lines.map((l) =>
-            l.key === key ? { ...l, discount: Math.max(0, Math.min(paisa, lineGrossOf(l))) } : l,
-          ),
+          lines,
+          invoiceDiscount: Math.min(get().invoiceDiscount, subtotalOf(lines)),
           approvalToken: null,
-        }),
-      setCustomer: (customer) => set({ customer }),
+        });
+      },
+      // an approval was given for this bill and customer, not for whoever is picked next
+      setCustomer: (customer) => set({ customer, approvalToken: null }),
       setInvoiceDiscount: (invoiceDiscount) =>
         set({ invoiceDiscount: Math.max(0, invoiceDiscount), approvalToken: null }),
       setApproval: (approvalToken) => set({ approvalToken }),
@@ -220,6 +261,7 @@ export const useCart = create<CartState>()(
           lines: s.lines,
           invoiceDiscount: s.invoiceDiscount,
           saleId: s.saleId,
+          note: s.note,
         };
         set({ ...fresh(), held: [bill, ...s.held].slice(0, 20) });
       },
@@ -239,6 +281,7 @@ export const useCart = create<CartState>()(
                   lines: s.lines,
                   invoiceDiscount: s.invoiceDiscount,
                   saleId: s.saleId,
+                  note: s.note,
                 },
               ]
             : [];
@@ -248,6 +291,7 @@ export const useCart = create<CartState>()(
           saleId: bill.saleId ?? uuidv7(),
           customer: bill.customer,
           invoiceDiscount: bill.invoiceDiscount,
+          note: bill.note ?? '',
           approvalToken: null,
           selected: bill.lines.length - 1,
           held: [...parked, ...s.held.filter((h) => h.id !== id)],
@@ -255,7 +299,12 @@ export const useCart = create<CartState>()(
       },
       deleteHeld: (id) => set({ held: get().held.filter((h) => h.id !== id) }),
     }),
-    { name: 'pos-held-bills', partialize: (s) => ({ held: s.held }) },
+    {
+      name: 'pos-held-bills',
+      version: HELD_BILLS_VERSION,
+      partialize: (s) => ({ held: s.held }),
+      migrate: migrateHeldBills,
+    },
   ),
 );
 
@@ -264,8 +313,7 @@ export function cartToDraft(
 ): CheckoutDraft {
   return {
     lines: s.lines.map((l) => ({
-      ...(l.phoneUnitId ? { phoneUnitId: l.phoneUnitId } : {}),
-      ...(l.variantId ? { variantId: l.variantId } : {}),
+      itemId: l.itemId,
       quantity: l.qty,
       discountAmount: l.discount,
     })),

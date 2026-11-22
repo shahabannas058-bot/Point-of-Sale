@@ -67,11 +67,11 @@ describe('createRuntime', () => {
   it('never seeds over a shop that already exists', async () => {
     const driver = await emptyDb();
     await createPosService({ driver, pinIterations: 1000 }).setup.firstRun({
-      shopName: 'Ali Mobiles',
+      shopName: 'Ali General Store',
       branchName: 'Main',
       invoicePrefix: 'A',
       owner: { username: 'owner', displayName: 'Owner', pin: '1234' },
-      businessType: 'mobile',
+      businessType: 'kiryana',
     });
     const rt = await createRuntime(
       hostOf({ canReset: true, canExport: true, first: driver }),
@@ -79,24 +79,20 @@ describe('createRuntime', () => {
     );
     expect(await rt.service.setup.getShop()).toMatchObject({
       isDemo: false,
-      businessType: 'mobile',
+      shopName: 'Ali General Store',
     });
   });
 
-  it('loadDemo fills an empty database with the demo of the chosen business type', async () => {
+  it('loadDemo fills an empty database with the kiryana demo', async () => {
     const rt = await createRuntime(hostOf({ canReset: true, canExport: true }), EMPTY);
-    await rt.loadDemo('mobile');
+    await rt.loadDemo();
     expect(await rt.service.setup.getShop()).toMatchObject({
       isDemo: true,
-      businessType: 'custom',
+      businessType: 'kiryana',
     });
-
-    const kiryana = await createRuntime(hostOf({ canReset: true, canExport: true }), EMPTY);
-    await kiryana.loadDemo('kiryana');
-    expect((await kiryana.service.setup.getShop()).businessType).toBe('kiryana');
   });
 
-  it('resetDemo wipes the database through the host and reseeds the same business type', async () => {
+  it('resetDemo wipes the database through the host and reseeds the kiryana demo', async () => {
     const host = hostOf({ canReset: true, canExport: true });
     const rt = await createRuntime(host, FRESH);
     await rt.service.auth.login('owner', '1234');

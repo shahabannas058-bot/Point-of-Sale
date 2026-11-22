@@ -15,25 +15,26 @@ import {
 } from '@pos/shared';
 import { negPaisa, paisa } from '@pos/core';
 import { WriteBatch } from './batch';
+import { cashStamp } from './cash-book';
 import { insertBatch, type BatchRec } from './batches';
-import { createProductResolver, normalizePhone, stagePhoneUnit } from './catalog';
 import { canDo, requirePermission, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optPhone, optText, reqText } from './errors';
 import { mapRow, type Raw } from './mappers';
 import { loadShop } from './meta';
 import { assertModule } from './modules';
+import { olderThan } from './page-cursor';
 import {
   insertLedger,
   insertMovement,
   insertPurchase,
   insertSupplier,
-  loadVariantRec,
+  loadItemRec,
   requireSupplier,
   supplierBalance,
-  updateVariant,
+  updateItem,
   type PurchaseRec,
   type SupplierRec,
-  type VariantRec,
+  type ItemRec,
 } from './queries';
 
 const NON_KHATA = PaymentMethodSchema.exclude(['khata']);
@@ -85,46 +86,42 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
     async receive(i) {
       const session = requirePermission(ctx, 'receive_stock');
       const shop = await loadShop(ctx.driver);
-      const phones = i.phones ?? [];
-      const accessories = i.accessories ?? [];
-      if (phones.length === 0 && accessories.length === 0)
-        throw invalid('items', 'A purchase needs at least one phone or accessory line');
-      if (phones.length > 0) assertModule(shop.modules, 'imei');
+      const items = i.items ?? [];
+      if (items.length === 0) throw invalid('items', 'A purchase needs at least one item line');
       const referenceNo = optText(i.referenceNo, 'referenceNo', 60);
       const note = optText(i.note, 'note', 500);
       // validate everything up front and compute the total
       let total = 0;
-      for (const p of phones) total += normalizePhone(p).costPrice;
       const lines: {
-        variantId: string;
+        itemId: string;
         quantity: number;
         unitCost: number;
         batch: { batchNo: string | null; expiryDate: string } | null;
       }[] = [];
-      for (const [idx, a] of accessories.entries()) {
-        if (typeof a.variantId !== 'string')
-          throw invalid(`accessories.${idx}.variantId`, 'variantId is required');
-        const quantity = intIn(a.quantity, `accessories.${idx}.quantity`, 1, MAX_QUANTITY_ANY);
-        const unitCost = money(a.unitCost, `accessories.${idx}.unitCost`);
-        const variant = await loadVariantRec(ctx.driver, a.variantId); // NOT_FOUND
-        if (quantity > maxQuantity(variant.unitScale))
-          throw invalid(`accessories.${idx}.quantity`, 'Quantity is larger than this item allows');
+      for (const [idx, a] of items.entries()) {
+        if (typeof a.itemId !== 'string')
+          throw invalid(`items.${idx}.itemId`, 'itemId is required');
+        const quantity = intIn(a.quantity, `items.${idx}.quantity`, 1, MAX_QUANTITY_ANY);
+        const unitCost = money(a.unitCost, `items.${idx}.unitCost`);
+        const rec = await loadItemRec(ctx.driver, a.itemId); // NOT_FOUND
+        if (quantity > maxQuantity(rec.unitScale))
+          throw invalid(`items.${idx}.quantity`, 'Quantity is larger than this item allows');
         let batch: { batchNo: string | null; expiryDate: string } | null = null;
         if (a.batch !== undefined && a.batch !== null) {
           assertModule(shop.modules, 'batch_expiry');
           if (!isValidYmd(a.batch.expiryDate))
             throw invalid(
-              `accessories.${idx}.batch.expiryDate`,
+              `items.${idx}.batch.expiryDate`,
               'Expiry date must be a real date written as YYYY-MM-DD',
             );
           batch = {
-            batchNo: optText(a.batch.batchNo, `accessories.${idx}.batch.batchNo`, 60),
+            batchNo: optText(a.batch.batchNo, `items.${idx}.batch.batchNo`, 60),
             expiryDate: a.batch.expiryDate,
           };
         }
         // unitCost is per priced unit (per kg for weighted items), quantity is in base units (grams)
-        total += lineGross(quantity, unitCost, variant.unitScale);
-        lines.push({ variantId: a.variantId, quantity, unitCost, batch });
+        total += lineGross(quantity, unitCost, rec.unitScale);
+        lines.push({ itemId: a.itemId, quantity, unitCost, batch });
       }
       const totalPaisa: Paisa = paisa(total);
       let paid = 0;
@@ -138,9 +135,9 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
         paidMethod = m.data;
       }
 
-      const out = await ctx.lock(async () => {
+      const received = await ctx.lock(async () => {
         await requireSupplier(ctx.driver, i.supplierId);
-        const at = ctx.clock();
+        const at = await cashStamp(ctx, shop.branchId);
         const b = new WriteBatch(ctx.newId, at);
         const purchase: PurchaseRec = {
           id: ctx.newId(),
@@ -155,31 +152,15 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
         };
         insertPurchase(b, purchase);
 
-        const resolveProduct = createProductResolver(ctx, b, at);
-        const seen = new Set<string>();
-        const phoneUnitIds: string[] = [];
-        for (const p of phones) {
-          const rec = await stagePhoneUnit(ctx, b, p, {
-            at,
-            branchId: shop.branchId,
-            actorId: session.user.id,
-            resolveProduct,
-            defaultSupplierId: i.supplierId,
-            stock: { type: 'purchase', purchaseId: purchase.id },
-            seen,
-          });
-          phoneUnitIds.push(rec.id);
-        }
-
-        const variants = new Map<string, VariantRec>();
+        const itemRecs = new Map<string, ItemRec>();
         for (const l of lines) {
-          const cur = variants.get(l.variantId) ?? (await loadVariantRec(ctx.driver, l.variantId));
-          variants.set(l.variantId, { ...cur, costPrice: l.unitCost, updatedAt: at });
+          const cur = itemRecs.get(l.itemId) ?? (await loadItemRec(ctx.driver, l.itemId));
+          itemRecs.set(l.itemId, { ...cur, costPrice: l.unitCost, updatedAt: at });
           let batchId: string | null = null;
           if (l.batch !== null) {
             const rec: BatchRec = {
               id: ctx.newId(),
-              variantId: l.variantId,
+              itemId: l.itemId,
               branchId: shop.branchId,
               batchNo: l.batch.batchNo,
               expiryDate: l.batch.expiryDate,
@@ -194,8 +175,7 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
             id: ctx.newId(),
             branchId: shop.branchId,
             type: 'purchase',
-            phoneUnitId: null,
-            variantId: l.variantId,
+            itemId: l.itemId,
             batchId,
             quantity: l.quantity,
             unitCost: l.unitCost,
@@ -206,7 +186,7 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
             createdAt: at,
           });
         }
-        for (const v of variants.values()) updateVariant(b, v); // latest cost price
+        for (const v of itemRecs.values()) updateItem(b, v); // latest cost price
 
         if (totalPaisa > 0)
           insertLedger(b, {
@@ -239,11 +219,10 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
 
         await ctx.assertCanSell({ action: 'purchase', branchId: shop.branchId, now: at });
         await b.commit(ctx.driver);
-        return { purchase, phoneUnitIds };
+        return purchase;
       });
       return {
-        purchase: out.purchase as unknown as Purchase,
-        phoneUnitIds: out.phoneUnitIds,
+        purchase: received as unknown as Purchase,
         supplierBalance: paisa(await supplierBalance(ctx.driver, i.supplierId)),
       };
     },
@@ -256,7 +235,7 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
       const note = optText(i.note, 'note', 500);
       await ctx.lock(async () => {
         await requireSupplier(ctx.driver, i.supplierId);
-        const at = ctx.clock();
+        const at = await cashStamp(ctx, (await loadShop(ctx.driver)).branchId);
         const b = new WriteBatch(ctx.newId, at);
         insertLedger(b, {
           id: ctx.newId(),
@@ -280,15 +259,15 @@ export function createPurchasingApi(ctx: Ctx): PurchasingApi {
       requirePermission(ctx, 'receive_stock');
       const supplier = await requireSupplier(ctx.driver, supplierId); // NOT_FOUND
       const limit = o.limit === undefined ? 100 : intIn(o.limit, 'limit', 1, 1000);
-      const before = o.beforeCreatedAt ?? null;
+      const older = olderThan(o);
       const rows = await ctx.driver.query<Raw>(
         `SELECT * FROM (
            SELECT le.*, p.reference_no AS reference_no,
              SUM(le.amount) OVER (ORDER BY le.created_at, le.id) AS running_balance
            FROM ledger_entries le LEFT JOIN purchases p ON p.id = le.purchase_id
            WHERE le.supplier_id = ?
-         ) WHERE (? IS NULL OR created_at < ?) ORDER BY created_at DESC, id DESC LIMIT ?`,
-        [supplierId, before, before, limit],
+         ) WHERE ${older.sql} ORDER BY created_at DESC, id DESC LIMIT ?`,
+        [supplierId, ...older.params, limit],
       );
       const lines = rows.map((r): SupplierLedgerLine => {
         const { running_balance: running, reference_no: referenceNo, ...entry } = r;

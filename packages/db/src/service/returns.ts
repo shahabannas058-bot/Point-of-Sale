@@ -1,6 +1,7 @@
 import {
   MAX_QUANTITY_ANY,
   PaymentMethodSchema,
+  lineGross,
   ServiceError,
   UuidV7Schema,
   type ApprovalReason,
@@ -20,6 +21,7 @@ import {
   type PricedLine,
 } from '@pos/core';
 import {
+  paymentsKey,
   resolveApproval,
   toInvoiceView,
   withApprovalNote,
@@ -27,6 +29,7 @@ import {
   type LineSpec,
   type PaymentSpec,
 } from './checkout';
+import { invoiceForSession } from './cost-mask';
 import { canDo, requireSession, type Ctx } from './deps';
 import { guardApi, intIn, invalid, money, optText, reqText } from './errors';
 import { loadShop } from './meta';
@@ -55,8 +58,9 @@ interface ComputedReturn {
 
 /*
  * sale_lines has no "original line" column, so earlier returns are matched to original lines by item
- * (phone unit or variant) and handed out first-in-first-out by line number. For the common case (one line
- * per item) this is exact; stock quantities are always exact because they are ledger sums per item.
+ * and handed out first-in-first-out by line number. A sale has one line per item (checkout refuses a second one),
+ * so this is exact; only old sales with an item on two lines rely on the first-in-first-out guess. Stock quantities
+ * are always exact because they are ledger sums per item.
  */
 async function loadReturnContext(
   driver: SqlDriver,
@@ -67,30 +71,20 @@ async function loadReturnContext(
     throw new ServiceError('RETURN_NOT_ALLOWED', 'Only a sale invoice can be returned', {
       kind: original.kind,
     });
-  const prior = await driver.query<{
-    phone_unit_id: string | null;
-    variant_id: string | null;
-    qty: number;
-  }>(
-    `SELECT l.phone_unit_id, l.variant_id, -SUM(l.quantity) AS qty
+  const prior = await driver.query<{ item_id: string; qty: number }>(
+    `SELECT l.item_id, -SUM(l.quantity) AS qty
      FROM sale_lines l JOIN sales s ON s.id = l.sale_id
      WHERE s.original_sale_id = ? AND s.kind IN ('return', 'void')
-     GROUP BY l.phone_unit_id, l.variant_id`,
+     GROUP BY l.item_id`,
     [original.id],
   );
-  const pool = new Map(
-    prior.map((r) => [
-      r.phone_unit_id !== null ? `u:${r.phone_unit_id}` : `v:${r.variant_id ?? ''}`,
-      r.qty,
-    ]),
-  );
+  const pool = new Map(prior.map((r) => [r.item_id, r.qty]));
   const states = [...original.lines]
     .sort((a, b) => a.lineNo - b.lineNo)
     .map((line): LineState => {
-      const key = line.phoneUnitId !== null ? `u:${line.phoneUnitId}` : `v:${line.variantId ?? ''}`;
-      const available = pool.get(key) ?? 0;
+      const available = pool.get(line.itemId) ?? 0;
       const returnedQty = Math.min(available, line.quantity);
-      pool.set(key, available - returnedQty);
+      pool.set(line.itemId, available - returnedQty);
       return { line, returnedQty, remainingQty: line.quantity - returnedQty };
     });
   const disc = await driver.query<{ d: number }>(
@@ -105,6 +99,25 @@ function lineDiscountShare(discount: number, k: number, n: number): number {
   if (discount === 0 || k === 0) return 0;
   if (k >= n) return discount;
   return allocate(paisa(discount), [k, n - k])[0] ?? 0;
+}
+
+/**
+ * Signed discount of a return line that gives back q more of a line after k were returned already. The return line
+ * keeps the SQL rule (its own gross of q, rounded on its own, minus the discount) but refunds its fair part: the
+ * cumulative gross (gross of k + q minus gross of k) minus its cumulative discount share. The rounding difference
+ * between the two grosses is folded into the discount, and the discount is kept between 0 and the own gross: when the
+ * fair part is above the own gross (a rounding gap the share cannot absorb) the part refunds its own gross, and when
+ * the fair part is below zero it refunds nothing. The parts of a weighed line add up to the line or less, never more.
+ */
+function returnLineDiscount(line: InvoiceLine, k: number, q: number): Paisa {
+  const n = line.quantity;
+  const d = line.discountAmount;
+  const share = lineDiscountShare(d, k + q, n) - lineDiscountShare(d, k, n);
+  const ownGross = lineGross(q, line.unitPrice, line.unitScale);
+  const fairGross =
+    lineGross(k + q, line.unitPrice, line.unitScale) - lineGross(k, line.unitPrice, line.unitScale);
+  const magnitude = Math.min(ownGross, Math.max(0, share + ownGross - fairGross));
+  return paisa(-magnitude);
 }
 
 function computeReturn(
@@ -129,20 +142,15 @@ function computeReturn(
         remainingQty: st.remainingQty,
         requested: q,
       });
-    const n = st.line.quantity;
-    const d = st.line.discountAmount;
-    const share =
-      lineDiscountShare(d, st.returnedQty + q, n) - lineDiscountShare(d, st.returnedQty, n);
     specs.push({
       productId: st.line.productId,
-      phoneUnitId: st.line.phoneUnitId,
-      variantId: st.line.variantId,
+      itemId: st.line.itemId,
       description: st.line.description,
       quantity: -q,
       unitScale: st.line.unitScale,
       unitPrice: st.line.unitPrice,
       costPrice: st.line.costPrice,
-      discountAmount: paisa(-share),
+      discountAmount: returnLineDiscount(st.line, st.returnedQty, q),
     });
   }
   if (specs.length === 0)
@@ -211,6 +219,25 @@ const toReturnableLines = (states: LineState[]): ReturnableLine[] =>
     unitPrice: st.line.unitPrice,
   }));
 
+/**
+ * A replayed saleId must be the same return or void: same kind, same original sale and (for a return) the same
+ * refund. Anything else is a reused id; returning that invoice would hand out a refund that was never recorded.
+ */
+function assertSameReturn(
+  existing: Invoice,
+  args: { kind: 'return' | 'void'; originalSaleId: string; givenRefund: PaymentSpec[] | null },
+): void {
+  const same =
+    existing.kind === args.kind &&
+    existing.originalSaleId === args.originalSaleId &&
+    (args.givenRefund === null || paymentsKey(existing.payments) === paymentsKey(args.givenRefund));
+  if (same) return;
+  throw new ServiceError('SALE_ID_REUSED', 'This saleId already belongs to a different invoice', {
+    invoiceId: existing.id,
+    invoiceNo: existing.invoiceNo,
+  });
+}
+
 type ReturnsPart = Pick<CheckoutApi, 'previewReturn' | 'createReturn' | 'voidSale'>;
 
 export function createReturnsPart(ctx: Ctx): ReturnsPart {
@@ -228,12 +255,17 @@ export function createReturnsPart(ctx: Ctx): ReturnsPart {
     originalSaleId: string;
     pick: (rc: ReturnContext) => { lineId: string; quantity: number }[];
     refund: (rc: ReturnContext, comp: ComputedReturn) => PaymentSpec[];
+    /** createReturn's refund as given; a replay must match it. Null for a void (its refund is computed). */
+    givenRefund: PaymentSpec[] | null;
   }): Promise<Invoice> => {
     const session = requireSession(ctx);
     const shop = await loadShop(ctx.driver);
     if (args.saleId !== undefined) {
       const existing = await loadInvoiceBy(ctx.driver, 'id', args.saleId);
-      if (existing !== null) return existing;
+      if (existing !== null) {
+        assertSameReturn(existing, args);
+        return invoiceForSession(ctx, existing);
+      }
     }
     const needed: ApprovalReason[] = canDo(ctx, 'return_void') ? [] : [args.kind];
     const { approvedBy } = resolveApproval(ctx, needed, args.approvalToken);
@@ -260,7 +292,7 @@ export function createReturnsPart(ctx: Ctx): ReturnsPart {
     });
     if (approvedBy !== null && args.approvalToken !== undefined)
       ctx.approvals.delete(args.approvalToken);
-    return invoice;
+    return invoiceForSession(ctx, invoice);
   };
 
   return guardApi<ReturnsPart>({
@@ -269,7 +301,7 @@ export function createReturnsPart(ctx: Ctx): ReturnsPart {
       const rc = await loadReturnContext(ctx.driver, originalSaleId);
       const comp = computeReturn(rc, lines);
       return {
-        original: await toInvoiceView(ctx.driver, rc.original),
+        original: await toInvoiceView(ctx.driver, invoiceForSession(ctx, rc.original)),
         lines: toReturnableLines(rc.states),
         total: comp.total,
         suggestedRefund: suggestRefund(rc.original, comp.total),
@@ -301,6 +333,7 @@ export function createReturnsPart(ctx: Ctx): ReturnsPart {
           originalSaleId: i.originalSaleId,
           pick: () => i.lines,
           refund: () => refund,
+          givenRefund: refund,
         }),
       );
     },
@@ -325,6 +358,7 @@ export function createReturnsPart(ctx: Ctx): ReturnsPart {
               );
             return left.map((s) => ({ lineId: s.line.id, quantity: s.remainingQty }));
           },
+          givenRefund: null,
           // the refund mirrors the original payments (scaled if part of the sale was returned earlier)
           refund: (rc, comp) =>
             suggestRefund(rc.original, comp.total).map((p) => ({

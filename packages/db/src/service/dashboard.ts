@@ -53,15 +53,12 @@ async function loadInventoryValue(driver: SqlDriver, branchId: string): Promise<
   const rows = await driver.query<{ v: unknown }>(
     `SELECT
        COALESCE((SELECT SUM((q.on_hand * q.cost_price + q.unit_scale / 2) / q.unit_scale)
-         FROM (SELECT av.cost_price, av.unit_scale,
+         FROM (SELECT it.cost_price, it.unit_scale,
                  (SELECT SUM(sm.quantity) FROM stock_movements sm
-                   WHERE sm.variant_id = av.id AND sm.branch_id = ?) AS on_hand
-               FROM accessory_variants av) q
-         WHERE q.on_hand > 0), 0)
-     + COALESCE((SELECT SUM(pu.cost_price) FROM phone_units pu
-         WHERE (SELECT SUM(sm.quantity) FROM stock_movements sm
-                 WHERE sm.phone_unit_id = pu.id AND sm.branch_id = ?) > 0), 0) AS v`,
-    [branchId, branchId],
+                   WHERE sm.item_id = it.id AND sm.branch_id = ?) AS on_hand
+               FROM items it) q
+         WHERE q.on_hand > 0), 0) AS v`,
+    [branchId],
   );
   return num(rows[0]?.v);
 }

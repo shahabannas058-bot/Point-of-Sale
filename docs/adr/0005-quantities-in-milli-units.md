@@ -2,6 +2,7 @@
 
 **Date**: 2026-10-18
 **Status**: superseded by [ADR-0008](0008-per-item-unit-scale.md)
+> Superseded in part by ADR-0011 (2026-11-21): phone units are removed, so the phone constraint in this ADR no longer applies.
 **Deciders**: Owner, Claude
 
 > Superseded the same day. Reading the code showed that multiplying every stored quantity by 1000 would rewrite

@@ -11,7 +11,7 @@ import {
 } from '../src/lib/stock-import';
 
 const KIRYANA: readonly ModuleId[] = ['weight_units', 'batch_expiry'];
-const MOBILE: readonly ModuleId[] = ['imei', 'warranty', 'repair'];
+const NO_WEIGHTS: readonly ModuleId[] = ['batch_expiry'];
 const HEADER = 'brand,name,sku,barcode,unit,cost,sale,qty,reorder';
 
 const csv = (...lines: string[]): string => [HEADER, ...lines].join('\n');
@@ -36,6 +36,22 @@ describe('parseCsv', () => {
     expect(parseCsv('"Chini, white","12"" pack"\n"two\nlines",x')).toEqual([
       { line: 1, cells: ['Chini, white', '12" pack'] },
       { line: 2, cells: ['two\nlines', 'x'] },
+    ]);
+  });
+
+  it('treats a quote inside an unquoted cell as a plain character (QA#8)', () => {
+    expect(parseCsv('name,sale\nLED 32" TV,30000\nCharger,500')).toEqual([
+      { line: 1, cells: ['name', 'sale'] },
+      { line: 2, cells: ['LED 32" TV', '30000'] },
+      { line: 3, cells: ['Charger', '500'] },
+    ]);
+  });
+
+  it('splits rows on classic-Mac CR-only line ends (QA#19c)', () => {
+    expect(parseCsv('a,b\r1,2\r\r3,4\r')).toEqual([
+      { line: 1, cells: ['a', 'b'] },
+      { line: 2, cells: ['1', '2'] },
+      { line: 4, cells: ['3', '4'] },
     ]);
   });
 
@@ -151,7 +167,7 @@ describe('toImportRows', () => {
 
   it('rejects kg / L when the shop lacks the weight_units module', () => {
     const { rows, problems } = toImportRows(csv(',Chini,,,kg,1,2,3,', ',Oil,,,L,1,2,3,'), {
-      modules: MOBILE,
+      modules: NO_WEIGHTS,
     });
     expect(rows).toEqual([]);
     expect(problems.map((p) => p.code)).toEqual(['unit_module', 'unit_module']);
@@ -219,7 +235,7 @@ describe('runStockImport', () => {
     expect(failed?.status === 'failed' && failed.error).toBeInstanceOf(ServiceError);
   });
 
-  it('passes the row to the service in the shape createAccessory expects', async () => {
+  it('passes the row to the service in the shape createItem expects', async () => {
     const seen: unknown[] = [];
     await runStockImport(
       (i) => {

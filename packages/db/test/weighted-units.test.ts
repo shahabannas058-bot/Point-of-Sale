@@ -3,6 +3,7 @@ import { verifyChain } from '@pos/core';
 import { migrate } from '../src/migrate';
 import { createNodeSqliteDriver, loadMigrationsFromDir, type NodeSqliteDriver } from '../src/node';
 import { buildChain } from '../../core/test/fixtures';
+import { legacyDriver } from './legacy-driver';
 import {
   SHOP,
   count,
@@ -30,23 +31,27 @@ describe('migration 0006 on a database that already has invoices', () => {
   it('keeps every line, every hash and the chain, and adds unit_scale = 1', async () => {
     const db = track(createNodeSqliteDriver(':memory:'));
     const migrations = loadMigrationsFromDir();
-    await migrate(db, migrations.slice(0, 5)); // the schema a shop has today
-    await seedShop(db);
+    await migrate(db, migrations.slice(0, 5)); // the schema a shop had before 0006
+    const old = legacyDriver(db); // pre-0009 names (accessory_variants, variant_id)
+    await seedShop(old);
     const chain = buildChain(3);
-    await insertInvoices(db, chain);
-    const linesBefore = await db.query<Record<string, unknown>>(
+    await insertInvoices(old, chain);
+    const linesBefore = await old.query<Record<string, unknown>>(
       'select * from sale_lines order by id',
     );
     expect(linesBefore).toHaveLength(6);
 
-    expect(await migrate(db, migrations)).toEqual([6, 7, 8]); // 0007 (batches) and 0008 (cash book) must not disturb the 0006 result
+    expect(await migrate(db, migrations)).toEqual([6, 7, 8, 9]); // 0007-0009 must not disturb the 0006 result
 
     const linesAfter = await db.query<Record<string, unknown>>(
       'select * from sale_lines order by id',
     );
     expect(linesAfter).toHaveLength(6);
     for (const [i, before] of linesBefore.entries()) {
-      expect(linesAfter[i]).toMatchObject({ ...before, unit_scale: 1 });
+      // 0009 dropped phone_unit_id (always null here) and renamed variant_id to item_id
+      const { phone_unit_id: phoneUnitId, ...kept } = before;
+      expect(phoneUnitId).toBeNull();
+      expect(linesAfter[i]).toEqual({ ...kept, unit_scale: 1 });
     }
 
     const invoices = await readInvoices(db);
@@ -74,15 +79,15 @@ describe('migration 0006 on a database that already has invoices', () => {
   });
 });
 
-describe('weighted variants and lines (database rules)', () => {
+describe('weighted items and lines (database rules)', () => {
   const WEIGHTED = newId();
 
   async function seedWeighted(): Promise<NodeSqliteDriver> {
     const { db } = await createSeededDb();
     track(db);
-    await insertRow(db, 'accessory_variants', {
+    await insertRow(db, 'items', {
       id: WEIGHTED,
-      product_id: SHOP.accessoryProductId,
+      product_id: SHOP.itemProductId,
       sku: 'CHINI-LOOSE',
       cost_price: 25_000,
       sale_price: 28_550,
@@ -100,7 +105,7 @@ describe('weighted variants and lines (database rules)', () => {
     const lineTotal = o.lineTotal ?? 35_688;
     const sale = saleRow({ subtotal: lineTotal, total: lineTotal });
     const line = lineRow(sale.id as string, {
-      variant_id: WEIGHTED,
+      item_id: WEIGHTED,
       quantity,
       unit_price: 28_550,
       unit_scale: 1000,
@@ -138,7 +143,7 @@ describe('weighted variants and lines (database rules)', () => {
       db,
       'sale_lines',
       lineRow(ret.id as string, {
-        variant_id: WEIGHTED,
+        item_id: WEIGHTED,
         quantity: -1250,
         unit_price: 28_550,
         unit_scale: 1000,
@@ -158,9 +163,9 @@ describe('weighted variants and lines (database rules)', () => {
     },
   );
 
-  it('rejects a line that claims a different unit than its variant', async () => {
+  it('rejects a line that claims a different unit than its item', async () => {
     const db = await seedWeighted();
-    // the piece variant (SHOP.variantId, scale 1) sold as if it were weighed
+    // the piece item (SHOP.itemId, scale 1) sold as if it were weighed
     const sale = saleRow({ subtotal: 1, total: 1 });
     await insertRow(db, 'sales', sale);
     await expect(
@@ -168,14 +173,14 @@ describe('weighted variants and lines (database rules)', () => {
         db,
         'sale_lines',
         lineRow(sale.id as string, {
-          variant_id: SHOP.variantId,
+          item_id: SHOP.itemId,
           quantity: 1000,
           unit_price: 1,
           unit_scale: 1000,
           line_total: 1,
         }),
       ),
-    ).rejects.toThrow(/unit_scale must match the variant/);
+    ).rejects.toThrow(/unit_scale must match the item/);
     // and the other way round
     const sale2 = saleRow({
       seq: 2,
@@ -190,48 +195,28 @@ describe('weighted variants and lines (database rules)', () => {
         db,
         'sale_lines',
         lineRow(sale2.id as string, {
-          variant_id: WEIGHTED,
+          item_id: WEIGHTED,
           quantity: 1000,
           unit_price: 1,
           unit_scale: 1,
           line_total: 1000,
         }),
       ),
-    ).rejects.toThrow(/unit_scale must match the variant/);
+    ).rejects.toThrow(/unit_scale must match the item/);
   });
 
-  it('a phone unit can never be sold by weight', async () => {
-    const db = await seedWeighted();
-    const sale = saleRow({ subtotal: 8, total: 8 });
-    await insertRow(db, 'sales', sale);
-    await expect(
-      insertRow(
-        db,
-        'sale_lines',
-        lineRow(sale.id as string, {
-          phone_unit_id: SHOP.phoneUnitId,
-          variant_id: null,
-          quantity: 1,
-          unit_price: 8_500,
-          unit_scale: 1000,
-          line_total: 9,
-        }),
-      ),
-    ).rejects.toThrow(/CHECK constraint failed/);
-  });
-
-  it('unit_label and unit_scale must agree on a variant', async () => {
+  it('unit_label and unit_scale must agree on a item', async () => {
     const { db } = await createSeededDb();
     track(db);
     const base = {
-      product_id: SHOP.accessoryProductId,
+      product_id: SHOP.itemProductId,
       cost_price: 1,
       sale_price: 2,
       created_at: 1,
       updated_at: 1,
     };
     await expect(
-      insertRow(db, 'accessory_variants', {
+      insertRow(db, 'items', {
         ...base,
         id: newId(),
         sku: 'BAD-1',
@@ -240,7 +225,7 @@ describe('weighted variants and lines (database rules)', () => {
       }),
     ).rejects.toThrow(/unit_scale must match unit_label/);
     await expect(
-      insertRow(db, 'accessory_variants', {
+      insertRow(db, 'items', {
         ...base,
         id: newId(),
         sku: 'BAD-2',
@@ -249,7 +234,7 @@ describe('weighted variants and lines (database rules)', () => {
       }),
     ).rejects.toThrow(/unit_scale must match unit_label/);
     await expect(
-      insertRow(db, 'accessory_variants', {
+      insertRow(db, 'items', {
         ...base,
         id: newId(),
         sku: 'BAD-3',
@@ -259,21 +244,16 @@ describe('weighted variants and lines (database rules)', () => {
     ).rejects.toThrow(/unit_scale must match unit_label|CHECK constraint failed/);
   });
 
-  it('the unit of a variant is locked once it has stock movements', async () => {
+  it('the unit of a item is locked once it has stock movements', async () => {
     const db = await seedWeighted();
     // no stock yet: switching is still allowed
-    await db.exec(
-      `update accessory_variants set unit_scale = 1, unit_label = 'pcs' where id = '${WEIGHTED}'`,
-    );
-    await db.exec(
-      `update accessory_variants set unit_scale = 1000, unit_label = 'kg' where id = '${WEIGHTED}'`,
-    );
+    await db.exec(`update items set unit_scale = 1, unit_label = 'pcs' where id = '${WEIGHTED}'`);
+    await db.exec(`update items set unit_scale = 1000, unit_label = 'kg' where id = '${WEIGHTED}'`);
     await insertRow(db, 'stock_movements', {
       id: newId(),
       branch_id: SHOP.branchId,
       type: 'purchase',
-      phone_unit_id: null,
-      variant_id: WEIGHTED,
+      item_id: WEIGHTED,
       quantity: 50_000,
       unit_cost: null,
       ref_type: null,
@@ -283,11 +263,9 @@ describe('weighted variants and lines (database rules)', () => {
       created_at: 1,
     });
     await expect(
-      db.exec(
-        `update accessory_variants set unit_scale = 1, unit_label = 'pcs' where id = '${WEIGHTED}'`,
-      ),
+      db.exec(`update items set unit_scale = 1, unit_label = 'pcs' where id = '${WEIGHTED}'`),
     ).rejects.toThrow(/unit cannot change once stock exists/);
     // prices stay editable
-    await db.exec(`update accessory_variants set sale_price = 30000 where id = '${WEIGHTED}'`);
+    await db.exec(`update items set sale_price = 30000 where id = '${WEIGHTED}'`);
   });
 });

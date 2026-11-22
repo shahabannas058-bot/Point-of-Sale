@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { NewPhoneUnitInput } from '@pos/shared';
 import {
   CHARGER_COST,
-  IMEI_Y,
-  PHONE_COST,
-  PHONE_PRICE,
+  CARTON_COST,
   expectCode,
   first,
   makeService,
@@ -16,27 +13,19 @@ beforeEach(async () => {
   t = await makeService();
 });
 
-const newPhone = (over: Partial<NewPhoneUnitInput> = {}): NewPhoneUnitInput => ({
-  product: { brand: 'Infinix', name: 'Hot 40 Pro' },
-  imei1: IMEI_Y,
-  ptaStatus: 'approved',
-  condition: 'new',
-  costPrice: PHONE_COST,
-  salePrice: PHONE_PRICE,
-  ...over,
-});
-
 async function makeSupplier(name = 'Hafeez Centre Traders'): Promise<string> {
   return (await t.svc.purchasing.createSupplier({ name })).id;
 }
 
-/** Phone (7 800 000) + 10 chargers (900 000) = 8 700 000, 2 000 000 paid now, supplier invoice INV-9001. */
+/** Carton (7 800 000) + 10 chargers (900 000) = 8 700 000, 2 000 000 paid now, supplier invoice INV-9001. */
 async function receiveBig(supplierId: string): Promise<void> {
   await t.svc.purchasing.receive({
     supplierId,
     referenceNo: 'INV-9001',
-    phones: [newPhone()],
-    accessories: [{ variantId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST }],
+    items: [
+      { itemId: t.ids.cartonId, quantity: 1, unitCost: CARTON_COST },
+      { itemId: t.ids.chargerId, quantity: 10, unitCost: CHARGER_COST },
+    ],
     paidNow: { method: 'cash', amount: 2_000_000 },
   });
 }
@@ -109,6 +98,31 @@ describe('supplier ledger (getLedger)', () => {
       beforeCreatedAt: first(page1.lines).entry.createdAt,
     });
     expect(page2.lines.map((l) => l.runningBalance)).toEqual([6_700_000, 8_700_000]);
+  });
+
+  it('pages with beforeCreatedAt + beforeId keep both entries of a paid purchase (same timestamp)', async () => {
+    await t.loginAs('mgr');
+    const supplierId = await makeSupplier();
+    await receiveBig(supplierId); // purchase_credit + payment_made share one timestamp
+    const all = await t.svc.purchasing.getLedger(supplierId);
+    expect(all.lines).toHaveLength(2);
+    const page1 = await t.svc.purchasing.getLedger(supplierId, { limit: 1 });
+    const last = first(page1.lines).entry;
+    const page2 = await t.svc.purchasing.getLedger(supplierId, {
+      limit: 1,
+      beforeCreatedAt: last.createdAt,
+      beforeId: last.id,
+    });
+    expect([...page1.lines, ...page2.lines].map((l) => l.entry.id)).toEqual(
+      all.lines.map((l) => l.entry.id),
+    );
+    await expectCode(
+      t.svc.purchasing.getLedger(supplierId, {
+        beforeCreatedAt: last.createdAt,
+        beforeId: 7 as unknown as string,
+      }),
+      'VALIDATION',
+    );
   });
 
   it('validates the limit, the supplier and the permission', async () => {

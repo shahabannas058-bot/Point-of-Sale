@@ -13,6 +13,7 @@ import { useT } from '../i18n';
 import { formatDateTime } from '../lib/dates';
 import {
   SUMMARY_ROWS,
+  fetchItemHistory,
   historyDateRange,
   historyKindKey,
   historyKindTone,
@@ -144,7 +145,7 @@ export function ItemHistoryDialog({
   const key = item ? itemRefKey(item) : '';
   const range = historyDateRange(fromYmd, toYmd);
   const page = useServiceQuery(
-    (s) => s.catalog.itemHistory(item as ItemRef, range),
+    (s) => fetchItemHistory(s.catalog, item as ItemRef, range),
     [key, range.from, range.to],
     open && item !== null,
   );

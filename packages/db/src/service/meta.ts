@@ -27,7 +27,7 @@ export const META = {
   businessType: 'business_type',
   /** Comma-separated ModuleId list. Later written by the licence token (ADR-0003). */
   modules: 'modules',
-  /** Comma-separated variant ids pinned as Billing's one-tap quick items, in order. */
+  /** Comma-separated item ids pinned as Billing's one-tap quick items, in order. */
   quickItems: 'quick_items',
 } as const;
 
@@ -76,7 +76,7 @@ export async function loadShop(driver: SqlDriver): Promise<ShopMeta> {
     invoicePrefix,
     setupAt: Number(m.get(META.setupAt) ?? 0),
     isDemo: m.get(META.demoData) === '1',
-    businessType: type.success ? type.data : 'custom',
+    businessType: type.success ? type.data : 'kiryana',
     modules: rawModules === undefined ? [...MODULE_IDS] : parseModuleList(rawModules),
     settings: {
       shopName: m.get(META.shopName) ?? '',

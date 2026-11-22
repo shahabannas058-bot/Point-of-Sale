@@ -4,13 +4,11 @@ import {
   CnicSchema,
   CustomerSchema,
   GENESIS_HASH,
-  ImeiSchema,
   InvoiceSchema,
   LedgerEntrySchema,
   OutboxEntrySchema,
   PaisaSchema,
   PhoneNumberSchema,
-  PhoneUnitSchema,
   PurchaseSchema,
   SaleSchema,
   Sha256HexSchema,
@@ -57,13 +55,6 @@ describe('primitives', () => {
     expectRejected(PaisaSchema, 2 ** 53);
     expectRejected(PaisaSchema, Number.NaN);
     expectRejected(PaisaSchema, '100');
-  });
-
-  it('ImeiSchema needs exactly 15 digits', () => {
-    expectAccepted(ImeiSchema, '356938035643809');
-    expectRejected(ImeiSchema, '35693803564380'); // 14 digits
-    expectRejected(ImeiSchema, '3569380356438090'); // 16 digits
-    expectRejected(ImeiSchema, '12345678901234a');
   });
 
   it('CnicSchema, PhoneNumberSchema and Sha256HexSchema', () => {
@@ -116,62 +107,12 @@ describe('people', () => {
   });
 });
 
-describe('PhoneUnitSchema', () => {
-  const unit = {
-    id: uid(20),
-    productId: uid(21),
-    imei1: '356938035643809',
-    imei2: '356938035643817',
-    serial: null,
-    colour: 'Black',
-    storageGb: 256,
-    ramGb: 8,
-    batteryHealthPct: null,
-    ptaStatus: 'approved',
-    condition: 'new',
-    costPrice: 7_800_000,
-    salePrice: 8_500_000,
-    supplierId: null,
-    note: null,
-    createdAt: NOW,
-    updatedAt: NOW,
-  };
-
-  it('accepts a dual-SIM unit and a serial-only unit', () => {
-    expectAccepted(PhoneUnitSchema, unit);
-    expectAccepted(PhoneUnitSchema, { ...unit, imei1: null, imei2: null, serial: 'SN-001' });
-  });
-
-  it('needs imei1 or serial', () => {
-    expectRejected(
-      PhoneUnitSchema,
-      { ...unit, imei1: null, imei2: null, serial: null },
-      'imei1 or serial',
-    );
-  });
-
-  it('rejects imei2 equal to imei1', () => {
-    expectRejected(PhoneUnitSchema, { ...unit, imei2: unit.imei1 }, 'must differ');
-  });
-
-  it('rejects imei2 without imei1', () => {
-    expectRejected(PhoneUnitSchema, { ...unit, imei1: null, serial: 'SN-001' }, 'imei2 requires');
-  });
-
-  it('rejects out-of-range battery health, unknown PTA status and negative prices', () => {
-    expectRejected(PhoneUnitSchema, { ...unit, batteryHealthPct: 101 });
-    expectRejected(PhoneUnitSchema, { ...unit, ptaStatus: 'banned' });
-    expectRejected(PhoneUnitSchema, { ...unit, costPrice: -1 });
-  });
-});
-
 describe('StockMovementSchema', () => {
   const movement = {
     id: uid(30),
     branchId: uid(31),
     type: 'purchase',
-    phoneUnitId: null,
-    variantId: uid(32),
+    itemId: uid(32),
     quantity: 10,
     unitCost: 90_000,
     refType: null,
@@ -181,16 +122,9 @@ describe('StockMovementSchema', () => {
     createdAt: NOW,
   };
 
-  it('accepts a purchase, a sale, and a phone-unit movement', () => {
+  it('accepts a purchase and a sale', () => {
     expectAccepted(StockMovementSchema, movement);
     expectAccepted(StockMovementSchema, { ...movement, type: 'sale', quantity: -2 });
-    expectAccepted(StockMovementSchema, {
-      ...movement,
-      type: 'purchase',
-      variantId: null,
-      phoneUnitId: uid(34),
-      quantity: 1,
-    });
   });
 
   it('rejects a sale with a positive quantity', () => {
@@ -202,21 +136,8 @@ describe('StockMovementSchema', () => {
     expectRejected(StockMovementSchema, { ...movement, quantity: 0 }, 'zero');
   });
 
-  it('rejects a phone unit with quantity 2', () => {
-    expectRejected(
-      StockMovementSchema,
-      { ...movement, variantId: null, phoneUnitId: uid(34), quantity: 2 },
-      'one at a time',
-    );
-  });
-
-  it('rejects both or neither of phoneUnitId / variantId', () => {
-    expectRejected(
-      StockMovementSchema,
-      { ...movement, phoneUnitId: uid(34), quantity: 1 },
-      'Exactly one',
-    );
-    expectRejected(StockMovementSchema, { ...movement, variantId: null }, 'Exactly one');
+  it('rejects a movement without a item', () => {
+    expectRejected(StockMovementSchema, { ...movement, itemId: null });
   });
 
   it('rejects an adjustment without a reason, accepts it with one', () => {
@@ -261,7 +182,7 @@ describe('PurchaseSchema', () => {
 
 describe('Invoice schemas', () => {
   const SALE = uid(50);
-  /** One accessory line of 150000, paid half cash and half khata. */
+  /** One item line of 150000, paid half cash and half khata. */
   const sale = {
     id: SALE,
     deviceId: uid(51),
@@ -286,8 +207,7 @@ describe('Invoice schemas', () => {
         saleId: SALE,
         lineNo: 1,
         productId: uid(56),
-        phoneUnitId: null,
-        variantId: uid(57),
+        itemId: uid(57),
         description: 'Fast Charger 25W',
         quantity: 1,
         unitPrice: 150000,
@@ -407,18 +327,10 @@ describe('Invoice schemas', () => {
     expectRejected(InvoiceSchema, payBad, 'another sale');
   });
 
-  it('rejects a phone-unit line with quantity 2 and a line with both unit and variant', () => {
-    const phoneBad = clone(sale);
-    phoneBad.lines[0]!.variantId = null as unknown as string;
-    (phoneBad.lines[0] as Record<string, unknown>).phoneUnitId = uid(70);
-    phoneBad.lines[0]!.quantity = 2;
-    phoneBad.lines[0]!.unitPrice = 75000;
-    phoneBad.lines[0]!.lineTotal = 150000;
-    expectRejected(InvoiceSchema, phoneBad, 'one at a time');
-
-    const both = clone(sale);
-    (both.lines[0] as Record<string, unknown>).phoneUnitId = uid(70);
-    expectRejected(InvoiceSchema, both, 'Exactly one');
+  it('rejects a line without a item', () => {
+    const noItem = clone(sale);
+    noItem.lines[0]!.itemId = null as unknown as string;
+    expectRejected(InvoiceSchema, noItem);
   });
 
   it('rejects a payment of zero and a wrong-sign payment', () => {

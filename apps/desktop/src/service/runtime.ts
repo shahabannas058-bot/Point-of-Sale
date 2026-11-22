@@ -44,7 +44,7 @@ export async function createRuntime(host: DbHost, opts: RuntimeOptions): Promise
   let handle = await host.open();
   let service = createPosService(deps(handle));
   if (!opts.fresh && !(await service.setup.isSetUp())) {
-    await seedDemoData(deps(handle), { businessType: 'kiryana' });
+    await seedDemoData(deps(handle));
     service = createPosService(deps(handle));
   }
 
@@ -57,8 +57,8 @@ export async function createRuntime(host: DbHost, opts: RuntimeOptions): Promise
     get exportBytes() {
       return handle.exportBytes;
     },
-    loadDemo: async (businessType) => {
-      await seedDemoData(deps(handle), { businessType });
+    loadDemo: async () => {
+      await seedDemoData(deps(handle));
       service = createPosService(deps(handle));
     },
     ...(restore === undefined ? {} : { restore }),
@@ -66,10 +66,8 @@ export async function createRuntime(host: DbHost, opts: RuntimeOptions): Promise
       ? {}
       : {
           resetDemo: async () => {
-            // keep the demo flavour: a kiryana demo is reseeded as kiryana, not as the mobile shop
-            const { businessType } = await service.setup.getShop();
             handle = await reset();
-            await seedDemoData(deps(handle), { businessType });
+            await seedDemoData(deps(handle));
             service = createPosService(deps(handle));
           },
         }),

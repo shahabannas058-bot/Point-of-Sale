@@ -20,10 +20,10 @@ export interface ShopIds {
   cashierId: string;
   customerId: string;
   supplierId: string;
-  productId: string; // the phone product
-  accessoryProductId: string;
-  phoneUnitId: string;
-  variantId: string;
+  productId: string; // the cable product
+  itemProductId: string; // the charger product
+  itemId: string; // the charger
+  item2Id: string; // the cable
 }
 
 export const SHOP: ShopIds = {
@@ -34,12 +34,10 @@ export const SHOP: ShopIds = {
   customerId: FIXTURE_IDS.customerId,
   supplierId: newId(),
   productId: FIXTURE_IDS.productId,
-  accessoryProductId: newId(),
-  phoneUnitId: FIXTURE_IDS.phoneUnitId,
-  variantId: FIXTURE_IDS.variantId,
+  itemProductId: newId(),
+  itemId: FIXTURE_IDS.itemId,
+  item2Id: FIXTURE_IDS.item2Id,
 };
-
-export const IMEI_1 = '356938035643809';
 
 // ---------------------------------------------------------------------------------------------
 // Generic row helpers
@@ -69,8 +67,7 @@ export const movementRow = (over: Row = {}): Row => ({
   id: newId(),
   branch_id: SHOP.branchId,
   type: 'purchase',
-  phone_unit_id: null,
-  variant_id: SHOP.variantId,
+  item_id: SHOP.itemId,
   quantity: 1,
   unit_cost: null,
   ref_type: null,
@@ -110,9 +107,8 @@ export const lineRow = (saleId: string, over: Row = {}): Row => ({
   id: newId(),
   sale_id: saleId,
   line_no: 1,
-  product_id: SHOP.accessoryProductId,
-  phone_unit_id: null,
-  variant_id: SHOP.variantId,
+  product_id: SHOP.itemProductId,
+  item_id: SHOP.itemId,
   description: 'Fast Charger 25W',
   quantity: 1,
   unit_price: 1000,
@@ -187,7 +183,7 @@ export async function createMigratedDb(filename = ':memory:'): Promise<NodeSqlit
 
 /**
  * Inserts the reference data every test needs: 2 branches, a cashier, a customer, a supplier,
- * a phone product with one IMEI unit (no stock yet), an accessory product with one variant.
+ * two products with one item each (a charger and a cable, no stock yet).
  * The ids match `makeInvoice` / `buildChain` fixtures, so fixture invoices satisfy every foreign key.
  */
 export async function seedShop(db: SqlDriver): Promise<ShopIds> {
@@ -223,15 +219,15 @@ export async function seedShop(db: SqlDriver): Promise<ShopIds> {
     }),
     rowStatement('products', {
       id: SHOP.productId,
-      kind: 'phone',
-      brand: 'Samsung',
-      name: 'Galaxy A55 8/256',
-      category: 'Smartphone',
+      kind: 'accessory',
+      brand: 'Generic',
+      name: 'Braided Cable 2m',
+      category: 'Cable',
       created_at: now,
       updated_at: now,
     }),
     rowStatement('products', {
-      id: SHOP.accessoryProductId,
+      id: SHOP.itemProductId,
       kind: 'accessory',
       brand: 'Generic',
       name: 'Fast Charger 25W',
@@ -239,21 +235,9 @@ export async function seedShop(db: SqlDriver): Promise<ShopIds> {
       created_at: now,
       updated_at: now,
     }),
-    rowStatement('phone_units', {
-      id: SHOP.phoneUnitId,
-      product_id: SHOP.productId,
-      imei1: IMEI_1,
-      pta_status: 'approved',
-      condition: 'new',
-      cost_price: 7_800_000,
-      sale_price: 8_500_000,
-      supplier_id: SHOP.supplierId,
-      created_at: now,
-      updated_at: now,
-    }),
-    rowStatement('accessory_variants', {
-      id: SHOP.variantId,
-      product_id: SHOP.accessoryProductId,
+    rowStatement('items', {
+      id: SHOP.itemId,
+      product_id: SHOP.itemProductId,
       sku: 'CHG-25W-BLK',
       barcode: '8961234567890',
       model: 'Universal',
@@ -261,6 +245,19 @@ export async function seedShop(db: SqlDriver): Promise<ShopIds> {
       cost_price: 90_000,
       sale_price: 150_000,
       reorder_level: 3,
+      created_at: now,
+      updated_at: now,
+    }),
+    rowStatement('items', {
+      id: SHOP.item2Id,
+      product_id: SHOP.productId,
+      sku: 'CBL-2M',
+      barcode: '8961234567906',
+      model: 'USB-C',
+      colour: 'Grey',
+      cost_price: 150_000,
+      sale_price: 199_950,
+      reorder_level: 2,
       created_at: now,
       updated_at: now,
     }),
@@ -275,12 +272,12 @@ export async function createSeededDb(): Promise<{ db: NodeSqliteDriver; ids: Sho
   return { db, ids };
 }
 
-/** Adds another accessory variant (for multi-item stock tests). */
-export async function addVariant(db: SqlDriver, sku: string): Promise<string> {
+/** Adds another item (for multi-item stock tests). */
+export async function addItem(db: SqlDriver, sku: string): Promise<string> {
   const id = newId();
-  await insertRow(db, 'accessory_variants', {
+  await insertRow(db, 'items', {
     id,
-    product_id: SHOP.accessoryProductId,
+    product_id: SHOP.itemProductId,
     sku,
     cost_price: 100,
     sale_price: 200,
@@ -332,8 +329,7 @@ export function invoiceStatements(inv: Invoice, options: InvoiceInsertOptions = 
         sale_id: l.saleId,
         line_no: l.lineNo,
         product_id: l.productId,
-        phone_unit_id: l.phoneUnitId,
-        variant_id: l.variantId,
+        item_id: l.itemId,
         description: l.description,
         quantity: l.quantity,
         unit_price: l.unitPrice,
@@ -350,8 +346,7 @@ export function invoiceStatements(inv: Invoice, options: InvoiceInsertOptions = 
           movementRow({
             type: inv.kind === 'sale' ? 'sale' : 'return',
             branch_id: inv.branchId,
-            phone_unit_id: l.phoneUnitId,
-            variant_id: l.variantId,
+            item_id: l.itemId,
             quantity: -l.quantity,
             ref_type: 'sale',
             ref_id: inv.id,
@@ -463,23 +458,4 @@ export async function readInvoices(db: SqlDriver): Promise<Invoice[]> {
     );
   }
   return out;
-}
-
-/** Puts one handset into stock at the given branch. */
-export async function receivePhone(
-  db: SqlDriver,
-  unitId: string = SHOP.phoneUnitId,
-  branchId: string = SHOP.branchId,
-): Promise<void> {
-  await insertRow(
-    db,
-    'stock_movements',
-    movementRow({
-      type: 'purchase',
-      phone_unit_id: unitId,
-      variant_id: null,
-      quantity: 1,
-      branch_id: branchId,
-    }),
-  );
 }

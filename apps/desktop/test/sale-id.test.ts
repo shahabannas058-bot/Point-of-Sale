@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { VariantView } from '@pos/shared';
+import type { ItemView } from '@pos/shared';
 
 // the cart persists held bills in localStorage; give the node test environment one
 vi.hoisted(() => {
@@ -20,9 +20,9 @@ import { useCart } from '../src/store/cart';
 
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-const variant = (id: string): VariantView =>
+const makeItem = (id: string): ItemView =>
   ({
-    variant: {
+    item: {
       id,
       productId: 'p1',
       sku: `SKU-${id}`,
@@ -40,7 +40,6 @@ const variant = (id: string): VariantView =>
     },
     product: {
       id: 'p1',
-      kind: 'accessory',
       brand: 'Test',
       name: `Item ${id}`,
       category: null,
@@ -51,7 +50,7 @@ const variant = (id: string): VariantView =>
     onHand: 50,
     lowStock: false,
     label: `Item ${id}`,
-  }) as unknown as VariantView;
+  }) as unknown as ItemView;
 
 const cart = () => useCart.getState();
 
@@ -67,8 +66,8 @@ describe('cart saleId lifecycle', () => {
 
   it('keeps the same id while lines are added and edited (one attempt = one id)', () => {
     const id = cart().saleId;
-    cart().addVariant(variant('a'));
-    cart().addVariant(variant('b'));
+    cart().addItem(makeItem('a'));
+    cart().addItem(makeItem('b'));
     cart().setQty('v:a', 3);
     cart().setLineDiscount('v:a', 100);
     cart().setInvoiceDiscount(50);
@@ -80,7 +79,7 @@ describe('cart saleId lifecycle', () => {
   });
 
   it('rotates the id when the cart is cleared (successful commit / explicit clear)', () => {
-    cart().addVariant(variant('a'));
+    cart().addItem(makeItem('a'));
     const id = cart().saleId;
     cart().clear();
     expect(cart().saleId).not.toBe(id);
@@ -88,7 +87,7 @@ describe('cart saleId lifecycle', () => {
   });
 
   it('rotates the id when the last line is removed, so a refilled cart is a new attempt', () => {
-    cart().addVariant(variant('a'));
+    cart().addItem(makeItem('a'));
     const id = cart().saleId;
     cart().remove('v:a');
     expect(cart().lines).toHaveLength(0);
@@ -96,7 +95,7 @@ describe('cart saleId lifecycle', () => {
   });
 
   it('gives the live cart a fresh id on hold and keeps the held bill its own id', () => {
-    cart().addVariant(variant('a'));
+    cart().addItem(makeItem('a'));
     const id = cart().saleId;
     cart().hold(10_000);
     const live = cart().saleId;
@@ -106,13 +105,13 @@ describe('cart saleId lifecycle', () => {
   });
 
   it('restores the held bill id on resume and parks the live cart under its own id', () => {
-    cart().addVariant(variant('a'));
+    cart().addItem(makeItem('a'));
     const heldId = cart().saleId;
     cart().hold(10_000);
     const parkedBill = cart().held[0];
     expect(parkedBill).toBeDefined();
 
-    cart().addVariant(variant('b'));
+    cart().addItem(makeItem('b'));
     const liveId = cart().saleId;
     cart().resume(parkedBill!.id);
 
@@ -126,7 +125,7 @@ describe('cart saleId lifecycle', () => {
   });
 
   it('mints an id for held bills saved by an older version without one', () => {
-    cart().addVariant(variant('a'));
+    cart().addItem(makeItem('a'));
     cart().hold(10_000);
     const old = cart().held[0]!;
     useCart.setState({ held: [{ ...old, saleId: undefined }] });

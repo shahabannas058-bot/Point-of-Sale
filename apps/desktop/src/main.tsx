@@ -4,6 +4,7 @@ import './styles/index.css';
 import { StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Loader } from './components/Loader';
+import { UpgradeRefused } from './components/UpgradeRefused';
 import { App } from './App';
 import { bootstrap, installGlobalErrorLogging, type BootResult } from './bootstrap';
 import { translate } from './i18n';
@@ -30,6 +31,7 @@ function Boot(): ReactNode {
         still
       />
     );
+  if (state.kind === 'legacy') return <UpgradeRefused error={state.error} />;
   if (state.kind === 'error')
     return (
       <Loader
