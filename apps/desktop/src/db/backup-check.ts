@@ -1,5 +1,6 @@
 import type { Database, SqlJsStatic } from 'sql.js';
-import { checksum, type Migration } from '@pos/db';
+import { checksum, migrate, type Migration } from '@pos/db';
+import { createSqlJsDriver } from './sqljs-driver';
 
 /**
  * Checks a backup file before it replaces the shop database. Vite-free so it runs in Node tests. These codes are
@@ -11,7 +12,15 @@ export const BACKUP_ERROR_CODES = [
   'BACKUP_CORRUPT',
   'BACKUP_NEWER',
   'BACKUP_INCOMPATIBLE',
+  'BACKUP_UPGRADE_FAILED',
+  'BACKUP_TOO_LARGE',
 ] as const;
+
+/**
+ * A shop database is a few MB, a busy one after years tens of MB. A restore holds the file in memory several times
+ * (checks, upgrade copy, store), so anything far larger is refused before it can freeze the tab.
+ */
+export const MAX_BACKUP_BYTES = 300 * 1024 * 1024;
 export type BackupErrorCode = (typeof BACKUP_ERROR_CODES)[number];
 
 export class BackupError extends Error {
@@ -105,6 +114,8 @@ export function validateBackup(
   bytes: Uint8Array,
   bundled: readonly Migration[],
 ): void {
+  if (bytes.length > MAX_BACKUP_BYTES)
+    throw new BackupError('BACKUP_TOO_LARGE', `The file is ${bytes.length} bytes`);
   if (!hasSqliteHeader(bytes))
     throw new BackupError('BACKUP_NOT_DATABASE', 'The file does not start with the SQLite header');
   const db = new SQL.Database(bytes);
@@ -113,5 +124,25 @@ export function validateBackup(
     checkBackupCompat(readAppliedMigrations(db), bundled);
   } finally {
     db.close();
+  }
+}
+
+/**
+ * Runs the pending migrations on a throwaway copy of an older backup. A restore stores the bytes and reloads, and the
+ * reload migrates: if that upgrade fails (migration 0009 refuses old mobile-shop data, for one), the shop's database
+ * would already be gone (QA S13). Checking first means a failing backup is refused while the current data is intact.
+ */
+export async function checkBackupUpgrades(
+  SQL: SqlJsStatic,
+  bytes: Uint8Array,
+  bundled: readonly Migration[],
+): Promise<void> {
+  const copy = createSqlJsDriver(new SQL.Database(bytes));
+  try {
+    await migrate(copy, bundled);
+  } catch (e) {
+    throw new BackupError('BACKUP_UPGRADE_FAILED', `The backup cannot be upgraded: ${describe(e)}`);
+  } finally {
+    copy.close();
   }
 }

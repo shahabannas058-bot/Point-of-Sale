@@ -6,7 +6,7 @@ import { ItemHistoryDialog, ItemHistoryTable } from '../src/components/ItemHisto
 import { translate, type TFn } from '../src/i18n';
 import { en } from '../src/i18n/en';
 import { ur } from '../src/i18n/ur';
-import { localDayRange } from '../src/lib/dates';
+import { pktDayRange } from '../src/lib/dates';
 import {
   SUMMARY_ROWS,
   batchText,
@@ -27,7 +27,7 @@ const KINDS: ItemHistoryKind[] = ['sale', 'return', 'purchase', 'adjustment', 't
 
 const entry = (over: Partial<ItemHistoryEntry> = {}): ItemHistoryEntry => ({
   id: 'm1',
-  at: new Date(2026, 9, 18, 14, 5).getTime(),
+  at: Date.UTC(2026, 9, 18, 9, 5), // 14:05 Pakistan time
   kind: 'sale',
   quantity: -2,
   balanceAfter: 10,
@@ -142,8 +142,8 @@ describe('historyDateRange', () => {
 
   it('from is the start of its day, to is the last millisecond of its day', () => {
     const r = historyDateRange('2026-10-01', '2026-10-18');
-    expect(r.from).toBe(localDayRange('2026-10-01').fromMs);
-    expect(r.to).toBe(localDayRange('2026-10-18').toMs - 1);
+    expect(r.from).toBe(pktDayRange('2026-10-01').fromMs);
+    expect(r.to).toBe(pktDayRange('2026-10-18').toMs - 1);
     expect(historyDateRange('2026-10-01', '')).toEqual({ from: r.from });
     expect(historyDateRange('', '2026-10-18')).toEqual({ to: r.to });
   });

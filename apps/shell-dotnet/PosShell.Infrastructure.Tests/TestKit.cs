@@ -27,18 +27,9 @@ internal sealed record Seeded(
 
 internal sealed class RecordingLicence : ILicenceGuard
 {
-    public int Calls { get; private set; }
-    public Action<string, string, long>? Behaviour { get; set; }
-
     /// <summary>Every batch the bridge asked about (db.batch), as the guard saw it.</summary>
     public List<IReadOnlyList<SqlStatement>> Writes { get; } = [];
     public Action<IReadOnlyList<SqlStatement>, long>? WriteBehaviour { get; set; }
-
-    public void AssertCanSell(string action, string branchId, long nowMs)
-    {
-        Calls++;
-        Behaviour?.Invoke(action, branchId, nowMs);
-    }
 
     public void AssertCanWrite(IReadOnlyList<SqlStatement> statements, long nowMs)
     {
@@ -47,7 +38,7 @@ internal sealed class RecordingLicence : ILicenceGuard
     }
 }
 
-/// <summary>Everything a sale test needs: a migrated database with a small shop in it, and the service wired to it.</summary>
+/// <summary>A migrated database with a small shop in it (users, items, a customer, opening stock).</summary>
 internal sealed class ShopFixture : IDisposable
 {
     public const long Charger = 50_000;     // 500.00
@@ -61,8 +52,6 @@ internal sealed class ShopFixture : IDisposable
     public UuidV7Generator Ids { get; }
     public Seeded S { get; }
     public RecordingLicence Licence { get; } = new();
-    public InMemoryApprovals Approvals { get; }
-    public SalesService Sales { get; }
 
     /// <summary>Advances 1 s per call so created_at is strictly increasing and tests are reproducible.</summary>
     public long Now() => _now += 1_000;
@@ -70,9 +59,7 @@ internal sealed class ShopFixture : IDisposable
     public ShopFixture()
     {
         Ids = new UuidV7Generator(() => 1_760_000_000_000 + Environment.TickCount64);
-        Approvals = new InMemoryApprovals(() => _now);
         S = Seed();
-        Sales = new SalesService(Db, Licence, Approvals, Ids, Now);
     }
 
     private Seeded Seed()
@@ -146,16 +133,6 @@ internal sealed class ShopFixture : IDisposable
 
     public long OnHandOf(string itemId) =>
         Db.Query("SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_movements WHERE item_id = ?", itemId)[0].Lng("n");
-
-    public string CashSaleOfChargers(int quantity, string? saleId = null)
-    {
-        var idPart = saleId is null ? "" : "\"saleId\": \"" + saleId + "\", ";
-        var amount = quantity * Charger;
-        return $$"""
-            { {{idPart}}"lines": [ { "itemId": "{{S.ItemId}}", "quantity": {{quantity}} } ],
-              "payments": [ { "method": "cash", "amount": {{amount}} } ] }
-            """;
-    }
 
     public void Dispose() => _store.Dispose();
 }

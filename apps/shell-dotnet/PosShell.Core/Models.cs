@@ -12,7 +12,7 @@ public sealed class ServiceException(
 public sealed record InvoiceLine(
     string Id, string SaleId, int LineNo, string ProductId, string ItemId,
     string Description, long Quantity, long UnitPrice, long CostPrice, long DiscountAmount, long LineTotal,
-    long CreatedAt);
+    long CreatedAt, int UnitScale = 1);
 
 public sealed record InvoicePayment(
     string Id, string SaleId, string Method, long Amount, string? Reference, long CreatedAt);

@@ -8,7 +8,7 @@ import { call } from '../native/webview-bridge';
  *
  * NOTE: db.query / db.exec / db.batch expose raw SQL to the page. That is acceptable only while the page is our own
  * bundle served from the app's virtual host (the shell refuses to navigate anywhere else and DevTools are off in
- * release). As services move to C#, replace these with typed methods like `checkout.commit` and delete them.
+ * release). As services move to C#, replace these with typed methods and delete them.
  */
 export const createWebViewDriver = (): SqlDriver => ({
   exec: (script) => call<void>('db.exec', { sql: script }),

@@ -3,23 +3,26 @@ import type { Customer, Paisa, PendingUdhaar } from '@pos/shared';
 import { compactRs, niceMax, periodBuckets, udhaarHealth } from '../src/lib/dashboard';
 
 const DAY = 86_400_000;
-// 20 Oct 2026 15:30 local time
-const NOW = new Date(2026, 9, 20, 15, 30).getTime();
+/** An instant on the Pakistan wall clock (UTC+5); the suite itself runs in UTC. */
+const pkt = (y: number, m0: number, d: number, h = 0, min = 0): number =>
+  Date.UTC(y, m0, d, h, min) - 5 * 3_600_000;
+// 20 Oct 2026 15:30 Pakistan time
+const NOW = pkt(2026, 9, 20, 15, 30);
 
 describe('periodBuckets', () => {
-  it('week = the last 7 local days, today included, labelled by day', () => {
+  it('week = the last 7 Pakistan days, today included, labelled by day', () => {
     const b = periodBuckets('week', NOW);
     expect(b.buckets).toHaveLength(8);
-    expect(b.buckets[0]).toBe(new Date(2026, 9, 14).getTime());
-    expect(b.buckets[7]).toBe(new Date(2026, 9, 21).getTime());
+    expect(b.buckets[0]).toBe(pkt(2026, 9, 14));
+    expect(b.buckets[7]).toBe(pkt(2026, 9, 21));
     expect(b.labels[0]).toBe('14 Oct');
     expect(b.labels[6]).toBe('20 Oct');
   });
 
-  it('month = the last 30 local days', () => {
+  it('month = the last 30 Pakistan days', () => {
     const b = periodBuckets('month', NOW);
     expect(b.labels).toHaveLength(30);
-    expect(b.buckets[30]).toBe(new Date(2026, 9, 21).getTime());
+    expect(b.buckets[30]).toBe(pkt(2026, 9, 21));
     expect(b.labels[0]).toBe('21 Sep');
   });
 
@@ -39,8 +42,8 @@ describe('periodBuckets', () => {
       'Sep',
       'Oct',
     ]);
-    expect(b.buckets[0]).toBe(new Date(2025, 10, 1).getTime());
-    expect(b.buckets[12]).toBe(new Date(2026, 10, 1).getTime());
+    expect(b.buckets[0]).toBe(pkt(2025, 10, 1));
+    expect(b.buckets[12]).toBe(pkt(2026, 10, 1));
   });
 });
 
@@ -72,9 +75,11 @@ const owes = (
   balance: number,
   lastCreditAt: number | null,
   lastPaymentAt: number | null,
+  firstCreditAt: number | null = lastCreditAt,
 ): PendingUdhaar => ({
   party: customer(id),
   balance: balance as Paisa,
+  firstCreditAt,
   lastCreditAt,
   lastPaymentAt,
 });
@@ -99,6 +104,13 @@ describe('udhaarHealth', () => {
       collected: 100_000,
       collectionRate: 100_000 / 210_000,
     });
+  });
+
+  it('a customer who never paid is overdue from the first udhaar, not the latest (QA S11)', () => {
+    // udhaar since 45 days, a small new purchase on khata 2 days ago, never a payment
+    const h = udhaarHealth([owes('e', 40_000, NOW - 2 * DAY, null, NOW - 45 * DAY)], 0, NOW);
+    expect(h.overdueCustomers).toBe(1);
+    expect(h.overdue).toBe(40_000);
   });
 
   it('is 0% collected, not NaN, when nothing is owed or paid', () => {

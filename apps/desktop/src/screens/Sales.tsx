@@ -19,7 +19,7 @@ import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/
 import { dynKey, useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
 import { useBusyAction } from '../lib/busy-action';
-import { formatDateTime, localDayRange } from '../lib/dates';
+import { formatDateTime, pktDayRange } from '../lib/dates';
 import { paisaToInput, parseRupees } from '../lib/money';
 import { labelFor, perUnit, qtyText } from '../lib/qty';
 import {
@@ -368,8 +368,8 @@ export function Sales(): ReactNode {
   const service = useService();
   const filter = {
     ...(q.trim() ? { q: q.trim() } : {}),
-    ...(from ? { fromMs: localDayRange(from).fromMs } : {}),
-    ...(to ? { toMs: localDayRange(to).toMs } : {}),
+    ...(from ? { fromMs: pktDayRange(from).fromMs } : {}),
+    ...(to ? { toMs: pktDayRange(to).toMs } : {}),
     limit: PAGE,
   };
   const list = useServiceQuery((s) => s.checkout.listInvoices(filter), [q, from, to]);

@@ -1,10 +1,4 @@
-import {
-  ServiceError,
-  log,
-  type CommitSaleInput,
-  type Invoice,
-  type ServiceErrorCode,
-} from '@pos/shared';
+import { ServiceError, log, type ServiceErrorCode } from '@pos/shared';
 
 /**
  * React -> C# bridge over the WebView2 message channel.
@@ -120,12 +114,7 @@ export function call<T>(method: string, payload?: unknown, timeoutMs = 30_000): 
   });
 }
 
-/** Typed entry points. Everything else still goes through the TypeScript PosService until it is ported. */
+/** Typed entry points. Sales and everything else go through the TypeScript PosService (over db.batch). */
 export const posNative = {
   ping: () => call<string>('ping'),
-  checkout: {
-    /** `input` is the same CommitSaleInput the TS service takes; `cashierId` is the logged-in user. */
-    commit: (input: CommitSaleInput, cashierId: string) =>
-      call<Invoice>('checkout.commit', { input, cashierId }),
-  },
 };

@@ -8,13 +8,7 @@ import { Input } from '../components/ui/Field';
 import { Empty, ErrorBox, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { useT } from '../i18n';
 import { errorMessage } from '../i18n/errors';
-import {
-  formatDateTime,
-  inclusiveBounds,
-  localMonthRange,
-  monthYm,
-  shiftMonth,
-} from '../lib/dates';
+import { formatDateTime, inclusiveBounds, pktMonthRange, monthYm, shiftMonth } from '../lib/dates';
 import { signedQtyText } from '../lib/item-history';
 import { qtyText } from '../lib/qty';
 import { useService } from '../service/context';
@@ -89,7 +83,7 @@ export function StockLog(): ReactNode {
   }, [q]);
 
   const query = {
-    ...inclusiveBounds(localMonthRange(ym)),
+    ...inclusiveBounds(pktMonthRange(ym)),
     limit: PAGE,
     ...(term ? { q: term } : {}),
   };

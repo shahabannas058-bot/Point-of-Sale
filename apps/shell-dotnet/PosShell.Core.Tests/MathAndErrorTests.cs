@@ -113,6 +113,30 @@ public class PaisaMathTests
         Assert.Equal(exceeds, PaisaMath.ExceedsDiscountLimit(discount, gross, bps));
 }
 
+public class UnitScaleTests
+{
+    // lineGross (packages/shared/src/units.ts): quantity × price ÷ scale, rounded half away from zero
+    [Theory]
+    [InlineData(3, 50_000, 1, 150_000)]       // 3 pieces at Rs 500
+    [InlineData(1_250, 28_550, 1000, 35_688)] // 35,687.5 -> up (same case as the TS test)
+    [InlineData(250, 33_333, 1000, 8_333)]    // 8,333.25 -> down
+    [InlineData(-1_250, 28_550, 1000, -35_688)] // a return rounds away from zero too
+    [InlineData(-1, 1, 1000, 0)]              // never -0
+    public void Gross_divides_by_the_unit_scale_and_rounds_half_away_from_zero(long qty, long price, int scale, long gross)
+    {
+        Assert.Equal(gross, PaisaMath.Gross(new PricedLine(qty, price, 0, scale)));
+    }
+
+    [Fact]
+    public void Line_totals_of_weighed_items_use_the_scaled_gross()
+    {
+        var t = PaisaMath.ComputeSaleTotals([new PricedLine(1_250, 28_550, 88, 1000), new PricedLine(2, 10_000, 0)], 0);
+        Assert.Equal(new long[] { 35_600, 20_000 }, t.LineTotals);
+        Assert.Equal(55_600, t.Total);
+        Assert.Equal("MONEY_INVALID", Assert.Throws<ServiceException>(() => PaisaMath.Gross(new PricedLine(1, 1, 0, 0))).Code);
+    }
+}
+
 public class ErrorMapTests
 {
     [Theory]
@@ -170,37 +194,5 @@ public class ErrorMapTests
             new Dictionary<string, object?> { ["onHand"] = 3L }));
         Assert.Equal("STOCK_INSUFFICIENT", s.Code);
         Assert.Equal(3L, s.Details!["onHand"]);
-    }
-}
-
-public class ApprovalsAndPermissionsTests
-{
-    [Fact]
-    public void Approval_tokens_expire_and_are_single_use()
-    {
-        long now = 1_000;
-        var approvals = new InMemoryApprovals(() => now, ttlMs: 60_000);
-        var token = approvals.Grant("manager");
-        Assert.Equal("manager", approvals.Lookup(token));
-        now += 59_999;
-        Assert.Equal("manager", approvals.Lookup(token));
-        approvals.Consume(token);
-        Assert.Null(approvals.Lookup(token));
-
-        var second = approvals.Grant("owner");
-        now += 60_000; // expiresAt <= now counts as expired, like TS
-        Assert.Null(approvals.Lookup(second));
-        Assert.Null(approvals.Lookup(null));
-        Assert.Null(approvals.Lookup("nope"));
-    }
-
-    [Theory]
-    [InlineData("owner", true)]
-    [InlineData("manager", true)]
-    [InlineData("cashier", false)]
-    public void Only_owner_and_manager_have_unlimited_discount(string role, bool expected)
-    {
-        Assert.Equal(expected, Permissions.HasDiscountUnlimited(role));
-        Assert.True(Permissions.CanSell(role));
     }
 }

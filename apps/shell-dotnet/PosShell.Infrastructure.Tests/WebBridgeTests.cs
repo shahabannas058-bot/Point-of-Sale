@@ -4,13 +4,13 @@ using Xunit;
 
 namespace PosShell.Infrastructure.Tests;
 
-/// <summary>The exact JSON React sends and receives, run through the real SalesService and a real SQLite file.</summary>
+/// <summary>The exact JSON React sends and receives, run against a real SQLite file.</summary>
 public sealed class WebBridgeTests : IDisposable
 {
     private readonly ShopFixture _fx = new();
     private readonly WebBridge _bridge;
 
-    public WebBridgeTests() => _bridge = new WebBridge(_fx.Db, _fx.Sales, _fx.Licence);
+    public WebBridgeTests() => _bridge = new WebBridge(_fx.Db, _fx.Licence);
 
     public void Dispose() => _fx.Dispose();
 
@@ -20,9 +20,6 @@ public sealed class WebBridgeTests : IDisposable
         return JsonDocument.Parse(reply).RootElement;
     }
 
-    private string Commit(string cartJson, string? cashierId = null) =>
-        $$"""{ "cashierId": "{{cashierId ?? _fx.S.CashierId}}", "input": {{cartJson}} }""";
-
     [Fact]
     public async Task Ping_answers_pong_and_echoes_the_request_id()
     {
@@ -30,53 +27,6 @@ public sealed class WebBridgeTests : IDisposable
         Assert.Equal("req-1", r.GetProperty("id").GetString());
         Assert.True(r.GetProperty("ok").GetBoolean());
         Assert.Equal("pong", r.GetProperty("data").GetString());
-    }
-
-    [Fact]
-    public async Task A_cart_posted_from_react_becomes_a_sealed_invoice_in_camelCase()
-    {
-        var saleId = _fx.Ids.Next();
-        var r = await Send("req-2", "checkout.commit", Commit(_fx.CashSaleOfChargers(2, saleId)));
-
-        Assert.True(r.GetProperty("ok").GetBoolean());
-        var inv = r.GetProperty("data");
-        Assert.Equal(saleId, inv.GetProperty("id").GetString());
-        Assert.Equal("A-000001", inv.GetProperty("invoiceNo").GetString());
-        Assert.Equal(100_000, inv.GetProperty("total").GetInt64());
-        Assert.Equal(1, inv.GetProperty("hashVersion").GetInt32());
-        Assert.Equal(64, inv.GetProperty("hash").GetString()!.Length);
-        Assert.Equal(1, inv.GetProperty("lines").GetArrayLength());
-        Assert.Equal("cash", inv.GetProperty("payments")[0].GetProperty("method").GetString());
-        Assert.Equal(1, _fx.Count("sales"));
-
-        // a retried request (timeout, double click) returns the same invoice, it does not sell twice
-        var again = await Send("req-3", "checkout.commit", Commit(_fx.CashSaleOfChargers(2, saleId)));
-        Assert.Equal(inv.GetProperty("hash").GetString(), again.GetProperty("data").GetProperty("hash").GetString());
-        Assert.Equal(1, _fx.Count("sales"));
-    }
-
-    [Fact]
-    public async Task Business_errors_come_back_with_the_typescript_code_and_details()
-    {
-        var r = await Send("req-4", "checkout.commit", Commit(_fx.CashSaleOfChargers(11)));
-
-        Assert.False(r.GetProperty("ok").GetBoolean());
-        Assert.Equal("req-4", r.GetProperty("id").GetString());
-        var error = r.GetProperty("error");
-        Assert.Equal("STOCK_INSUFFICIENT", error.GetProperty("code").GetString());
-        Assert.Equal("Not enough stock", error.GetProperty("message").GetString());
-        Assert.Equal(10, error.GetProperty("details").GetProperty("onHand").GetInt64());
-        Assert.Equal(11, error.GetProperty("details").GetProperty("requested").GetInt64());
-        Assert.Equal(0, _fx.Count("sales"));
-    }
-
-    [Fact]
-    public async Task A_fractional_quantity_survives_the_trip_as_a_VALIDATION_error()
-    {
-        var cart = $$"""{ "lines": [ { "itemId": "{{_fx.S.ItemId}}", "quantity": 1.5 } ], "payments": [] }""";
-        var error = (await Send("req-5", "checkout.commit", Commit(cart))).GetProperty("error");
-        Assert.Equal("VALIDATION", error.GetProperty("code").GetString());
-        Assert.Equal("lines.0.quantity", error.GetProperty("details").GetProperty("field").GetString());
     }
 
     [Fact]
@@ -93,24 +43,15 @@ public sealed class WebBridgeTests : IDisposable
         var unknown = await Send("x2", "format.disk");
         Assert.Equal("NOT_FOUND", unknown.GetProperty("error").GetProperty("code").GetString());
 
+        // the old C# checkout path is gone: sales are committed by the TypeScript service through db.batch
+        var commit = await Send("x3", "checkout.commit", "{}");
+        Assert.Equal("NOT_FOUND", commit.GetProperty("error").GetProperty("code").GetString());
+
         var array = JsonDocument.Parse(await _bridge.HandleAsync("[1,2,3]")).RootElement;
         Assert.False(array.GetProperty("ok").GetBoolean());
 
         var huge = JsonDocument.Parse(await _bridge.HandleAsync(new string(' ', 2_000_001))).RootElement;
         Assert.Equal("Request is too large", huge.GetProperty("error").GetProperty("message").GetString());
-    }
-
-    [Fact]
-    public async Task Commit_without_a_cashier_or_input_is_refused()
-    {
-        var noCashier = await Send("c1", "checkout.commit", $$"""{ "input": {{_fx.CashSaleOfChargers(1)}} }""");
-        Assert.Equal("cashierId", noCashier.GetProperty("error").GetProperty("details").GetProperty("field").GetString());
-
-        var noInput = await Send("c2", "checkout.commit", $$"""{ "cashierId": "{{_fx.S.CashierId}}" }""");
-        Assert.Equal("input", noInput.GetProperty("error").GetProperty("details").GetProperty("field").GetString());
-
-        var stranger = await Send("c3", "checkout.commit", Commit(_fx.CashSaleOfChargers(1), "someone-else"));
-        Assert.Equal("NOT_AUTHENTICATED", stranger.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
@@ -221,7 +162,7 @@ public sealed class WebBridgeTests : IDisposable
         var dir = Path.Combine(Path.GetTempPath(), $"pos-log-{Guid.NewGuid():N}");
         try
         {
-            var bridge = new WebBridge(_fx.Db, _fx.Sales, _fx.Licence, new FileLog(dir));
+            var bridge = new WebBridge(_fx.Db, _fx.Licence, new FileLog(dir));
             var reply = await bridge.HandleAsync(
                 """{ "id": "req-log-1", "method": "db.batch", "payload": { "statements": [ { "sql": "SELEKT nothing FROM nowhere" } ] } }""");
             Assert.Equal("INTERNAL", JsonDocument.Parse(reply).RootElement.GetProperty("error").GetProperty("code").GetString());

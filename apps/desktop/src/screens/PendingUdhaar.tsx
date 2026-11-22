@@ -20,7 +20,8 @@ export function PendingUdhaar(): ReactNode {
   const now = Date.now();
 
   const rows = (q.data ?? []).map((r) => {
-    const since = r.lastPaymentAt ?? r.lastCreditAt;
+    // same rule as the dashboard: never paid -> as old as the first udhaar (QA S11)
+    const since = r.lastPaymentAt ?? r.firstCreditAt;
     return { ...r, days: since === null ? null : daysSince(since, now) };
   });
   const shown = overdueOnly ? rows.filter((r) => r.days !== null && r.days >= OVERDUE_DAYS) : rows;
