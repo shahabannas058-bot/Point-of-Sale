@@ -5,6 +5,9 @@ namespace PosShell.Infrastructure;
 
 public sealed class DatabaseCorruptException(string message) : Exception(message);
 
+/// <summary>The copy taken before an upgrade could not be written (disk full, no access); the database was not touched.</summary>
+public sealed class PreUpgradeBackupException(string message, Exception inner) : Exception(message, inner);
+
 /// <summary>Startup sequence for the shop database: create/open -> integrity check -> migrate -> daily backup.</summary>
 public static class DatabaseBootstrap
 {
@@ -23,7 +26,14 @@ public static class DatabaseBootstrap
             var check = db.QuickCheck();
             if (!string.Equals(check, "ok", StringComparison.OrdinalIgnoreCase))
                 throw new DatabaseCorruptException($"SQLite integrity check failed: {check}");
-            Migrator.Apply(db, beforeUpgrade: version => BackupBeforeUpgrade(db, backupDir, version, now));
+            Migrator.Apply(db, beforeUpgrade: version =>
+            {
+                try { BackupBeforeUpgrade(db, backupDir, version, now); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    throw new PreUpgradeBackupException($"Backup before migration {version} failed: {e.Message}", e);
+                }
+            });
             return db;
         }
         catch

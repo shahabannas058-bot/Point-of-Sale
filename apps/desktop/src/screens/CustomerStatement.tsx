@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
-import { formatDateTime, formatMonth, localMonthRange, monthYm, shiftMonth } from '../lib/dates';
+import { formatDateTime, formatMonth, pktMonthRange, monthYm, shiftMonth } from '../lib/dates';
 import { printPage } from '../lib/print';
 import { reminderLink } from '../lib/udhaar-reminder';
 import { useServiceQuery } from '../service/use-query';
@@ -22,7 +22,7 @@ export function CustomerStatement(): ReactNode {
   const raw = params.get('m') ?? '';
   const ym = YM.test(raw) ? raw : monthYm();
   const setYm = (next: string): void => setParams({ m: next });
-  const range = useMemo(() => localMonthRange(ym), [ym]);
+  const range = useMemo(() => pktMonthRange(ym), [ym]);
   const q = useServiceQuery((s) => s.khata.statement(id, range), [id, range]);
   const shop = useServiceQuery((s) => s.setup.getShop(), []);
   const [receipt, setReceipt] = useState<string | null>(null);

@@ -13,6 +13,7 @@ public partial class App : Application
     private SqliteDatabase? _db;
     private FileLog? _log;
     private DispatcherTimer? _backupTimer;
+    private int _backupRunning; // 1 while a backup runs: a slow one is never started twice
 
     /// <summary>The shop PC often runs for days without a restart: check for today's backup this often.</summary>
     private static readonly TimeSpan BackupCheckEvery = TimeSpan.FromHours(1);
@@ -45,6 +46,18 @@ public partial class App : Application
             Shutdown(2);
             return;
         }
+        catch (PreUpgradeBackupException ex)
+        {
+            _log?.Error("startup", ex);
+            MessageBox.Show(
+                "Update se pehle database ka backup nahi ban saka (shayad disk bhar gayi hai). " +
+                "Database ko haath nahi lagaya gaya.\n" +
+                "The backup before the update could not be written (the disk may be full). Nothing was changed.\n\n" +
+                $"Backups: {PosPaths.BackupDir}\n\nJagah khali karke POS dobara kholein. / Free some space and open POS again.",
+                "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Shutdown(1);
+            return;
+        }
         catch (MigrationException ex) when (ex.Message.Contains("grocery upgrade refused", StringComparison.Ordinal))
         {
             // migration 0009 found mobile-shop data (phones, repairs) and rolled back: pos.db is still on 0008
@@ -68,7 +81,7 @@ public partial class App : Application
             return;
         }
 
-        RunBackup();
+        _ = Task.Run(RunBackup); // off the UI thread: a large database must not delay the window
         // A backup only at startup misses every day the PC is left on (QA S2); the file is still written once per day.
         _backupTimer = new DispatcherTimer { Interval = BackupCheckEvery };
         _backupTimer.Tick += async (_, _) => await Task.Run(RunBackup);
@@ -82,13 +95,14 @@ public partial class App : Application
     private void RunBackup()
     {
         var db = _db; // OnExit clears it first, so a late timer tick does nothing
-        if (db is null) return;
+        if (db is null || Interlocked.CompareExchange(ref _backupRunning, 1, 0) != 0) return;
         try { DatabaseBootstrap.RunDailyBackup(db); }
         catch (Exception ex) // never block the shop because a backup failed
         {
             _log?.Error("backup", ex);
             Debug.WriteLine($"Daily backup failed: {ex}");
         }
+        finally { Volatile.Write(ref _backupRunning, 0); }
     }
 
     protected override void OnExit(ExitEventArgs e)

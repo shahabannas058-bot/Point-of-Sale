@@ -3,7 +3,7 @@ import {
   daysSince,
   formatMonth,
   inclusiveBounds,
-  localMonthRange,
+  pktMonthRange,
   monthYm,
   shiftMonth,
 } from '../src/lib/dates';
@@ -18,16 +18,16 @@ describe('month helpers (Pakistan time, no DST)', () => {
     expect(monthYm(pkt(2026, 0, 1, 0, 0))).toBe('2026-01');
   });
 
-  it('localMonthRange runs from the 1st 00:00 to the next 1st 00:00', () => {
-    const r = localMonthRange('2026-10');
+  it('pktMonthRange runs from the 1st 00:00 to the next 1st 00:00', () => {
+    const r = pktMonthRange('2026-10');
     expect(r).toEqual({ fromMs: pkt(2026, 9, 1), toMs: pkt(2026, 10, 1) });
-    expect(localMonthRange('2026-12').toMs).toBe(pkt(2027, 0, 1));
+    expect(pktMonthRange('2026-12').toMs).toBe(pkt(2027, 0, 1));
   });
 
   it('inclusiveBounds ends one ms before the next month, so 1st 00:00 is in one month only (QA#17)', () => {
-    const oct = inclusiveBounds(localMonthRange('2026-10'));
-    const novStart = localMonthRange('2026-11').fromMs;
-    expect(oct).toEqual({ from: localMonthRange('2026-10').fromMs, to: novStart - 1 });
+    const oct = inclusiveBounds(pktMonthRange('2026-10'));
+    const novStart = pktMonthRange('2026-11').fromMs;
+    expect(oct).toEqual({ from: pktMonthRange('2026-10').fromMs, to: novStart - 1 });
     expect(novStart <= oct.to).toBe(false);
   });
 

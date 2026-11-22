@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Field';
 import { Empty, ErrorBox, Money, PageHeader, SkeletonRows } from '../components/ui/misc';
 import { dynKey, useT } from '../i18n';
-import { localDayRange, todayYmd } from '../lib/dates';
+import { pktDayRange, todayYmd } from '../lib/dates';
 import { formatRs } from '../lib/money';
 import { itemQtyText } from '../lib/qty';
 import { printPage } from '../lib/print';
@@ -40,7 +40,7 @@ export function Reports(): ReactNode {
   const t = useT();
   const can = useCan();
   const [day, setDay] = useState(todayYmd());
-  const range = useMemo(() => localDayRange(day), [day]);
+  const range = useMemo(() => pktDayRange(day), [day]);
   const q = useServiceQuery((s) => s.reports.summary(range), [range], can('view_reports'));
 
   if (!can('view_reports'))

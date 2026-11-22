@@ -7,6 +7,7 @@ import {
   checkBackupCompat,
   checkBackupUpgrades,
   isBackupError,
+  MAX_BACKUP_BYTES,
   validateBackup,
   type AppliedMigrationRow,
 } from '../src/db/backup-check';
@@ -125,6 +126,14 @@ describe('validateBackup (sql.js)', () => {
     // keep the 100-byte header so sql.js opens it, then wreck the second page's b-tree content
     damaged.fill(0xff, 4096 + 8, 4096 * 2);
     expect(() => validateBackup(SQL, damaged, bundled)).toThrow(BackupError);
+  });
+});
+
+describe('backup size limit', () => {
+  it('refuses a file larger than any shop database before reading it', async () => {
+    const SQL = await initSqlJs();
+    const huge = { length: MAX_BACKUP_BYTES + 1 } as Uint8Array; // never read: the size check comes first
+    expect(codeOf(() => validateBackup(SQL, huge, bundled))).toBe('BACKUP_TOO_LARGE');
   });
 });
 

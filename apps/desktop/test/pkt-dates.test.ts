@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDate,
   formatTime,
-  localDayRange,
-  localMonthRange,
+  pktDayRange,
+  pktMonthRange,
   monthYm,
   todayYmd,
 } from '../src/lib/dates';
@@ -24,14 +24,14 @@ describe('dates follow Pakistan time, not the PC clock zone (QA S9)', () => {
   });
 
   it('a day runs from PKT midnight to the next PKT midnight', () => {
-    expect(localDayRange('2026-10-19')).toEqual({
+    expect(pktDayRange('2026-10-19')).toEqual({
       fromMs: pkt(2026, 10, 19),
       toMs: pkt(2026, 10, 20),
     });
   });
 
   it('a month starts at PKT midnight on the 1st', () => {
-    expect(localMonthRange('2026-11')).toEqual({
+    expect(pktMonthRange('2026-11')).toEqual({
       fromMs: pkt(2026, 11, 1),
       toMs: pkt(2026, 12, 1),
     });

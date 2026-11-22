@@ -557,7 +557,7 @@ export const ur: Dict = {
   'udhaar.pendingSubtitle': 'Sab udhaar wale gahak, sab se zyada pehle',
   'udhaar.lastGiven': 'Aakhri udhaar',
   'udhaar.lastPaid': 'Aakhri payment',
-  'udhaar.daysNoPayment': 'Payment ko guzre din',
+  'udhaar.daysNoPayment': 'Kitne din se paisa nahi aaya',
   'udhaar.never': 'Kabhi nahi',
   'udhaar.olderThan': '30+ din se payment nahi',
   'udhaar.nonePending': 'Kisi ka udhaar baqi nahi',
@@ -678,6 +678,7 @@ export const ur: Dict = {
   'err.BACKUP_CORRUPT': 'Backup file kharab hai aur restore nahi ho sakti.',
   'err.BACKUP_NEWER': 'Yeh backup app ke naye version ne banaya tha. Pehle app update karein.',
   'err.BACKUP_INCOMPATIBLE': 'Yeh backup is app version se match nahi karta.',
+  'err.BACKUP_TOO_LARGE': 'Yeh file POS backup hone ke liye bohat bari hai.',
   'err.BACKUP_UPGRADE_FAILED':
     'Yeh backup is version mein nahi khul sakta (shayad purane mobile-shop version ka hai). Aap ka mojooda data nahi badla.',
 

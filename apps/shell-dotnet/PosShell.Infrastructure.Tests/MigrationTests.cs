@@ -241,6 +241,28 @@ public class MigrationTests
     }
 
     [Fact]
+    public void A_failed_pre_upgrade_backup_stops_the_upgrade_and_leaves_the_database_alone()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"pos-up-{Guid.NewGuid():N}.db");
+        var notADir = Path.Combine(Path.GetTempPath(), $"pos-bak-{Guid.NewGuid():N}.txt");
+        try
+        {
+            using (var old = new SqliteDatabase(file)) Migrator.Apply(old, Migrator.LoadEmbedded().Take(8).ToList());
+            File.WriteAllText(notADir, "a file where the backup folder should be"); // the copy cannot be written
+
+            Assert.Throws<PreUpgradeBackupException>(() => DatabaseBootstrap.OpenAndMigrate(file, notADir));
+
+            using var db = new SqliteDatabase(file);
+            Assert.Equal(8, db.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
+        }
+        finally
+        {
+            Cleanup(file);
+            File.Delete(notADir);
+        }
+    }
+
+    [Fact]
     public void Only_the_newest_pre_upgrade_copies_are_kept()
     {
         using var t = new TempDb();

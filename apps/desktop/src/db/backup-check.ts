@@ -13,7 +13,14 @@ export const BACKUP_ERROR_CODES = [
   'BACKUP_NEWER',
   'BACKUP_INCOMPATIBLE',
   'BACKUP_UPGRADE_FAILED',
+  'BACKUP_TOO_LARGE',
 ] as const;
+
+/**
+ * A shop database is a few MB, a busy one after years tens of MB. A restore holds the file in memory several times
+ * (checks, upgrade copy, store), so anything far larger is refused before it can freeze the tab.
+ */
+export const MAX_BACKUP_BYTES = 300 * 1024 * 1024;
 export type BackupErrorCode = (typeof BACKUP_ERROR_CODES)[number];
 
 export class BackupError extends Error {
@@ -107,6 +114,8 @@ export function validateBackup(
   bytes: Uint8Array,
   bundled: readonly Migration[],
 ): void {
+  if (bytes.length > MAX_BACKUP_BYTES)
+    throw new BackupError('BACKUP_TOO_LARGE', `The file is ${bytes.length} bytes`);
   if (!hasSqliteHeader(bytes))
     throw new BackupError('BACKUP_NOT_DATABASE', 'The file does not start with the SQLite header');
   const db = new SQL.Database(bytes);

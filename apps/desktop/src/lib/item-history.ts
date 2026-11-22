@@ -10,7 +10,7 @@ import type {
 } from '@pos/shared';
 import type { Tone } from '../components/ui/Badge';
 import type { TFn, TKey } from '../i18n';
-import { localDayRange } from './dates';
+import { pktDayRange } from './dates';
 import { qtyText } from './qty';
 
 /* Pure helpers for the item history dialog (Ctrl+H): what each row says, in which colour. */
@@ -115,8 +115,8 @@ export function historyDateRange(
   toYmd: string,
 ): Pick<ItemHistoryQuery, 'from' | 'to'> {
   return {
-    ...(fromYmd ? { from: localDayRange(fromYmd).fromMs } : {}),
-    ...(toYmd ? { to: localDayRange(toYmd).toMs - 1 } : {}),
+    ...(fromYmd ? { from: pktDayRange(fromYmd).fromMs } : {}),
+    ...(toYmd ? { to: pktDayRange(toYmd).toMs - 1 } : {}),
   };
 }
 

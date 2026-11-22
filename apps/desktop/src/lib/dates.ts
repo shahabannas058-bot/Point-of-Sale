@@ -24,7 +24,7 @@ export function pktParts(ms: number): { y: number; m0: number; d: number } {
 }
 
 /** Pakistan-day bounds [from, to) for a YYYY-MM-DD string (no DST, so +24h is exact). */
-export function localDayRange(ymd: string): SummaryRange {
+export function pktDayRange(ymd: string): SummaryRange {
   const [y = 1970, m = 1, d = 1] = ymd.split('-').map(Number);
   return { fromMs: pktMidnight(y, m - 1, d), toMs: pktMidnight(y, m - 1, d + 1) };
 }
@@ -53,7 +53,7 @@ export function monthYm(now: number = Date.now()): string {
 }
 
 /** Pakistan-month bounds [first day 00:00, first day of next month 00:00) for a YYYY-MM string. */
-export function localMonthRange(ym: string): SummaryRange {
+export function pktMonthRange(ym: string): SummaryRange {
   const [y = 1970, m = 1] = ym.split('-').map(Number);
   return { fromMs: pktMidnight(y, m - 1, 1), toMs: pktMidnight(y, m, 1) };
 }
