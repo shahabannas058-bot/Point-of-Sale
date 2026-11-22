@@ -8,18 +8,20 @@ import {
   shiftMonth,
 } from '../src/lib/dates';
 
-describe('month helpers (PKT has no DST, local midnight is exact)', () => {
+/** An instant on the Pakistan wall clock (UTC+5); the suite itself runs in UTC. */
+const pkt = (y: number, m0: number, d: number, h = 0, min = 0): number =>
+  Date.UTC(y, m0, d, h, min) - 5 * 3_600_000;
+
+describe('month helpers (Pakistan time, no DST)', () => {
   it('monthYm names the month a timestamp falls in', () => {
-    expect(monthYm(new Date(2026, 9, 19, 13, 0).getTime())).toBe('2026-10');
-    expect(monthYm(new Date(2026, 0, 1, 0, 0).getTime())).toBe('2026-01');
+    expect(monthYm(pkt(2026, 9, 19, 13, 0))).toBe('2026-10');
+    expect(monthYm(pkt(2026, 0, 1, 0, 0))).toBe('2026-01');
   });
 
   it('localMonthRange runs from the 1st 00:00 to the next 1st 00:00', () => {
     const r = localMonthRange('2026-10');
-    expect(new Date(r.fromMs).toString()).toBe(new Date(2026, 9, 1).toString());
-    expect(new Date(r.toMs).toString()).toBe(new Date(2026, 10, 1).toString());
-    const dec = localMonthRange('2026-12');
-    expect(new Date(dec.toMs).getFullYear()).toBe(2027);
+    expect(r).toEqual({ fromMs: pkt(2026, 9, 1), toMs: pkt(2026, 10, 1) });
+    expect(localMonthRange('2026-12').toMs).toBe(pkt(2027, 0, 1));
   });
 
   it('inclusiveBounds ends one ms before the next month, so 1st 00:00 is in one month only (QA#17)', () => {
@@ -40,7 +42,7 @@ describe('month helpers (PKT has no DST, local midnight is exact)', () => {
   });
 
   it('daysSince floors and never goes negative', () => {
-    const now = new Date(2026, 9, 19).getTime();
+    const now = pkt(2026, 9, 19);
     expect(daysSince(now - 3.9 * 86_400_000, now)).toBe(3);
     expect(daysSince(now + 1000, now)).toBe(0);
   });

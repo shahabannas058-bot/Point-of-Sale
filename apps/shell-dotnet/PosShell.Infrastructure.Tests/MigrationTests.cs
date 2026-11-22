@@ -192,10 +192,84 @@ public class MigrationTests
     }
 
     [Fact]
+    public void A_new_backup_survives_rotation_after_the_pc_clock_jumps_back()
+    {
+        using var t = new TempDb();
+        var dir = Path.Combine(Path.GetTempPath(), $"pos-bak-{Guid.NewGuid():N}");
+        try
+        {
+            DatabaseBootstrap.RunDailyBackup(t.Db, dir, keep: 2, today: new DateTime(2026, 10, 12));
+            DatabaseBootstrap.RunDailyBackup(t.Db, dir, keep: 2, today: new DateTime(2026, 10, 13));
+
+            // the clock went back (dead CMOS battery): today's file sorts before the others by name
+            var created = DatabaseBootstrap.RunDailyBackup(t.Db, dir, keep: 2, today: new DateTime(2026, 10, 1));
+
+            Assert.NotNull(created);
+            Assert.True(File.Exists(created));
+            Assert.Equal(new[] { "pos-2026-10-01.db", "pos-2026-10-13.db" },
+                Directory.GetFiles(dir).Select(f => Path.GetFileName(f)).OrderBy(n => n, StringComparer.Ordinal).ToArray());
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void An_existing_database_is_backed_up_before_it_is_upgraded_and_a_new_one_is_not()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"pos-up-{Guid.NewGuid():N}.db");
+        var dir = Path.Combine(Path.GetTempPath(), $"pos-bak-{Guid.NewGuid():N}");
+        try
+        {
+            using (DatabaseBootstrap.OpenAndMigrate(file, dir)) { }
+            Assert.False(Directory.Exists(dir) && Directory.GetFiles(dir).Length > 0); // nothing to protect yet
+            Cleanup(file);
+
+            using (var old = new SqliteDatabase(file)) Migrator.Apply(old, Migrator.LoadEmbedded().Take(8).ToList());
+
+            using (var upgraded = DatabaseBootstrap.OpenAndMigrate(file, dir, new DateTime(2026, 11, 22, 10, 15, 0)))
+                Assert.Equal(9, upgraded.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n"));
+
+            var backup = Assert.Single(Directory.GetFiles(dir));
+            Assert.Equal("premigrate-v0009-20261122-101500.db", Path.GetFileName(backup));
+            using var copy = new SqliteDatabase(backup);
+            Assert.Equal(8, copy.Query("SELECT COUNT(*) AS n FROM schema_migrations")[0].Lng("n")); // the data as it was
+        }
+        finally
+        {
+            Cleanup(file);
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Only_the_newest_pre_upgrade_copies_are_kept()
+    {
+        using var t = new TempDb();
+        var dir = Path.Combine(Path.GetTempPath(), $"pos-bak-{Guid.NewGuid():N}");
+        try
+        {
+            for (var i = 0; i < DatabaseBootstrap.KeepPremigrate + 2; i++)
+                DatabaseBootstrap.BackupBeforeUpgrade(t.Db, dir, 9, new DateTime(2026, 11, 1 + i, 9, 0, 0));
+            File.WriteAllText(Path.Combine(dir, "premigrate-notes.db"), "not ours"); // a name we did not write stays
+
+            var names = Directory.GetFiles(dir).Select(f => Path.GetFileName(f)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            Assert.Equal(DatabaseBootstrap.KeepPremigrate + 1, names.Count);
+            Assert.Contains("premigrate-notes.db", names);
+            Assert.DoesNotContain("premigrate-v0009-20261101-090000.db", names);
+            Assert.Contains("premigrate-v0009-20261107-090000.db", names);
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
     public void Immutability_triggers_surface_as_IMMUTABLE_RECORD_through_the_real_driver_message()
     {
         using var fx = new ShopFixture();
-        fx.Sales.Commit(ShopFixture.Json(fx.CashSaleOfChargers(1)), fx.S.CashierId);
+        // one invoice, written the way the TypeScript service writes it through db.batch
+        fx.Db.Batch([new SqlStatement("""
+            INSERT INTO sales (id, device_id, seq, invoice_no, kind, branch_id, cashier_id, subtotal, discount_total, total,
+              created_at, hash_version, prev_hash, hash) VALUES (?, ?, 1, 'A-000001', 'sale', ?, ?, 50000, 0, 50000, ?, 2, ?, ?)
+            """,
+            [fx.Ids.Next(), fx.S.DeviceId, fx.S.BranchId, fx.S.CashierId, fx.Now(), InvoiceHasher.Genesis, new string('a', 64)])]);
 
         var update = Assert.Throws<ServiceException>(() =>
             fx.Db.Batch([new SqlStatement("UPDATE sales SET note = ?", ["tamper"])]));

@@ -68,7 +68,7 @@ Free setup + training, Urdu WhatsApp support, in-app updates, subscription remin
 - [x] Decide DB access layer for SQLite (`SqlDriver` abstraction in `packages/db`, SQL migrations 0001–0004)
 
 ### Phase 1 — Working offline POS (no licensing yet)
-- [x] Desktop shell — _C# WPF + WebView2 in `apps/shell-dotnet` (ADR-0010 replaces Tauri). Verified 2026-10-18 on a scratch data folder: setup wizard on an empty native `pos.db`, demo load, login, Expiry screen and a real sale with batches all work through the bridge. Still to do: installer / auto-update, ESC/POS printing, fix the 2 old C# test problems, licence guard on `db.batch`_
+- [x] Desktop shell — _C# WPF + WebView2 in `apps/shell-dotnet` (ADR-0010 replaces Tauri). Verified 2026-10-18 on a scratch data folder: setup wizard on an empty native `pos.db`, demo load, login, Expiry screen and a real sale with batches all work through the bridge. Still to do: installer / auto-update, ESC/POS printing, the real licence guard on `db.batch` (the hook exists). The old C# test problems are fixed and the unused C# `SalesService` was removed (2026-11-22)_
 - [x] SQLite schema + migrations, money in integer paisa
 - [x] Products: items with SKU/barcode and unit scale (phone units were also built here and removed 2026-11-21, ADR-0011)
 - [x] Stock ledger (`stock_movements`), purchase entry

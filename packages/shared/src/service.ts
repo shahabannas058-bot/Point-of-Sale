@@ -554,6 +554,7 @@ export interface CustomerStatement {
 export interface PendingUdhaar {
   party: Customer;
   balance: Paisa; // > 0
+  firstCreditAt: number | null; // first entry that increased the balance (how old the udhaar is when never paid)
   lastCreditAt: number | null; // last entry that increased the balance
   lastPaymentAt: number | null; // last payment_received
 }

@@ -72,7 +72,7 @@ and the `expiredOnHand` error on sql.js).
   version 7 and `stock_batches`. Two C# problems that existed before this work were left alone:
   `WebBridgeTests.The_sql_driver_methods_round_trip_values_for_the_typescript_services` fails with or without 0007, and
   `PosShell.Core.Tests` does not compile (`GoldenVectorTests.cs(92,70)`, error CS0411).
-- The C# `SalesService` still writes one movement per line and does not know about batches (it never sets `batch_id`);
+- (Resolved 2026-11-22: the C# `SalesService` was removed.) The C# `SalesService` still wrote one movement per line and did not know about batches (it never set `batch_id`);
   a C# port of first-expiry-first-out is future work.
 - Receipts do not print the batch; invoices are untouched by design (ADR-0009).
 - No git checkpoint commits: the tree holds unrelated uncommitted work on `main`.

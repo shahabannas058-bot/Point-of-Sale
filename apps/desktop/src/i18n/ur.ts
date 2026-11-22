@@ -678,6 +678,8 @@ export const ur: Dict = {
   'err.BACKUP_CORRUPT': 'Backup file kharab hai aur restore nahi ho sakti.',
   'err.BACKUP_NEWER': 'Yeh backup app ke naye version ne banaya tha. Pehle app update karein.',
   'err.BACKUP_INCOMPATIBLE': 'Yeh backup is app version se match nahi karta.',
+  'err.BACKUP_UPGRADE_FAILED':
+    'Yeh backup is version mein nahi khul sakta (shayad purane mobile-shop version ka hai). Aap ka mojooda data nahi badla.',
 
   'hist.title': 'Item ki history',
   'hist.open': 'History',

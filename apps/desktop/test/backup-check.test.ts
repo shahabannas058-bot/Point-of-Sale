@@ -5,6 +5,7 @@ import { createPosService } from '@pos/db/service';
 import {
   BackupError,
   checkBackupCompat,
+  checkBackupUpgrades,
   isBackupError,
   validateBackup,
   type AppliedMigrationRow,
@@ -124,5 +125,41 @@ describe('validateBackup (sql.js)', () => {
     // keep the 100-byte header so sql.js opens it, then wreck the second page's b-tree content
     damaged.fill(0xff, 4096 + 8, 4096 * 2);
     expect(() => validateBackup(SQL, damaged, bundled)).toThrow(BackupError);
+  });
+});
+
+describe('checkBackupUpgrades (QA S13): a restore must not replace the shop database with one that cannot open', () => {
+  const at8 = async (withPhone: boolean): Promise<Uint8Array> => {
+    const SQL = await initSqlJs();
+    const db = createSqlJsDriver(new SQL.Database());
+    await migrate(
+      db,
+      bundled.filter((m) => m.version <= 8),
+    );
+    if (withPhone) {
+      const now = Date.now();
+      await db.exec(`
+        INSERT INTO products (id, kind, brand, name, category, is_active, created_at, updated_at)
+        VALUES ('0199c82c-0000-7000-8000-000000000001', 'phone', 'Samsung', 'Galaxy A15', 'Phone', 1, ${now}, ${now});
+        INSERT INTO phone_units (id, product_id, imei1, pta_status, condition, cost_price, sale_price, created_at, updated_at)
+        VALUES ('0199c82c-0000-7000-8000-000000000002', '0199c82c-0000-7000-8000-000000000001', '356938035643809',
+                'approved', 'new', 4000000, 4500000, ${now}, ${now});
+      `);
+    }
+    return db.exportBytes();
+  };
+
+  it('accepts an older backup that upgrades cleanly', async () => {
+    const SQL = await initSqlJs();
+    await expect(checkBackupUpgrades(SQL, await at8(false), bundled)).resolves.toBeUndefined();
+  });
+
+  it('refuses a backup whose upgrade fails (old mobile-shop data), before anything is stored', async () => {
+    const SQL = await initSqlJs();
+    const error = await checkBackupUpgrades(SQL, await at8(true), bundled).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(isBackupError(error) ? error.code : error).toBe('BACKUP_UPGRADE_FAILED');
   });
 });

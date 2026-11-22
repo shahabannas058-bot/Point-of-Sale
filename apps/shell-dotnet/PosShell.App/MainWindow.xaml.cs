@@ -104,7 +104,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// React called window.chrome.webview.postMessage({ id, method, payload }). WebBridge parses it as JsonElement,
-    /// runs it (checkout.commit goes through SalesService) and always returns a reply JSON, which is posted back.
+    /// runs it and always returns a reply JSON, which is posted back.
     /// </summary>
     private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {

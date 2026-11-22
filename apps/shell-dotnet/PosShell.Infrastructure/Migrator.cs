@@ -54,8 +54,13 @@ public static class Migrator
         return list;
     }
 
-    /// <summary>Applies pending migrations. Returns the versions applied now (empty when already up to date).</summary>
-    public static IReadOnlyList<int> Apply(SqliteDatabase db, IReadOnlyList<Migration>? migrations = null)
+    /// <summary>
+    /// Applies pending migrations. Returns the versions applied now (empty when already up to date).
+    /// <paramref name="beforeUpgrade"/> runs once, with the first pending version, before an EXISTING database (one that
+    /// already has migrations) is changed; the shell takes a backup there. It does not run for a brand-new database.
+    /// </summary>
+    public static IReadOnlyList<int> Apply(
+        SqliteDatabase db, IReadOnlyList<Migration>? migrations = null, Action<int>? beforeUpgrade = null)
     {
         migrations ??= LoadEmbedded();
 
@@ -80,8 +85,11 @@ public static class Migrator
                 throw new MigrationException($"Migration {version} ({row.Str("name")}) was modified after it was applied");
         }
 
+        var pending = migrations.Skip(applied.Count).ToList();
+        if (pending.Count > 0 && applied.Count > 0) beforeUpgrade?.Invoke(pending[0].Version);
+
         var done = new List<int>();
-        foreach (var m in migrations.Skip(applied.Count))
+        foreach (var m in pending)
         {
             var script =
                 $"BEGIN IMMEDIATE;\n{m.Sql}\n" +

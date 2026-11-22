@@ -1,5 +1,5 @@
 import type { PendingUdhaar } from '@pos/shared';
-import { MONTHS } from './dates';
+import { MONTHS, pktMidnight, pktParts } from './dates';
 
 export type DashPeriod = 'week' | 'month' | 'year';
 export const DASH_PERIODS: readonly DashPeriod[] = ['week', 'month', 'year'];
@@ -16,29 +16,30 @@ export interface Bucketing {
   labels: string[];
 }
 
-/** Local-day buckets for week / month, local-month buckets for year; the current day or month is the last point. */
+/** Pakistan-day buckets for week / month, Pakistan-month buckets for year; the current day or month is the last point. */
 export function periodBuckets(period: DashPeriod, now: number = Date.now()): Bucketing {
-  const today = new Date(now);
+  const today = pktParts(now);
   if (period === 'year') {
-    const first = today.getMonth() - (MONTHS_IN_YEAR - 1);
-    const starts = Array.from(
-      { length: MONTHS_IN_YEAR + 1 },
-      (_, i) => new Date(today.getFullYear(), first + i, 1),
-    );
+    const first = today.m0 - (MONTHS_IN_YEAR - 1);
+    const months = Array.from({ length: MONTHS_IN_YEAR + 1 }, (_, i) => first + i);
     return {
-      buckets: starts.map((d) => d.getTime()),
-      labels: starts.slice(0, -1).map((d) => MONTHS[d.getMonth()] ?? '?'),
+      buckets: months.map((m0) => pktMidnight(today.y, m0, 1)),
+      labels: months
+        .slice(0, -1)
+        .map((m0) => MONTHS[(m0 + MONTHS_IN_YEAR * 2) % MONTHS_IN_YEAR] ?? '?'),
     };
   }
   const days = DAYS_IN[period];
-  const first = today.getDate() - (days - 1);
-  const starts = Array.from(
-    { length: days + 1 },
-    (_, i) => new Date(today.getFullYear(), today.getMonth(), first + i),
+  const first = today.d - (days - 1);
+  const buckets = Array.from({ length: days + 1 }, (_, i) =>
+    pktMidnight(today.y, today.m0, first + i),
   );
   return {
-    buckets: starts.map((d) => d.getTime()),
-    labels: starts.slice(0, -1).map((d) => `${d.getDate()} ${MONTHS[d.getMonth()] ?? '?'}`),
+    buckets,
+    labels: buckets.slice(0, -1).map((ms) => {
+      const p = pktParts(ms);
+      return `${p.d} ${MONTHS[p.m0] ?? '?'}`;
+    }),
   };
 }
 
@@ -85,7 +86,8 @@ export function udhaarHealth(
   now: number = Date.now(),
 ): UdhaarHealth {
   const cutoff = now - OVERDUE_DAYS * DAY_MS;
-  const overdueRows = pending.filter((p) => (p.lastPaymentAt ?? p.lastCreditAt ?? now) < cutoff);
+  // never paid: the udhaar is as old as its first credit, a fresh small purchase does not make it new (QA S11)
+  const overdueRows = pending.filter((p) => (p.lastPaymentAt ?? p.firstCreditAt ?? now) < cutoff);
   const sum = (rows: readonly PendingUdhaar[]): number =>
     rows.reduce((acc, p) => acc + p.balance, 0);
   const outstanding = sum(pending);

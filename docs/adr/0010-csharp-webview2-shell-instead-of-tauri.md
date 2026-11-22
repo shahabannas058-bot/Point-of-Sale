@@ -71,4 +71,7 @@ The desktop shell is the C# WPF + WebView2 app in `apps/shell-dotnet`. Tauri is 
 - Two pre-existing C# test problems (one failing bridge test, and `PosShell.Core.Tests` does not compile) must be fixed
   before the shell is trusted for releases
 - The C# `SalesService` duplicates the commit rules of the TypeScript service and does not know about batches (ADR-0009);
-  the UI does not use it, it goes through the TypeScript service. Remove it or port it before anything depends on it
+  the UI does not use it, it goes through the TypeScript service. Remove it or port it before anything depends on it.
+  **Resolved 2026-11-22:** `SalesService` and the `checkout.commit` bridge method were removed; `db.batch` is the only
+  write path and the licence guard (`ILicenceGuard.AssertCanWrite`) sees every batch. The two old C# test problems are
+  fixed too (`dotnet test`: Core 158, Infrastructure 38 tests pass)

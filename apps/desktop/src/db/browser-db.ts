@@ -2,9 +2,10 @@ import initSqlJs from 'sql.js';
 import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url';
 import { del, get, set } from 'idb-keyval';
 import { migrate, migrationsFromFiles } from '@pos/db';
-import { validateBackup } from './backup-check';
+import { checkBackupUpgrades, validateBackup } from './backup-check';
 import { createOwnerPinCheck, type OwnerPinCheck } from './legacy-gate';
 import { createSqlJsDriver, type SqlJsDriver } from './sqljs-driver';
+import { acquireLease } from './tab-lease';
 
 const DB_KEY = 'pos-db-v1';
 
@@ -39,7 +40,8 @@ export async function openBrowserDb(opts: { fresh?: boolean } = {}): Promise<Sql
 
 /**
  * Replaces the persisted database with a backup file. The bytes are checked first (SQLite header, integrity_check,
- * migrations known to this app; see backup-check.ts) and nothing is written when a check fails. `beforeWrite` runs
+ * migrations known to this app, and that an older backup upgrades cleanly; see backup-check.ts) and nothing is
+ * written when a check fails. `beforeWrite` runs
  * after the checks and before the bytes are stored: the caller closes its open driver there, so no late write of the
  * old database can land on top of the restored one. The page must reload afterwards.
  */
@@ -48,7 +50,9 @@ export async function restoreBrowserDb(
   opts: { beforeWrite?: () => void } = {},
 ): Promise<void> {
   const SQL = await loadSql();
-  validateBackup(SQL, bytes, migrationsFromFiles(migrationFiles));
+  const bundled = migrationsFromFiles(migrationFiles);
+  validateBackup(SQL, bytes, bundled);
+  await checkBackupUpgrades(SQL, bytes, bundled);
   opts.beforeWrite?.();
   await set(DB_KEY, bytes);
 }
@@ -70,12 +74,41 @@ export async function resetBrowserDb(): Promise<void> {
   await del(DB_KEY);
 }
 
+/** No Web Locks (an http:// page that is not localhost): a renewed lease in localStorage instead (QA S15). */
+function leaseFallback(): boolean {
+  if (typeof window === 'undefined') return true;
+  let storage: Storage;
+  try {
+    storage = window.localStorage;
+  } catch {
+    return true; // storage blocked: nothing to coordinate with
+  }
+  return acquireLease({
+    storage,
+    now: () => Date.now(),
+    setInterval: (fn, ms) => window.setInterval(fn, ms),
+    onWake: (fn) => {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') fn();
+      });
+      window.addEventListener('focus', fn);
+    },
+    // a page kept in the back/forward cache comes back still owning the database, so it keeps its lease
+    onUnload: (fn) =>
+      window.addEventListener('pagehide', (e) => {
+        if (!e.persisted) fn();
+      }),
+    newId: () => crypto.randomUUID(),
+  });
+}
+
 /**
  * Two tabs would overwrite each other's blob, so only one may own the database.
  * Resolves true when this tab got the lock (held until the tab closes).
  */
 export function acquireTabLock(): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !('locks' in navigator)) return Promise.resolve(true);
+  if (typeof navigator === 'undefined' || !('locks' in navigator))
+    return Promise.resolve(leaseFallback());
   return new Promise<boolean>((resolve) => {
     void navigator.locks.request('pos-db-owner', { ifAvailable: true }, (lock) => {
       if (!lock) {

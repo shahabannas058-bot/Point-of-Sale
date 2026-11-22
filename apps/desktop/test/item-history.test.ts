@@ -27,7 +27,7 @@ const KINDS: ItemHistoryKind[] = ['sale', 'return', 'purchase', 'adjustment', 't
 
 const entry = (over: Partial<ItemHistoryEntry> = {}): ItemHistoryEntry => ({
   id: 'm1',
-  at: new Date(2026, 9, 18, 14, 5).getTime(),
+  at: Date.UTC(2026, 9, 18, 9, 5), // 14:05 Pakistan time
   kind: 'sale',
   quantity: -2,
   balanceAfter: 10,

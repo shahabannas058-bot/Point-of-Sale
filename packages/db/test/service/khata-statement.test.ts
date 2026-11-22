@@ -129,6 +129,15 @@ describe('khata.pendingUdhaar', () => {
     expect(firstSaleAt).toBeLessThan(bigOpenedAt);
   });
 
+  it('keeps the first udhaar date apart from the latest one (QA S11)', async () => {
+    await bilalOwes(CHARGER_PRICE);
+    const firstAt = t.clock.peek() - 1000;
+    await bilalOwes(CHARGER_PRICE);
+    const [bilal] = await t.svc.khata.pendingUdhaar();
+    expect(bilal?.firstCreditAt).toBe(firstAt);
+    expect(bilal?.lastCreditAt).toBeGreaterThan(firstAt);
+  });
+
   it('a customer with an advance (negative balance) is not pending', async () => {
     await bilalOwes(150_000);
     await pay(150_000);

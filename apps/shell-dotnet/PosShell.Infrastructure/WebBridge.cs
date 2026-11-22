@@ -7,24 +7,24 @@ namespace PosShell.Infrastructure;
 /// The one door between React and the native side. No WebView2 types here, so it is unit-testable; the WPF window
 /// just forwards WebMessageReceived text into <see cref="HandleAsync"/> and posts the returned string back.
 ///
-///   Request : { "id": "&lt;uuid&gt;", "method": "checkout.commit", "payload": { ... } }
+///   Request : { "id": "&lt;uuid&gt;", "method": "db.query", "payload": { ... } }
 ///   Reply   : { "id": "&lt;same&gt;", "ok": true,  "data": ... }
 ///           | { "id": "&lt;same&gt;", "ok": false, "error": { "code", "message", "details" } }
 ///
-/// Methods: ping, checkout.commit { input, cashierId }, db.query { sql, params } (read-only connection),
+/// Methods: ping, db.query { sql, params } (read-only connection),
 /// db.batch { statements: [ { sql, params } ] } (one transaction, asked of the licence first). db.exec is refused:
 /// the page never needs it in the shell (C# migrates) and an unguarded multi-statement script would bypass the guard.
 ///
-/// Rules: the payload stays a <see cref="JsonElement"/> all the way into <see cref="SalesService"/> (so "missing",
-/// null, wrong type and fractional numbers keep their distinct TypeScript errors); every failure becomes an error
-/// reply with the TS ServiceError code; unknown exceptions never leak their text to the page, the full exception goes
+/// Sales are committed by the TypeScript PosService in the page, not here (ADR-0011 removed the unused C# copy).
+///
+/// Rules: every failure becomes an error reply with the TS ServiceError code; unknown exceptions never leak their text to the page, the full exception goes
 /// to <see cref="FileLog"/> instead; work runs off the UI thread.
 ///
 /// Writes: db.batch is the choke point ADR-0010 names (the TypeScript PosService writes sales, stock and khata through
-/// it), so every batch passes <see cref="ILicenceGuard.AssertCanWrite"/> inside the write lock right before it runs,
-/// exactly like SalesService asks AssertCanSell before its own batch. Phase 2b only swaps the guard implementation.
+/// it), so every batch passes <see cref="ILicenceGuard.AssertCanWrite"/> inside the write lock right before it runs.
+/// Phase 2b only swaps the guard implementation.
 /// </summary>
-public sealed class WebBridge(SqliteDatabase db, SalesService sales, ILicenceGuard licence, FileLog? log = null, Func<long>? clock = null)
+public sealed class WebBridge(SqliteDatabase db, ILicenceGuard licence, FileLog? log = null, Func<long>? clock = null)
 {
     private const int MaxRequestChars = 2_000_000;
 
@@ -69,13 +69,6 @@ public sealed class WebBridge(SqliteDatabase db, SalesService sales, ILicenceGua
             case "ping":
                 return "pong";
 
-            case "checkout.commit":
-            {
-                var input = Require(payload, "input");
-                var cashierId = RequireString(payload, "cashierId");
-                return await Task.Run(() => sales.Commit(input, cashierId));
-            }
-
             case "db.query":
             {
                 var sql = RequireString(payload, "sql");
@@ -111,7 +104,7 @@ public sealed class WebBridge(SqliteDatabase db, SalesService sales, ILicenceGua
         }
     }
 
-    /// <summary>Same contract as SalesService.CallLicence: LICENCE_BLOCKED passes through, a plain Error becomes INTERNAL + message.</summary>
+    /// <summary>Same contract as the TS licence hook: LICENCE_BLOCKED passes through, a plain Error becomes INTERNAL + message.</summary>
     private void AssertCanWrite(IReadOnlyList<SqlStatement> statements)
     {
         try { licence.AssertCanWrite(statements, _clock()); }

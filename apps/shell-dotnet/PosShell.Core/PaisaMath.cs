@@ -1,6 +1,7 @@
 namespace PosShell.Core;
 
-public sealed record PricedLine(long Quantity, long UnitPrice, long DiscountAmount);
+/// <summary>UnitScale: 1 = pieces, 1000 = kg / litre (quantity in grams / ml, price per kg / litre).</summary>
+public sealed record PricedLine(long Quantity, long UnitPrice, long DiscountAmount, int UnitScale = 1);
 
 public sealed record PaymentPart(string Method, long Amount);
 
@@ -54,9 +55,25 @@ public static class PaisaMath
     {
         if (line.Quantity == 0 || line.Quantity is < -MaxSafe or > MaxSafe)
             throw MoneyInvalid($"Invalid quantity {Validate.JsNumber(line.Quantity)}");
-        var gross = Mul(line.UnitPrice, line.Quantity);
+        var gross = Gross(line);
         AssertDiscountWithin(line.DiscountAmount, gross, "Line");
         return Sub(gross, line.DiscountAmount);
+    }
+
+    /// <summary>
+    /// grossOf / lineGross (packages/core/src/money.ts, packages/shared/src/units.ts): quantity × unitPrice ÷ unitScale,
+    /// rounded half away from zero, exact in Int128 like the BigInt math in TS.
+    /// </summary>
+    public static long Gross(PricedLine line)
+    {
+        if (line.UnitScale == 1) return Mul(line.UnitPrice, line.Quantity);
+        if (line.UnitScale <= 0) throw MoneyInvalid($"Invalid unit scale {line.UnitScale}");
+        var product = (Int128)line.Quantity * line.UnitPrice;
+        Int128 scale = line.UnitScale;
+        var magnitude = product < 0 ? -product : product;
+        var rounded = (magnitude + scale / 2) / scale;
+        var exact = product < 0 ? -rounded : rounded;
+        return Narrow(exact, (double)exact);
     }
 
     public static SaleTotals ComputeSaleTotals(IReadOnlyList<PricedLine> lines, long invoiceDiscount)

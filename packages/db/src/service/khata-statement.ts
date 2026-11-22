@@ -87,6 +87,7 @@ export async function pendingUdhaar(ctx: Ctx): Promise<PendingUdhaar[]> {
   requireSession(ctx);
   const rows = await ctx.driver.query<Raw>(
     `SELECT c.*, SUM(le.amount) AS balance,
+       MIN(CASE WHEN le.amount > 0 THEN le.created_at END) AS first_credit_at,
        MAX(CASE WHEN le.amount > 0 THEN le.created_at END) AS last_credit_at,
        MAX(CASE WHEN le.type = 'payment_received' THEN le.created_at END) AS last_payment_at
      FROM customers c JOIN ledger_entries le ON le.customer_id = c.id
@@ -95,10 +96,17 @@ export async function pendingUdhaar(ctx: Ctx): Promise<PendingUdhaar[]> {
      ORDER BY balance DESC, c.name`,
   );
   return rows.map((r): PendingUdhaar => {
-    const { balance, last_credit_at: credit, last_payment_at: payment, ...customer } = r;
+    const {
+      balance,
+      first_credit_at: firstCredit,
+      last_credit_at: credit,
+      last_payment_at: payment,
+      ...customer
+    } = r;
     return {
       party: mapRow<Customer>(customer),
       balance: paisa(num(balance)),
+      firstCreditAt: epochOrNull(firstCredit),
       lastCreditAt: epochOrNull(credit),
       lastPaymentAt: epochOrNull(payment),
     };

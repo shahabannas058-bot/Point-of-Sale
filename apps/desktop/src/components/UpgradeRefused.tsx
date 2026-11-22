@@ -10,6 +10,7 @@ import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
 import { Field, Input } from './ui/Field';
 import { PIN_LENGTH } from './ui/PinPad';
+import { todayYmd } from '../lib/dates';
 
 const RESET_WORD = 'RESET';
 
@@ -86,7 +87,7 @@ export function UpgradeRefused({ error }: { error: unknown }): ReactNode {
       const { readStoredBrowserDb } = await import('../db/browser-db');
       const bytes = await readStoredBrowserDb();
       if (!bytes) return setProblem(t('boot.legacyNoCopy'));
-      const name = `pos-mobile-shop-${new Date().toISOString().slice(0, 10)}.sqlite`;
+      const name = `pos-mobile-shop-${todayYmd()}.sqlite`;
       downloadFile(name, bytes, 'application/octet-stream');
       setDownloaded(true);
     } catch (e) {

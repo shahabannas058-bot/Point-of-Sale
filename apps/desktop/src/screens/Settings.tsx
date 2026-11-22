@@ -17,6 +17,7 @@ import { useDataVersion } from '../store/data-version';
 import { usePrefs, type ReceiptLang, type ReceiptWidth, type ThemePref } from '../store/prefs';
 import { useCan } from '../store/session';
 import { toast } from '../store/toast';
+import { todayYmd } from '../lib/dates';
 
 function Section({
   title,
@@ -474,7 +475,7 @@ export function Settings(): ReactNode {
   const exportDb = (): void => {
     const bytes = rt.exportBytes?.();
     if (!bytes) return;
-    const name = `pos-backup-${new Date().toISOString().slice(0, 10)}.sqlite`;
+    const name = `pos-backup-${todayYmd()}.sqlite`;
     downloadFile(name, bytes, 'application/octet-stream');
   };
 

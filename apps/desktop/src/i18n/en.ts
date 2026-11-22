@@ -672,6 +672,8 @@ export const en = {
   'err.BACKUP_CORRUPT': 'The backup file is damaged and cannot be restored.',
   'err.BACKUP_NEWER': 'The backup was made by a newer version of the app. Update the app first.',
   'err.BACKUP_INCOMPATIBLE': 'The backup does not match this version of the app.',
+  'err.BACKUP_UPGRADE_FAILED':
+    'This backup cannot be opened by this version (it may be from the old mobile-shop version). Your current data was not changed.',
 
   'hist.title': 'Item history',
   'hist.open': 'History',
